@@ -6,6 +6,27 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.0 — 2026-06-21
+
+- **Tante nuove informazioni che arrivano direttamente dall'auto.** Quando l'auto è
+  sveglia, Home Assistant ora mostra molti più dati utili, finora non disponibili:
+  - **Autonomia**: quanti chilometri restano in elettrico e in totale (elettrico + benzina).
+  - **Chilometri totali** dell'auto (contachilometri) e chilometri percorsi in ibrido.
+  - **Gomme**: pressione e temperatura di ognuna delle quattro ruote, con un **avviso**
+    dedicato per ciascuna gomma se qualcosa non va.
+  - **Consumi medi**, sia di benzina sia di energia elettrica.
+  - **Carburante rimasto** nel serbatoio (in litri).
+  - **Batteria di trazione**: tensione e corrente (informazioni tecniche).
+  - **Clima**: la temperatura impostata sui due lati dell'abitacolo.
+  - **Ricarica**: stato della presa, stato della ricarica programmata e, quando l'auto è
+    in carica, il tempo che manca al termine.
+  - **Avviso "batteria scarica"** quando il livello è basso.
+
+  Sono tutte informazioni di **sola lettura** (l'auto non riceve nessun comando) e si
+  aggiornano quando l'auto si sveglia. Le trovi sotto il dispositivo "Omoda 9": quelle
+  più tecniche (temperature gomme, tensione batteria, ecc.) sono raggruppate tra i
+  "dettagli diagnostici".
+
 ## v1.4.0 — 2026-06-21
 
 - **Nuovo interruttore "Antifurto".** Puoi accendere e spegnere l'allarme antifurto
