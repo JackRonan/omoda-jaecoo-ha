@@ -6,6 +6,8 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.3.0 — 2026-06-21
+
 - **Il clima ora si imposta alla temperatura che vuoi.** Prima c'era un semplice
   interruttore che accendeva il clima fisso a 21°; ora trovi un vero **termostato**:
   scegli la temperatura desiderata (da 16° a 30°) e l'auto la applica, riscaldando o
