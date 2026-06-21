@@ -25,6 +25,22 @@ telematica Chery) a **Home Assistant**. Progetto di reverse-engineering.
 3. **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → Omoda 9** e
    segui il config flow (email / PIN / VIN / tUserId / regione → OTP).
 
+### Login (OTP) — interamente in Home Assistant
+
+Il login avviene **dal config flow**, in due passaggi, senza strumenti esterni
+né un token pre-esistente:
+
+1. **Primo step:** inserisci `email`, `PIN`, `VIN`, `tUserId` (e, se necessario,
+   gli endpoint regionali). Alla conferma HA risolve **da solo** il captcha del
+   gateway e invia un **codice OTP alla tua email**.
+2. **Secondo step:** inserisci il codice ricevuto → HA conia il token e crea il
+   dispositivo con tutte le entità.
+
+Se per quel `VIN` esiste già un token valido (es. migrazione), l'OTP viene
+saltato. Quando in futuro la sessione scade (tipicamente perché è stata aperta
+l'app ufficiale), usa i pulsanti **«Richiedi codice OTP»** / **«Conferma OTP»**
+(con l'entità *testo* «Codice OTP») per rifare il login senza riconfigurare.
+
 ## Aggiornamento
 
 Quando esce una nuova release: **HACS → Omoda 9 → Update → riavvia Home Assistant**.
@@ -51,9 +67,10 @@ EU, override disponibili in fase di setup.
 ## Stato / roadmap
 
 - ✅ Telemetria, posizione/GPS, batteria/velocità, comandi, sessione/OTP.
-- ⬜ OTP da zero su Home Assistant OS (il captcha dipende da `opencv`, non
-  installabile in HAOS): da reimplementare con `numpy`+`Pillow`. Con un token
-  valido la sessione si auto-rinnova senza captcha.
+- ✅ **OTP da zero su Home Assistant OS** (v0.2.1): il captcha è risolto
+  interamente in HA con `numpy`+`Pillow` (niente più `opencv`/`cv2`), quindi il
+  login dal config flow funziona su qualsiasi installazione, anche senza un token
+  preesistente. Con un token valido la sessione si auto-rinnova senza captcha.
 - ⬜ Persistenza posizione/realtime al riavvio di HA (`RestoreEntity`).
 - ⬜ Provisioning certificati e continuità entity_id dentro il config flow.
 
