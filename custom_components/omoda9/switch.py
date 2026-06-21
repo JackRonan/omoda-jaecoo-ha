@@ -21,7 +21,6 @@ from homeassistant.components.switch import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -75,20 +74,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
                         (psx_caldo, psx_aria), (pdx_caldo, pdx_aria)):
         caldo._exclusive = aria
         aria._exclusive = caldo
-    # macro comfort: clima + i SOLI comandi comfort verificati funzionanti su questa vettura
-    # (test live 2026-06-21: sedile-guida ventilato e sbrina-lunotto OK; il resto va in
-    # timeout = non installato). I passi girano in sequenza, uno alla volta (vedi
-    # Omoda9ClimaMacroSwitch._run_macro). Raffredda e riscalda si escludono a vicenda.
+    # macro comfort "tutto" (coolingControl/heatingControl): clima + tutti i sedili (+ volante
+    # e sbrinatori per il caldo) in un unico comando, come l'app. Funzionano a auto SPENTA.
+    # Raffredda e riscalda si escludono a vicenda.
     raffredda = Omoda9ClimaMacroSwitch(
         coord, "Omoda9 Raffredda tutto", "raffredda_tutto",
-        [("clima_raffredda_on", None), ("sedile_guida_aria", None)],
-        [("clima_raffredda_off", None), ("sedile_guida_aria_off", None)],
-        "mdi:snowflake")
+        "clima_raffredda_on", "clima_raffredda_off", "mdi:snowflake")
     riscalda = Omoda9ClimaMacroSwitch(
         coord, "Omoda9 Riscalda tutto", "riscalda_tutto",
-        [("clima_riscalda_on", None), ("defrost_lunotto", None)],
-        [("clima_riscalda_off", None), ("defrost_lunotto_off", None)],
-        "mdi:heat-wave")
+        "clima_riscalda_on", "clima_riscalda_off", "mdi:heat-wave")
     raffredda._exclusive = riscalda
     riscalda._exclusive = raffredda
     antifurto = Omoda9TheftAlarmSwitch(coord)
@@ -178,12 +172,13 @@ class Omoda9ChargeSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, Rest
 
 
 class Omoda9ClimaMacroSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):
-    """Macro comfort freddo/caldo: con un tap esegue in SEQUENZA (l'auto fa un comando alla
-    volta) il clima a temperatura estrema (15°C / 31°C) PIU' i comandi comfort verificati
-    funzionanti — qui solo sedile-guida ventilato (freddo) e sbrina-lunotto (caldo). NB: NON
-    usa la macro one-button coolingControl/heatingControl, che su questa vettura va in timeout
-    (TBOX↔centraline); i moduli assenti (sedili riscaldati, volante, sbrina-parabrezza, sedili
-    passeggero/posteriori) sono esclusi apposta per non far attendere 60s di timeout a vuoto.
+    """Macro clima "tutto" (coolingControl/heatingControl): un preset che accende clima +
+    TUTTI i sedili (+ sbrinatori parabrezza/lunotto e volante per il caldo) in un colpo solo,
+    con un unico comando — esattamente come l'app ufficiale.
+
+    ⚠️ Come ogni comando comfort, l'auto lo esegue solo a vettura SPENTA: se è accesa/occupata
+    lo rifiuta (blocco di sicurezza, esito ❌). A motore spento accende tutti i moduli
+    (verificato dal vivo 2026-06-21).
 
     L'auto NON pubblica uno stato "preset attivo" dedicato → switch ottimistico (mostra il
     target dopo il comando e ripristina l'ultimo stato al riavvio). Raffredda e Riscalda si
@@ -192,11 +187,10 @@ class Omoda9ClimaMacroSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, 
     _attr_device_class = SwitchDeviceClass.SWITCH
 
     def __init__(self, coord, name: str, suffix: str,
-                 on_steps: list[tuple[str, dict | None]],
-                 off_steps: list[tuple[str, dict | None]], icon: str) -> None:
+                 on_cmd: str, off_cmd: str, icon: str) -> None:
         super().__init__(coord, name, suffix, entity_id_format=ENTITY_ID_FORMAT)
-        self._on_steps = on_steps
-        self._off_steps = off_steps
+        self._on_cmd = on_cmd
+        self._off_cmd = off_cmd
         self._attr_icon = icon
         self._restored: bool | None = None
         self._exclusive: "Omoda9ClimaMacroSwitch | None" = None
@@ -213,29 +207,13 @@ class Omoda9ClimaMacroSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, 
             return self._opt_value
         return self._restored
 
-    async def _run_macro(self, steps: list[tuple[str, dict | None]], target: bool) -> None:
-        """Esegue i passi della macro in sequenza (uno alla volta). Mostra subito lo stato
-        target; se OGNI passo fallisce annulla l'ottimismo e segnala l'errore, altrimenti
-        (almeno il clima riuscito) tiene lo stato target — i passi assenti sono best-effort."""
-        if self.coordinator.command_busy():
-            raise HomeAssistantError(
-                "Un altro comando è ancora in corso — l'auto ne esegue uno alla volta. "
-                "Attendi qualche secondo (guarda «Esito comando») e riprova.")
-        self._set_optimistic(target)
-        results = await self.coordinator.async_run_sequence(steps)
-        if not any(ok for _, ok, _ in results):  # tutto fallito → niente di fatto
-            self._clear_optimistic()
-            self.async_write_ha_state()
-            raise HomeAssistantError(
-                "Macro non riuscita: nessun comando eseguito dall'auto.")
-
     async def async_turn_on(self, **kwargs) -> None:
         if self._exclusive is not None:
             self._exclusive._set_optimistic(False)
-        await self._run_macro(self._on_steps, True)
+        await self._run_command(self._on_cmd, True)
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._run_macro(self._off_steps, False)
+        await self._run_command(self._off_cmd, False)
 
 
 class Omoda9ScheduledChargeSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):

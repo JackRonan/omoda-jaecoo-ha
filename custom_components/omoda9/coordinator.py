@@ -544,29 +544,6 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         CMD.send(key, emit=emit, params=params)
         return msgs[-1] if msgs else "inviato"
 
-    async def async_run_sequence(
-        self, steps: list[tuple[str, dict | None]], confirm_timeout: float = 30.0
-    ) -> list[tuple[str, bool, str]]:
-        """Esegue piu' comandi UNO ALLA VOLTA (l'auto ne processa uno per volta), aspettando
-        la conferma dell'auto — o lo scadere del lock anti-doppio-tap — prima del successivo.
-        Best-effort: un sotto-comando fallito NON interrompe la sequenza (le macro comfort
-        combinano comandi singoli gia' verificati). Ritorna [(key, ok, msg)]."""
-        results: list[tuple[str, bool, str]] = []
-        for key, params in steps:
-            try:
-                msg = await self.async_send_command(key, params)
-                results.append((key, True, msg))
-            except Exception as err:  # noqa: BLE001 — best-effort: prosegue col prossimo
-                self.clear_command_busy()  # invio fallito → sblocca subito il successivo
-                results.append((key, False, str(err)))
-                continue
-            # attende che l'auto confermi (clear_command_busy sul push 110x) o che scada il lock
-            waited = 0.0
-            while self.command_busy() and waited < confirm_timeout:
-                await asyncio.sleep(1.0)
-                waited += 1.0
-        return results
-
     async def async_query_theft(self) -> int | None:
         """Stato antifurto via REST (read-only); None se non disponibile."""
         return await self.hass.async_add_executor_job(self._query_theft)
