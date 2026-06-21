@@ -43,6 +43,13 @@ Quando in futuro la sessione scade (tipicamente perché è stata aperta l'app
 ufficiale), usa i pulsanti **«Richiedi codice OTP»** / **«Conferma OTP»** (con
 l'entità *testo* «Codice OTP») per rifare il login senza riconfigurare.
 
+> **Certificati MQTT — automatici.** La telemetria usa un broker MQTT in
+> mutual-TLS. Il certificato client EMQX è una **costante universale per-regione**
+> (uguale per tutti, presente negli asset pubblici dell'app), **non** un dato
+> per-account: l'integrazione lo **auto-provisiona** al primo avvio in base alla
+> regione. Non devi procurarti né inserire nulla. Il campo *certs_src* serve solo
+> come override manuale (es. regione non coperta o cert personalizzati).
+
 ## Aggiornamento
 
 Quando esce una nuova release: **HACS → Omoda 9 → Update → riavvia Home Assistant**.
@@ -73,8 +80,10 @@ EU, override disponibili in fase di setup.
   interamente in HA con `numpy`+`Pillow` (niente più `opencv`/`cv2`), quindi il
   login dal config flow funziona su qualsiasi installazione, anche senza un token
   preesistente. Con un token valido la sessione si auto-rinnova senza captcha.
+- ✅ **Provisioning automatico dei certificati** mutual-TLS (v0.2.4): cert client
+  EMQX universali per-regione auto-installati al setup → onboarding solo email+PIN,
+  senza estrarre nulla a mano.
 - ⬜ Persistenza posizione/realtime al riavvio di HA (`RestoreEntity`).
-- ⬜ Provisioning certificati e continuità entity_id dentro il config flow.
 
 ## Licenza
 

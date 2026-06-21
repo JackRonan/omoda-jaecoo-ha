@@ -140,6 +140,7 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         if _have_required():
             return True, "cert presenti"
 
+        # 1) override manuale: cartella indicata in certs_src
         if self.certs_src and os.path.isdir(self.certs_src):
             copied = []
             for f in CERT_FILES:
@@ -150,11 +151,25 @@ class Omoda9Coordinator(DataUpdateCoordinator):
                     copied.append(f)
             if _have_required():
                 return True, f"cert importati da {self.certs_src}: {', '.join(copied)}"
-            return False, (f"in {self.certs_src} mancano alcuni cert richiesti "
-                           f"({', '.join(REQUIRED_CERTS)})")
 
-        return False, (f"cert mutual-TLS mancanti: copia {', '.join(CERT_FILES)} in "
-                       f"{self.certs_dir} (oppure indica una cartella sorgente nelle opzioni)")
+        # 2) auto-provisioning dai cert universali per-regione bundlati (vedi cert_bundle)
+        try:
+            from .cert_bundle import decrypt_region
+            certs = decrypt_region(self.car_host)
+        except Exception:  # noqa: BLE001
+            certs = None
+        if certs:
+            for name, data in certs.items():
+                p = os.path.join(self.certs_dir, name)
+                with open(p, "wb") as fh:
+                    fh.write(data)
+                os.chmod(p, 0o600)
+            if _have_required():
+                return True, f"cert auto-provisioned ({self.car_host})"
+
+        return False, (f"cert mutual-TLS mancanti per {self.car_host}: regione non nel bundle. "
+                       f"Copia {', '.join(REQUIRED_CERTS)} in {self.certs_dir} "
+                       f"(oppure indica una cartella in certs_src).")
 
     # ───────────────── ciclo di vita MQTT auto ─────────────────
     async def async_start(self) -> None:
