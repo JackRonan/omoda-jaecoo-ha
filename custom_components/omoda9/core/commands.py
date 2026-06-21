@@ -132,9 +132,12 @@ COMMANDS = [
     # interne" su clima E sedili (verificato dal vivo 2026-06-21, anche ad auto sveglia).
     # `airControl` invece è confermato funzionante (è ciò che l'app ufficiale lancia subito
     # dopo la macro). Quindi qui = solo clima a temperatura estrema: 15.0 (max freddo) /
-    # 31.0 (max caldo), `times` (NON `duration`). I sedili NON sono nel preset (restano
-    # comandabili dai rispettivi switch dedicati via seatControl). Per il caldo aggiungiamo
-    # gli sbrinatori parabrezza/lunotto, che airControl supporta (front/backDefrosting).
+    # 31.0 (max caldo), `times` (NON `duration`). Qui = solo clima: i pezzi comfort
+    # (sedile guida ventilato, sbrina lunotto) li aggiunge la macro lato componente come
+    # passi separati gia' verificati dal vivo (vedi Omoda9ClimaMacroSwitch in switch.py).
+    # Test 2026-06-21 su questa vettura: SOLO sedile-guida-ventilato e sbrina-lunotto
+    # rispondono; sedili riscaldati/passeggero/posteriori, volante e sbrina-parabrezza
+    # vanno in timeout (moduli non installati) → esclusi dalle macro.
     ("clima_raffredda_on", {"endpoint": "airControl",
                    "body": {"airControlType": "1", "airType": "1", "temperature": "15.0", "times": "15"},
                    "name": "Raffredda tutto", "icon": "mdi:snowflake", "group": "Clima"}),
@@ -142,12 +145,10 @@ COMMANDS = [
                    "body": {"airControlType": "0", "airType": "1", "temperature": "15.0", "times": "15"},
                    "name": "Raffredda tutto OFF", "icon": "mdi:snowflake-off", "group": "Clima"}),
     ("clima_riscalda_on", {"endpoint": "airControl",
-                   "body": {"airControlType": "1", "airType": "1", "temperature": "31.0", "times": "15",
-                            "frontDefrosting": "1", "backDefrosting": "1"},
+                   "body": {"airControlType": "1", "airType": "1", "temperature": "31.0", "times": "15"},
                    "name": "Riscalda tutto", "icon": "mdi:heat-wave", "group": "Clima"}),
     ("clima_riscalda_off", {"endpoint": "airControl",
-                   "body": {"airControlType": "0", "airType": "1", "temperature": "31.0", "times": "15",
-                            "frontDefrosting": "0", "backDefrosting": "0"},
+                   "body": {"airControlType": "0", "airType": "1", "temperature": "31.0", "times": "15"},
                    "name": "Riscalda tutto OFF", "icon": "mdi:heat-wave", "group": "Clima"}),
 
     # — Porte / chiusure —
