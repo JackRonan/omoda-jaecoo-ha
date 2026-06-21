@@ -6,6 +6,31 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.0.0 — 2026-06-21
+
+- **Versione 1.0: l'integrazione diventa stabile e più affidabile.** Tante piccole
+  rifiniture sotto il cofano per un funzionamento più solido di tutti i giorni.
+- **Connessione all'auto più robusta.** Se il collegamento cade viene ristabilito
+  da solo, senza lasciare l'integrazione "appesa"; meno disconnessioni inattese e
+  un avvio più pulito quando l'auto non è raggiungibile.
+- **Accesso più sicuro e protetto.** Migliorata la gestione dell'accesso per evitare
+  che la sessione si perda da sola; aggiunta una protezione che ferma i tentativi se
+  il PIN risulta sbagliato, così l'account non rischia il blocco.
+- **Informazioni sempre veritiere dopo un riavvio.** Dopo aver riavviato Home
+  Assistant, gli esiti dei comandi non mostrano più un risultato vecchio: o è
+  aggiornato o resta vuoto, niente informazioni fuorvianti.
+- **Stati più coerenti.** Porte, serratura, baule, finestrini, tetto e clima
+  vengono interpretati in modo uniforme: niente più "acceso" o "aperto" mostrati
+  per sbaglio quando il dato non c'è.
+- **Comandi con conferma a schermo.** Quando premi un comando (chiudi/apri/clima)
+  la card si aggiorna subito e, se qualcosa non va a buon fine, te lo segnala invece
+  di restare bloccata su uno stato mai raggiunto.
+- **Pronta anche fuori dall'Europa.** In fase di configurazione si può ora indicare
+  il server dell'auto della propria zona, così l'integrazione funziona anche fuori
+  dalla regione europea.
+- **La posizione GPS resta salvata.** L'ultima posizione nota viene conservata e
+  ricompare dopo un riavvio, invece di sparire.
+
 ## v0.3.0 — 2026-06-21
 
 - **La serratura ora è un vero lucchetto.** La blocchi e la sblocchi con un solo
