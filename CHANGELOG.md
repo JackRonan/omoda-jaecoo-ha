@@ -6,7 +6,17 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
-## v1.1.0 — 2026-06-21
+- **Comandi anche per i sedili passeggero e posteriori.** Finora potevi accendere e
+  spegnere solo il sedile del posto guida; ora trovi gli stessi interruttori (caldo e
+  aria) anche per il **passeggero** e per i due **sedili posteriori** (sinistro e
+  destro). Come per il guida, su ogni sedile caldo e aria si escludono a vicenda.
+- **Nuove informazioni dall'auto.** Compaiono tre nuove indicazioni quando l'auto è
+  sveglia: se la **spina di ricarica è collegata**, se il **motore è acceso**, e lo
+  stato di movimento del **tetto apribile** (quest'ultimo tra i dettagli tecnici).
+- **L'esito dei comandi ora arriva davvero dall'auto.** Prima la voce "Esito comando"
+  diceva solo che il comando era stato *accettato* dal server; adesso, quando l'auto
+  risponde, viene aggiornata con l'esito **reale**: comando eseguito e confermato,
+  ancora in corso, oppure non riuscito (con il motivo segnalato dall'auto).
 
 - **Riscaldamenti e sbrinamenti ora si spengono con un tocco.** Sbrinamento
   parabrezza, sbrinamento lunotto, volante riscaldato e i sedili (caldo/aria) del

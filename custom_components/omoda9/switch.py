@@ -45,10 +45,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     sedile_aria = Omoda9ComfortSwitch(
         coord, "Omoda9 Ventilazione sedile guida", "dSeatVentilateState", "dSeatVentilateState",
         "sedile_guida_aria", "sedile_guida_aria_off", "mdi:car-seat-cooler")
-    # sedile guida: caldo e aria si escludono a vicenda → wiring reciproco
-    sedile_caldo._exclusive = sedile_aria
-    sedile_aria._exclusive = sedile_caldo
-    add([clima, parabrezza, lunotto, volante, sedile_caldo, sedile_aria])
+    # sedili passeggero e posteriori SX/DX: stesso modello del guida (telemetria *State*
+    # ↔ comando seatControl). Posteriore centrale escluso (nessun comando dedicato).
+    pass_caldo = Omoda9ComfortSwitch(
+        coord, "Omoda9 Riscaldamento sedile passeggero", "pSeatHeatingState", "pSeatHeatingState",
+        "sedile_passeggero_caldo", "sedile_passeggero_caldo_off", "mdi:car-seat-heater")
+    pass_aria = Omoda9ComfortSwitch(
+        coord, "Omoda9 Ventilazione sedile passeggero", "pSeatVentilateState", "pSeatVentilateState",
+        "sedile_passeggero_aria", "sedile_passeggero_aria_off", "mdi:car-seat-cooler")
+    psx_caldo = Omoda9ComfortSwitch(
+        coord, "Omoda9 Riscaldamento sedile post. SX", "lSeatHeatingState2", "lSeatHeatingState2",
+        "sedile_post_sx_caldo", "sedile_post_sx_caldo_off", "mdi:car-seat-heater")
+    psx_aria = Omoda9ComfortSwitch(
+        coord, "Omoda9 Ventilazione sedile post. SX", "lSeatVentilateState2", "lSeatVentilateState2",
+        "sedile_post_sx_aria", "sedile_post_sx_aria_off", "mdi:car-seat-cooler")
+    pdx_caldo = Omoda9ComfortSwitch(
+        coord, "Omoda9 Riscaldamento sedile post. DX", "rSeatHeatingState2", "rSeatHeatingState2",
+        "sedile_post_dx_caldo", "sedile_post_dx_caldo_off", "mdi:car-seat-heater")
+    pdx_aria = Omoda9ComfortSwitch(
+        coord, "Omoda9 Ventilazione sedile post. DX", "rSeatVentilateState2", "rSeatVentilateState2",
+        "sedile_post_dx_aria", "sedile_post_dx_aria_off", "mdi:car-seat-cooler")
+    # caldo e aria si escludono a vicenda su OGNI sedile → wiring reciproco per coppia
+    for caldo, aria in ((sedile_caldo, sedile_aria), (pass_caldo, pass_aria),
+                        (psx_caldo, psx_aria), (pdx_caldo, pdx_aria)):
+        caldo._exclusive = aria
+        aria._exclusive = caldo
+    add([clima, parabrezza, lunotto, volante,
+         sedile_caldo, sedile_aria, pass_caldo, pass_aria,
+         psx_caldo, psx_aria, pdx_caldo, pdx_aria])
 
 
 class Omoda9ComfortSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):

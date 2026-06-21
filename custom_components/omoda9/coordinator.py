@@ -72,8 +72,23 @@ SENSORS = [
     {"key": "lSeatVentilateState2","name": "Ventilazione sedile post. SX",       "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
     {"key": "rSeatVentilateState2","name": "Ventilazione sedile post. DX",       "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
     {"key": "mSeatVentilateState2","name": "Ventilazione sedile post. centrale", "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
+    # — telemetria aggiuntiva (campi già inviati dall'auto nel 5A02) —
+    {"key": "chargeGunState", "name": "Spina ricarica",  "comp": "binary_sensor", "dclass": "plug",    "kind": "onoff"},
+    {"key": "engineState",    "name": "Motore",          "comp": "binary_sensor", "dclass": "running", "kind": "onoff", "icon": "mdi:engine"},
+    # sunroofMoveState = codice di FASE di movimento del tetto (valori 1/2/3/4/8, mai 0):
+    # non è un on/off pulito (non c'è un valore "fermo" noto) → sensore diagnostico raw.
+    {"key": "sunroofMoveState", "name": "Tetto · stato movimento", "comp": "sensor", "dclass": None, "kind": "value", "icon": "mdi:car-select", "diag": True},
+    # NB campi NON mappati di proposito (verificato su events.jsonl reali, 2026-06-21):
+    #   rangeUnit / averageFuelUnit / tirePressureUnit valgono SEMPRE "1" = sono FLAG di
+    #   unità di misura, NON il valore. L'auto non invia su questo canale il valore reale
+    #   di autonomia/consumo/pressione gomme → mapparli mostrerebbe "1" fisso. Rimandati:
+    #   serve l'altro canale (realtime /asr/manager o struttura TPMS annidata) → Round B.
 ]
 META = {s["key"]: s for s in SENSORS}
+
+# Meta-campi dei push di CONFERMA comando (110x/1105/1135…): NON sono telemetria di
+# stato del veicolo → non vanno messi tra i "fields" (vedi _on_car_message / Item 4).
+CMD_CONFIRM_META = ("result", "resultTime", "seq", "reason", "hasAsy")
 
 # [MED] Campi "geo" ammessi in self.position (push 1301 / sonda realtime). Si tiene
 # SOLO la geolocalizzazione: batteria/velocità/online vivono in self.data["realtime"].
@@ -310,16 +325,25 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             patch["position"] = pos_copy
             patch["last_pos_fix"] = now_dt
 
+        # [Item4] push di CONFERMA comando: l'auto risponde a ogni vehicleControl/X con un
+        # messaggio 110x/1105/1135 che porta result/resultTime/seq (+ reason sui guasti)
+        # OLTRE ai campi di stato reali. Lo riconosciamo dalla presenza di result/seq (la
+        # telemetria 5A02 "pura" non li ha). I campi di stato vanno comunque in fields;
+        # i meta-campi (CMD_CONFIRM_META) NO (non sono stato del veicolo).
+        is_confirmation = "result" in data or "seq" in data
+
         # [H2] _fields/_last_msg_ts toccati anche dall'executor → sotto lock; emetti una COPIA
         with self._state_lock:
             was_awake = bool(self._last_msg_ts) and (now - self._last_msg_ts) < self.awake_window
             self._last_msg_ts = now
             for k, v in data.items():
-                if k != "time":
+                if k != "time" and k not in CMD_CONFIRM_META:
                     self._fields[k] = str(v)
             fields_copy = dict(self._fields)
 
         patch.update({"fields": fields_copy, "awake": True})
+        if is_confirmation:
+            patch["cmd_status"] = self._format_cmd_result(data)
         self._update(patch)
 
         # [H3] fronte di risveglio → una sonda realtime (sola lettura). Lo schedule del
@@ -328,6 +352,27 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             self.hass.loop.call_soon_threadsafe(
                 lambda: self.hass.async_create_task(self.async_probe())
             )
+
+    @staticmethod
+    def _format_cmd_result(data: dict) -> str:
+        """Traduce l'esito REALE di un push di conferma comando in una frase per l'utente.
+
+        Distinto dall'"accettato" del backend (A00079, mostrato all'invio): qui è ciò che
+        l'AUTO riporta dopo aver provato a eseguire. Interpretazione CONSERVATIVA, basata
+        sui dati reali (events.jsonl 2026-06-21) e sul significato del bean:
+          - `reason` (lista) è popolato SOLO sui guasti → se presente = NON riuscito;
+          - `result`: 5 = operazione asincrona ancora in corso (sempre con hasAsy=1);
+            1/2 = eseguito/applicato (stato del veicolo aggiornato);
+          - codici diversi → riportati grezzi, senza inventarne il significato."""
+        result = str(data.get("result", "")).strip()
+        reason = data.get("reason")
+        if reason:  # lista di motivi di fallimento segnalati dall'auto
+            return f"L'auto ha segnalato un problema ❌ ({reason})"[:255]
+        if result == "5":
+            return "Comando in esecuzione sull'auto… ⏳"
+        if result in ("1", "2"):
+            return "Comando eseguito e confermato dall'auto ✅"
+        return f"Conferma ricevuta dall'auto (codice esito {result or '?'})"[:255]
 
     def _update(self, patch: dict) -> None:
         """Aggiorna self.data e notifica le entità (thread-safe dal thread paho)."""

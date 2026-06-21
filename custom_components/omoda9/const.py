@@ -5,11 +5,18 @@ PLATFORMS = ["sensor", "binary_sensor", "button", "lock", "switch", "cover", "de
 
 # Campi auto (5A02) ora rappresentati da entità native ATTUABILI (lock/switch/cover):
 # esclusi dalla creazione di sensor/binary_sensor "di sola lettura" per non duplicarli.
-# I 5 campi comfort (sbrinamenti/volante/sedili) sono ora interruttori ON/OFF (vedi switch.py).
+# I campi comfort (sbrinamenti/volante/sedili guida-passeggero-posteriori) sono ora
+# interruttori ON/OFF (vedi switch.py). NB: il sedile posteriore CENTRALE
+# (mSeatHeatingState2/mSeatVentilateState2) NON ha un comando dedicato → resta sola lettura.
 FIELDS_AS_RICH_ENTITY = {
     "doorLock", "frontHVACState", "trunkDoor", "sunroofState",
     "frontWindshieldHeat", "rWinHeatingState", "steerWheelHeating",
     "dSeatHeatingState", "dSeatVentilateState",
+    # sedile passeggero
+    "pSeatHeatingState", "pSeatVentilateState",
+    # sedili posteriori SX/DX (telemetria *State2 ↔ comando bl/br SeatControl)
+    "lSeatHeatingState2", "lSeatVentilateState2",
+    "rSeatHeatingState2", "rSeatVentilateState2",
 }
 
 # Comandi del catalogo ora gestiti da lock/switch/cover → esclusi dai pulsanti singoli
@@ -25,6 +32,12 @@ COMMANDS_AS_RICH_ENTITY = {
     "volante_caldo", "volante_caldo_off",
     "sedile_guida_caldo", "sedile_guida_caldo_off",
     "sedile_guida_aria", "sedile_guida_aria_off",
+    "sedile_passeggero_caldo", "sedile_passeggero_caldo_off",
+    "sedile_passeggero_aria", "sedile_passeggero_aria_off",
+    "sedile_post_sx_caldo", "sedile_post_sx_caldo_off",
+    "sedile_post_sx_aria", "sedile_post_sx_aria_off",
+    "sedile_post_dx_caldo", "sedile_post_dx_caldo_off",
+    "sedile_post_dx_aria", "sedile_post_dx_aria_off",
 }
 
 # Chiavi del config_entry (dati per-account, inseriti nel config flow)

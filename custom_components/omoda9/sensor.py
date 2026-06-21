@@ -76,7 +76,7 @@ class _Omoda9RestoreSensor(Omoda9Entity, RestoreSensor):
 
 
 class Omoda9FieldSensor(_Omoda9RestoreSensor):
-    """serratura (0=Bloccata/1=Sbloccata) o livello sedile (Livello N)."""
+    """serratura (0=Bloccata/1=Sbloccata), livello sedile (Livello N) o valore grezzo."""
 
     def __init__(self, coord, spec: dict) -> None:
         super().__init__(coord, f"Omoda9 {spec['name']}", spec["key"])
@@ -84,6 +84,9 @@ class Omoda9FieldSensor(_Omoda9RestoreSensor):
         self._kind = spec["kind"]
         if spec.get("icon"):
             self._attr_icon = spec["icon"]
+        # campi tecnici (es. codice di fase del tetto) → tra i dettagli diagnostici
+        if spec.get("diag"):
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _live_value(self):
         v = self.coordinator.data.get("fields", {}).get(self._key)
