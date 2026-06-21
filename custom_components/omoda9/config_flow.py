@@ -123,12 +123,9 @@ class Omoda9ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             self._data.update(user_input)
-            try:
-                ok, _msg = await self.hass.async_add_executor_job(
-                    _send_otp, self.hass, self._data
-                )
-            except NotImplementedError:
-                return await self.async_step_otp()
+            ok, _msg = await self.hass.async_add_executor_job(
+                _send_otp, self.hass, self._data
+            )
             if ok:
                 return await self.async_step_otp()
             errors["base"] = "otp_send_failed"
@@ -146,12 +143,9 @@ class Omoda9ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_otp(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                ok, _msg = await self.hass.async_add_executor_job(
-                    _mint_token, self.hass, self._data, user_input["code"].strip()
-                )
-            except NotImplementedError:
-                ok = True  # scaffold dev
+            ok, _msg = await self.hass.async_add_executor_job(
+                _mint_token, self.hass, self._data, user_input["code"].strip()
+            )
             if ok:
                 d_ok, tu, vins, _detail = await self.hass.async_add_executor_job(
                     _discover, self.hass, self._data
