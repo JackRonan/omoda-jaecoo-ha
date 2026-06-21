@@ -6,6 +6,8 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.4.0 — 2026-06-21
+
 - **Nuovo interruttore "Antifurto".** Puoi accendere e spegnere l'allarme antifurto
   dell'auto direttamente da Home Assistant. Quando è acceso, l'auto fa scattare l'allarme
   e ti avvisa in caso di movimento non autorizzato del veicolo, tentativi di scasso delle
