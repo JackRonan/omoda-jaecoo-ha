@@ -10,7 +10,9 @@
   "requirements": [
     "paho-mqtt>=2.0",
     "requests>=2.28",
-    "pycryptodome>=3.17"
+    "pycryptodome>=3.17",
+    "numpy>=1.21",
+    "pillow>=9.0"
   ],
-  "version": "0.2.0"
+  "version": "0.2.1"
 }

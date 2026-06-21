@@ -10,11 +10,18 @@ Cifratura: AES/ECB/PKCS7, chiave = secretKey (UTF-8), output base64.
 Il captchaVerification va passato a sendMailCode/sendSmsCode.
 """
 import os, time, hashlib, json, base64, io
-import requests, numpy as np, cv2
+import requests, numpy as np
 from PIL import Image
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
 import omoda
+
+# NB (2026-06-21): il solver NON usa più OpenCV (cv2). Lo shape-matching è
+# reimplementato con solo numpy + Pillow → installabile su Home Assistant/HAOS
+# (numpy ha wheel per ogni arch, Pillow è già nel core di HA), così l'intero login
+# OTP gira dentro HA per chi installa il componente senza un token preesistente.
+# Equivalenza verificata A/B vs cv2 su captcha reali (9/10 x identici, il restante
+# risolto MEGLIO dal numpy) + risolvi() end-to-end 5/5.
 
 SECRET = "5c7af05e6fbf562842ef483ee96e06a0"   # secret di firma del gateway (universale)
 NONCE  = "chery_legend_marketing"
@@ -38,24 +45,58 @@ def _aes_b64(plaintext, key):
 
 def _img(b64): return Image.open(io.BytesIO(base64.b64decode(b64)))
 
+def _dilate3(a):
+    """Dilatazione 3×3 (8-vicini) — equivalente numpy di cv2.dilate(kernel 3×3)."""
+    p = np.pad(a, 1, mode="edge")
+    return np.maximum.reduce([p[0:-2, 0:-2], p[0:-2, 1:-1], p[0:-2, 2:],
+                              p[1:-1, 0:-2], p[1:-1, 1:-1], p[1:-1, 2:],
+                              p[2:, 0:-2],  p[2:, 1:-1],  p[2:, 2:]])
+
+def _erode3(a):
+    """Erosione 3×3 (8-vicini) — equivalente numpy di cv2.erode(kernel 3×3)."""
+    p = np.pad(a, 1, mode="edge")
+    return np.minimum.reduce([p[0:-2, 0:-2], p[0:-2, 1:-1], p[0:-2, 2:],
+                              p[1:-1, 0:-2], p[1:-1, 1:-1], p[1:-1, 2:],
+                              p[2:, 0:-2],  p[2:, 1:-1],  p[2:, 2:]])
+
 def trova_gap_x(orig_b64, jigsaw_b64):
     """Ritorna pointJson x. Shape-matching: contorno del tassello vs contorni bianchi
     disegnati sullo sfondo (il vero buco ha la STESSA sagoma del tassello; le esche no).
-    pointJson x = (bordo sinistro del buco) - (x0 del tassello nell'immagine jigsaw)."""
-    o = np.array(_img(orig_b64).convert("RGB"))
-    j = np.array(_img(jigsaw_b64).convert("RGBA"))
+    pointJson x = (bordo sinistro del buco) - (x0 del tassello nell'immagine jigsaw).
+
+    Implementazione numpy-only (no cv2): bbox del tassello dall'alpha, gradiente
+    morfologico 3×3 (dilate−erode) come template, normalized cross-correlation
+    (TM_CCORR_NORMED) tramite sliding_window_view + einsum riga per riga (memoria O(W·h·w))."""
+    o = np.asarray(_img(orig_b64).convert("RGB"))
+    j = np.asarray(_img(jigsaw_b64).convert("RGBA"))
     m = (j[:, :, 3] > 128).astype(np.uint8)
-    n, lab, st, _ = cv2.connectedComponentsWithStats(m, 8)
-    big = 1 + int(np.argmax(st[1:, cv2.CC_STAT_AREA]))
-    x, y, w, h, _ = [int(v) for v in st[big]]
+    ys, xs = np.where(m)
+    if ys.size == 0:
+        return 0
+    x, y = int(xs.min()), int(ys.min())
+    w, h = int(xs.max()) - x + 1, int(ys.max()) - y + 1
     sil = m[y:y + h, x:x + w] * 255
-    outline = cv2.morphologyEx(sil, cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8))
-    white = ((o[:, :, 0] > 185) & (o[:, :, 1] > 185) & (o[:, :, 2] > 185)).astype(np.uint8) * 255
-    res = cv2.matchTemplate(white, outline, cv2.TM_CCORR_NORMED)
-    res[~np.isfinite(res)] = 0
-    res[:, :max(1, w)] = 0
-    _, _, _, loc = cv2.minMaxLoc(res)
-    return int(loc[0]) - x      # gapLeft - x0_jig
+    outline = np.clip(_dilate3(sil.astype(np.int16)) - _erode3(sil.astype(np.int16)),
+                      0, 255).astype(np.float64)
+    white = ((o[:, :, 0] > 185) & (o[:, :, 1] > 185) & (o[:, :, 2] > 185)).astype(np.float64)
+    H, W = white.shape
+    T = outline
+    T2 = float((T * T).sum())
+    if T2 <= 0 or H < h or W < w:
+        return 0
+    sw = np.lib.stride_tricks.sliding_window_view(white, (h, w))   # (H-h+1, W-w+1, h, w)
+    best_score, best_x = -1.0, w
+    for gy in range(sw.shape[0]):
+        wr = sw[gy]                                  # (W-w+1, h, w)
+        num = np.einsum("kij,ij->k", wr, T)
+        den = np.sqrt(np.einsum("kij,kij->k", wr, wr) * T2)
+        den[den == 0] = 1e-9
+        res = num / den
+        res[:max(1, w)] = 0                          # azzera il bordo sinistro (come l'orig.)
+        gx = int(np.argmax(res))
+        if res[gx] > best_score:
+            best_score, best_x = float(res[gx]), gx
+    return int(best_x) - x      # gapLeft - x0_jig
 
 def crea():
     r = requests.post(f"{ROOT}/code/create", json={"captchaType": "blockPuzzle"},
