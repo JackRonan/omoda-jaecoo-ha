@@ -6,6 +6,8 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.2.0 — 2026-06-21
+
 - **Comandi anche per i sedili passeggero e posteriori.** Finora potevi accendere e
   spegnere solo il sedile del posto guida; ora trovi gli stessi interruttori (caldo e
   aria) anche per il **passeggero** e per i due **sedili posteriori** (sinistro e
