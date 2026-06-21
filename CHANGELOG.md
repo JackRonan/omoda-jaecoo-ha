@@ -6,6 +6,24 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.7 — 2026-06-22
+
+- **"Raffredda tutto" e "Riscalda tutto" ora accendono DAVVERO tutto** (e si corregge
+  quanto detto nelle due note precedenti). Le macro tornano a fare ciò che ti aspetti, con
+  un unico comando come l'app ufficiale:
+  - **❄️ Raffredda tutto** = aria condizionata al massimo freddo **+ ventilazione di tutti
+    e quattro i sedili**.
+  - **🔥 Riscalda tutto** = aria calda al massimo **+ riscaldamento di tutti e quattro i
+    sedili + volante riscaldato + sbrinatore parabrezza + sbrinatore lunotto**.
+
+  Perché prima sembravano "non disponibili": i comandi del comfort (sedili, volante,
+  sbrinatori) l'auto li accetta **solo a vettura spenta e con il clima acceso**. Se l'auto
+  è accesa/occupata, o se si prova ad accendere un sedile col clima spento, l'auto li
+  rifiuta con un errore — e questo mi aveva tratto in inganno facendomi credere, a torto,
+  che certi comfort non fossero installati. Verificato dal vivo a motore spento: clima,
+  tutti i sedili, volante, parabrezza e lunotto rispondono correttamente. **Consiglio
+  d'uso:** lancia "Raffredda/Riscalda tutto" con l'**auto spenta**.
+
 ## v1.5.6 — 2026-06-21
 
 - **"Raffredda tutto" e "Riscalda tutto" ora sono vere macro su misura per la tua auto.**
