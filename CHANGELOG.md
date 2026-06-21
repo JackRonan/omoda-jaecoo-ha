@@ -6,6 +6,18 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.8 — 2026-06-22
+
+- **"Raffredda tutto" e "Riscalda tutto": basta un tocco, anche con l'auto parcheggiata.**
+  I sedili, il volante e gli sbrinatori l'auto li accende solo quando è **sveglia**: se la
+  premevi a vettura ferma da un po', l'auto era "addormentata" e rispondeva con un errore.
+  Ora la macro **sveglia l'auto da sola e aspetta qualche secondo** prima di mandare il
+  comando, quindi ti basta premere una volta e funziona (ci mette ~40 secondi a partire:
+  è normale, sta svegliando l'auto). Inoltre il pulsante ora fa **sempre l'accensione**
+  quando lo premi: prima, se era rimasto "acceso", il tocco mandava per sbaglio lo
+  spegnimento (che dava errore). 💡 Per il momento miglior risultato, usalo con l'**auto
+  spenta**.
+
 ## v1.5.7 — 2026-06-22
 
 - **"Raffredda tutto" e "Riscalda tutto" ora accendono DAVVERO tutto** (e si corregge
