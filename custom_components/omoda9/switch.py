@@ -73,9 +73,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
                         (psx_caldo, psx_aria), (pdx_caldo, pdx_aria)):
         caldo._exclusive = aria
         aria._exclusive = caldo
+    # macro clima "tutto" (confermati dal vivo) — raffredda e riscalda si escludono a vicenda
+    raffredda = Omoda9ClimaMacroSwitch(
+        coord, "Omoda9 Raffredda tutto", "raffredda_tutto",
+        "clima_raffredda_on", "clima_raffredda_off", "mdi:snowflake")
+    riscalda = Omoda9ClimaMacroSwitch(
+        coord, "Omoda9 Riscalda tutto", "riscalda_tutto",
+        "clima_riscalda_on", "clima_riscalda_off", "mdi:heat-wave")
+    raffredda._exclusive = riscalda
+    riscalda._exclusive = raffredda
     add([ricarica, ricarica_prog, parabrezza, lunotto, volante,
          sedile_caldo, sedile_aria, pass_caldo, pass_aria,
-         psx_caldo, psx_aria, pdx_caldo, pdx_aria])
+         psx_caldo, psx_aria, pdx_caldo, pdx_aria,
+         raffredda, riscalda])
 
 
 class Omoda9ComfortSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):
@@ -156,12 +166,53 @@ class Omoda9ChargeSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, Rest
         await self._run_command("ricarica_stop", False)
 
 
+class Omoda9ClimaMacroSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):
+    """Macro clima "tutto" (coolingControl/heatingControl): un preset che accende clima +
+    sedili (+ sbrinatori e volante per il caldo) in un colpo solo.
+
+    L'auto NON pubblica uno stato "preset attivo" dedicato → switch ottimistico (mostra il
+    target dopo il comando e ripristina l'ultimo stato al riavvio). Raffredda e Riscalda si
+    escludono a vicenda: accenderne uno spegne subito l'altro."""
+
+    _attr_device_class = SwitchDeviceClass.SWITCH
+
+    def __init__(self, coord, name: str, suffix: str,
+                 on_cmd: str, off_cmd: str, icon: str) -> None:
+        super().__init__(coord, name, suffix, entity_id_format=ENTITY_ID_FORMAT)
+        self._on_cmd = on_cmd
+        self._off_cmd = off_cmd
+        self._attr_icon = icon
+        self._restored: bool | None = None
+        self._exclusive: "Omoda9ClimaMacroSwitch | None" = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in ("on", "off"):
+            self._restored = last.state == "on"
+
+    @property
+    def is_on(self) -> bool | None:
+        if self._opt_value is not None:
+            return self._opt_value
+        return self._restored
+
+    async def async_turn_on(self, **kwargs) -> None:
+        if self._exclusive is not None:
+            self._exclusive._set_optimistic(False)
+        await self._run_command(self._on_cmd, True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._run_command(self._off_cmd, False)
+
+
 class Omoda9ScheduledChargeSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):
     """Ricarica PROGRAMMATA on/off (chargeAppointControl, body con array annidato).
 
-    Quando si accende, costruisce il piano dalle preferenze (number ora-inizio/durata,
-    tutti i giorni) e invia mainSwitch=1 + piano attivo; spegnendo invia mainSwitch=0.
-    Lo stato reale arriva dalla telemetria `chargeAppointPlans` (switchStatus del piano)."""
+    Quando si accende, costruisce il piano dalle preferenze (entità time "orario di
+    inizio" + number "durata", tutti i giorni) e invia mainSwitch=1 + piano attivo;
+    spegnendo invia mainSwitch=0. startTime è in MINUTI dalla mezzanotte (verificato dal
+    vivo: 465 = 07:45). Lo stato reale arriva dalla telemetria `chargeAppointPlans`."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_icon = "mdi:calendar-clock"
@@ -197,9 +248,13 @@ class Omoda9ScheduledChargeSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEnt
         return live if live is not None else self._restored
 
     def _plan(self, switch_status: int) -> dict:
-        hour = int(getattr(self.coordinator, "charge_start_hour", 8) or 8)
+        # orario di inizio in minuti-da-mezzanotte dall'entità time; fallback al vecchio
+        # cursore ore (compat) e infine 08:00 se nessuna preferenza è ancora disponibile.
+        mins = getattr(self.coordinator, "charge_start_minutes", None)
+        if mins is None:
+            mins = int(getattr(self.coordinator, "charge_start_hour", 8) or 8) * 60
         dur_h = int(getattr(self.coordinator, "charge_duration_hours", 6) or 6)
-        return {"cycleData": [1, 2, 3, 4, 5, 6, 7], "startTime": hour * 60,
+        return {"cycleData": [1, 2, 3, 4, 5, 6, 7], "startTime": int(mins),
                 "switchStatus": switch_status, "timeConsuming": dur_h * 60}
 
     async def async_turn_on(self, **kwargs) -> None:
