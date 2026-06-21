@@ -13,6 +13,12 @@ telematica Chery) a **Home Assistant**. Progetto di reverse-engineering.
   sull'auto coniando un `taskId` proprio.
 - **Sessione/OTP** — config flow per-utente + entità di recupero sessione.
 
+> ✅ **Pronto all'uso, condivisibile da chiunque.** Per partire bastano **email +
+> PIN** del tuo account Omoda/Jaecoo (più un **codice OTP** ricevuto via email al
+> primo accesso). VIN, tUserId e certificati MQTT vengono rilevati/installati
+> **automaticamente**. Il pacchetto **non contiene alcun dato per-account**: i soli
+> segreti (token, credenziali) restano nel *tuo* Home Assistant.
+
 > ⚠️ **Software NON ufficiale**, reverse-engineered. Nessuna affiliazione con
 > Omoda / Jaecoo / Chery. Fornito "as is", usalo a tuo rischio e solo sul tuo
 > veicolo. Vedi [`LICENSE`](LICENSE).
@@ -23,9 +29,9 @@ telematica Chery) a **Home Assistant**. Progetto di reverse-engineering.
    categoria **Integration**.
 2. Cerca **Omoda 9 / Jaecoo** → **Download** → **riavvia Home Assistant**.
 3. **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → Omoda 9** e
-   segui il config flow (bastano **email + PIN**).
+   segui il config flow: **email + PIN** → **codice OTP** ricevuto via email. Fine.
 
-### Login (OTP) — interamente in Home Assistant, solo email + PIN
+## Login (OTP) — interamente in Home Assistant, solo email + PIN
 
 Il login avviene **dal config flow**, senza strumenti esterni né un token
 pre-esistente, e chiede **solo l'email e il PIN** dell'account: VIN e tUserId
@@ -43,12 +49,102 @@ Quando in futuro la sessione scade (tipicamente perché è stata aperta l'app
 ufficiale), usa i pulsanti **«Richiedi codice OTP»** / **«Conferma OTP»** (con
 l'entità *testo* «Codice OTP») per rifare il login senza riconfigurare.
 
-> **Certificati MQTT — automatici.** La telemetria usa un broker MQTT in
-> mutual-TLS. Il certificato client EMQX è una **costante universale per-regione**
-> (uguale per tutti, presente negli asset pubblici dell'app), **non** un dato
-> per-account: l'integrazione lo **auto-provisiona** al primo avvio in base alla
-> regione. Non devi procurarti né inserire nulla. Il campo *certs_src* serve solo
-> come override manuale (es. regione non coperta o cert personalizzati).
+---
+
+## Come funziona — provisioning e autenticazione (sotto il cofano)
+
+Tutto ciò che segue è **automatico**: serve solo per capire il flusso, per il
+debug, o per portare l'integrazione su una regione non ancora coperta. Nessuno di
+questi passi va eseguito a mano in un'installazione normale.
+
+### 1. Login e token (OTP)
+
+Il primo accesso conia un **token di sessione** per-account a partire da email +
+PIN + un codice OTP via email. La catena (orchestrata dal config flow, codice in
+`custom_components/omoda9/core/`):
+
+| Passo | Modulo | Cosa fa |
+|---|---|---|
+| invio OTP | `login_omoda.py invia <email>` | risolve il captcha del gateway (vedi §2) e fa partire il codice via **email** |
+| conio token | `prova_token.py <email> <code>` | chiama `/auth/oauth2/token` replicando l'app (codice cifrato SM4) e salva il token |
+| orchestrazione | `session.py` | espone `request_otp()` / `confirm_otp(code)` / `check()` / `refresh()`; lancia i due script come sottoprocesso |
+
+Il token viene scritto in **`<config>/omoda9_<VIN>_token.json`** (nel *tuo* Home
+Assistant, mai nel repo). Finché il **refresh_token** è valido, `session.refresh()`
+rinnova la sessione **senza** nuovo OTP né captcha. Un nuovo OTP serve solo se
+sia il token sia il refresh muoiono — caso tipico: **apertura dell'app ufficiale**
+(sessione singola lato cloud).
+
+### 2. Captcha (slider) — risolto dentro Home Assistant
+
+L'invio dell'OTP è protetto da uno **slider-captcha** (`/api/code/create` →
+`/api/code/check`). `captcha_solver.py` lo risolve **in-process** con **solo
+`numpy` + `Pillow`** (cross-correlation e morfologia reimplementate da zero,
+**niente OpenCV/cv2**): così gira anche su **Home Assistant OS** (musllinux, dove
+`opencv-python-headless` non ha wheel). Nessuna interazione utente, nessuna
+dipendenza pesante.
+
+### 3. Certificati MQTT mutual-TLS — auto-provisioning
+
+La telemetria si connette al broker **EMQX** dell'auto in **mutual-TLS**. I
+certificati client (`ca.pem`, `client.pem`, `client.key`) sono **costanti
+universali per-regione** — **identiche per tutti gli utenti**, prese verbatim
+dagli asset **pubblici** dell'APK (`Subject: CN=client`) — **non** dati
+per-account: l'isolamento tra account è dato da username/password MQTT (clientId +
+md5) e dalle ACL sui topic, esattamente come fa l'app ufficiale.
+
+Al primo avvio `coordinator.async_provision_certs()` →
+`cert_bundle.decrypt_region(<host_mqtt>)` deobfusca i cert dal bundle
+(`custom_components/omoda9/certs/store.json`) e li scrive in
+**`<config>/omoda9_<VIN>_certs/`**. Override manuale: il campo **`certs_src`** del
+config flow (cartella con i cert già pronti), oppure copiali a mano in quella
+dir. Per una regione **non** presente nel bundle l'avvio fallisce con un messaggio
+che indica dove mettere i cert.
+
+### 4. Provisioning dei comandi (car_token)
+
+Inviare comandi all'auto richiede un **car_token per-veicolo** (non lo `userToken`
+del BFF). La catena replicata dall'app è:
+
+```
+getTuserId → loginTSP (= car_token) → queryList → setVecDefault(vin)
+           → checkPassword(PIN, scene) → comando   (Authorization = car_token)
+```
+
+Gestita da `commands.py`; il **PIN** è quello dell'account. ⚠️ Un PIN **errato**
+rischia il **lockout** dell'account: non va indovinato. Il VIN deve risultare tra
+i veicoli autorizzati (`authorizeType` 2 = proprietario, 0 = delegato).
+`provision.py` offre una **diagnostica in sola lettura** (`diagnose()`) per
+verificare appartenenza veicolo e `authorizeType` **senza toccare l'auto**.
+
+### File generati (nel tuo HA, mai nel repo)
+
+- `<config>/omoda9_<VIN>_token.json` — token di sessione per-account.
+- `<config>/omoda9_<VIN>_certs/` — certificati mutual-TLS del broker MQTT.
+
+Sono coperti da `.gitignore`; non lasciano mai la tua installazione.
+
+### Provisioning / login manuale (avanzato, fuori da HA)
+
+Per debug si possono usare gli script CLI in `custom_components/omoda9/core/` con
+un Python che abbia i `requirements` del manifest, configurando l'ambiente via
+variabili (vedi [`omoda9.env.example`](omoda9.env.example): `OMODA_BFF`,
+`OMODA_TOKEN_PATH`, `VIN`, `TUSERID`, `OMODA_PIN`, endpoint regionali…):
+
+```bash
+# 1) invia il codice OTP via email (risolve il captcha)
+python3 login_omoda.py invia <email>
+
+# 2) conia il token e salvalo in $OMODA_TOKEN_PATH (default ./token.json)
+python3 prova_token.py <email> <codice>
+
+# 3) (opzionale) diagnostica veicolo/autorizzazione — SOLA LETTURA, non tocca l'auto
+python3 provision.py
+```
+
+Il token così coniato è lo **stesso** file che legge l'integrazione: puntando
+`OMODA_TOKEN_PATH` a `<config>/omoda9_<VIN>_token.json` si può sbloccare un setup
+anche senza rifare l'OTP dal config flow.
 
 ## Aggiornamento
 
@@ -60,17 +156,12 @@ Quando esce una nuova release: **HACS → Omoda 9 → Update → riavvia Home As
 - Un account Omoda/Jaecoo con il veicolo associato (proprietario).
 - Un broker MQTT raggiungibile da Home Assistant (es. add-on Mosquitto).
 
-## Configurazione per-utente
-
-I dati per-account (token, certificati mutual-TLS) sono generati/raccolti dal
-config flow e **non** sono inclusi nel repository. Endpoint regionali con default
-EU, override disponibili in fase di setup.
-
 ## Note d'uso
 
 - **Non aprire l'app ufficiale Omoda/Jaecoo** mentre l'integrazione è attiva:
   stesso clientId → si scollegano (e può invalidare il token → nuovo OTP).
-- Molte entità sono `unknown` ad **auto in standby** (atteso).
+- Molte entità sono `unknown` ad **auto in standby** (atteso); mostrano l'ultimo
+  valore noto dopo un riavvio di HA (persistenza `RestoreEntity`).
 - Batteria/velocità/odometro arrivano **solo ad auto in marcia**.
 
 ## Stato / roadmap
@@ -83,7 +174,9 @@ EU, override disponibili in fase di setup.
 - ✅ **Provisioning automatico dei certificati** mutual-TLS (v0.2.4): cert client
   EMQX universali per-regione auto-installati al setup → onboarding solo email+PIN,
   senza estrarre nulla a mano.
-- ⬜ Persistenza posizione/realtime al riavvio di HA (`RestoreEntity`).
+- ✅ **Persistenza stato al riavvio di HA** (v0.2.5–v0.2.6): posizione, batteria,
+  velocità e tutte le entità di stato ripristinano l'ultimo valore noto via
+  `RestoreEntity`/`RestoreSensor`.
 
 ## Licenza
 
