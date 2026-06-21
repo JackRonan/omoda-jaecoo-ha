@@ -6,6 +6,24 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.1.0 — 2026-06-21
+
+- **Riscaldamenti e sbrinamenti ora si spengono con un tocco.** Sbrinamento
+  parabrezza, sbrinamento lunotto, volante riscaldato e i sedili (caldo/aria) del
+  posto guida diventano dei normali interruttori: prima potevi solo accenderli (e si
+  spegnevano da soli dopo 15 minuti), ora li accendi **e li spegni** quando vuoi,
+  vedendo lo stato acceso/spento nella stessa card.
+- **Sedile guida più furbo.** Caldo e aria del sedile guida non possono stare accesi
+  insieme: accendendo l'aria il riscaldamento si spegne (e viceversa), proprio come
+  fa l'auto — e ora la card lo mostra subito.
+- **Tasto "Sveglia auto" più affidabile.** Se la sveglia via SMS non risponde
+  (capitava che l'auto restasse a riposo), l'integrazione prova in automatico a
+  contattare l'auto con la richiesta di posizione, che la sveglia al primo colpo e
+  in più aggiorna la posizione GPS.
+- **Schermata più pulita.** Un paio di indicazioni che l'auto non comunica mai da
+  ferma (tendina del tetto, riscaldamento parabrezza) sono state spostate tra i
+  dettagli diagnostici, così non restano "in dubbio" tra i controlli principali.
+
 ## v1.0.0 — 2026-06-21
 
 - **Versione 1.0: l'integrazione diventa stabile e più affidabile.** Tante piccole
