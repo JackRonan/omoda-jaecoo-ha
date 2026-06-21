@@ -1,0 +1,18 @@
+# --- SEGRETI / DATI PER-ACCOUNT: non committare MAI ---
+certs_eu/
+*.env
+omoda9.env
+token.json
+.mqtt_cred
+
+# --- runtime / dati locali ---
+data/
+venv/
+__pycache__/
+*.pyc
+*.bak
+*.bak_*
+
+# IDE
+.vscode/
+.idea/

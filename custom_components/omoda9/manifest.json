@@ -1,0 +1,16 @@
+{
+  "domain": "omoda9",
+  "name": "Omoda 9 / Jaecoo",
+  "version": "0.2.0",
+  "documentation": "https://github.com/Caslinovich/omoda9-ha",
+  "issue_tracker": "https://github.com/Caslinovich/omoda9-ha/issues",
+  "codeowners": ["@Caslinovich"],
+  "config_flow": true,
+  "iot_class": "cloud_push",
+  "integration_type": "device",
+  "requirements": [
+    "paho-mqtt>=2.0",
+    "requests>=2.28",
+    "pycryptodome>=3.17"
+  ]
+}
