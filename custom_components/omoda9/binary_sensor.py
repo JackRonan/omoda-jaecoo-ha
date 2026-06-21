@@ -34,7 +34,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents.append(Omoda9Online(coord))
     ents.append(Omoda9Awake(coord))
     ents.append(Omoda9Session(coord))
+    # — avvisi dal canale realtime (Round B): gomme + batteria scarica —
+    for suffix, name, field, dc in _RT_BINARIES:
+        ents.append(Omoda9RealtimeBinary(coord, name, suffix, field, dc))
     add(ents)
+
+
+# Avvisi (warning) presenti sul canale realtime: ON = anomalia. `*TyreCall` = avviso
+# pressione gomma (device_class PROBLEM); `socLowCall` = batteria di trazione scarica
+# (device_class BATTERY → on = "low"). Convenzione ON/OFF (1=avviso) da confermare dal
+# vivo. (suffix, nome, campo realtime, device_class)
+_RT_BINARIES = [
+    ("avviso_gomma_ant_sx", "Avviso gomma ant. SX", "lFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("avviso_gomma_ant_dx", "Avviso gomma ant. DX", "rFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("avviso_gomma_post_sx", "Avviso gomma post. SX", "lRearTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("avviso_gomma_post_dx", "Avviso gomma post. DX", "rRearTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("batteria_scarica", "Batteria scarica", "socLowCall", BinarySensorDeviceClass.BATTERY),
+]
 
 
 class _Omoda9RestoreBinary(Omoda9Entity, BinarySensorEntity, RestoreEntity):
@@ -91,6 +107,25 @@ class Omoda9Online(_Omoda9RestoreBinary):
     def _live_is_on(self) -> bool | None:
         rt = self.coordinator.data.get("realtime") or {}
         return field_on(rt["onlineStatus"]) if "onlineStatus" in rt else None
+
+
+class Omoda9RealtimeBinary(_Omoda9RestoreBinary):
+    """Avviso generico su un campo del canale realtime (vedi `_RT_BINARIES`).
+
+    Stesso pattern di `Omoda9Online` (legge da coordinator.data["realtime"]) ma in
+    categoria diagnostica. ON se il campo è != 0; assente → ripristina l'ultimo noto."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coord, name: str, suffix: str, field: str,
+                 device_class: BinarySensorDeviceClass) -> None:
+        super().__init__(coord, f"Omoda9 {name}", f"rt_{suffix}")
+        self._field = field
+        self._attr_device_class = device_class
+
+    def _live_is_on(self) -> bool | None:
+        rt = self.coordinator.data.get("realtime") or {}
+        return field_on(rt[self._field]) if self._field in rt else None
 
 
 class Omoda9Awake(Omoda9Entity, BinarySensorEntity):

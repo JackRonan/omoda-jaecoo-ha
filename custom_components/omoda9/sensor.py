@@ -8,6 +8,7 @@ arriva un dato live dall'auto.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from homeassistant.components.sensor import (
@@ -17,7 +18,17 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfSpeed
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfLength,
+    UnitOfPressure,
+    UnitOfSpeed,
+    UnitOfTemperature,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -25,6 +36,127 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN, FIELDS_AS_RICH_ENTITY
 from .coordinator import SENSORS
 from .entity import Omoda9Entity
+
+
+# ───────────────────────── sensori "realtime" (Round B) ─────────────────────────
+# Campi del canale REST /asr/manager/realtime (in coordinator.data["realtime"]),
+# aggiornati al RISVEGLIO dell'auto (probe read-only). A differenza del 5A02 (MQTT),
+# qui i VALORI reali di autonomia/odometro/gomme/consumi/ricarica ci sono davvero
+# (sul 5A02 erano solo flag di unità "1"). Validati 1:1 contro il bean ufficiale
+# CVRealtimeResBean dell'SDK Chery. Una tabella di spec evita 20+ classi gemelle.
+#
+# Valori/unità CONFERMATI dal vivo ad auto sveglia (2026-06-21, 84 campi):
+#   pureElectricRange=60 km · mileageSurplus=215 km (totale) · cruiseRange=134 (stima)
+#   lFrontTyreKpa=292 (=42 psi) → kPa · gomme temp 34-35 °C · *TyreCall/socLowCall=0=ok
+#   oilSurplus=23 → LITRI (215−60=155 km a benzina /23 L ≈ 15 L/100km) · averageFuel=0.0
+#   avgHkPowerKwh50km=20.6 → kWh/100km · totalVoltage=323.1 V · totalCurrent=0.0 A (HV reali!)
+#   remainChargeTime ASSENTE ad auto non in carica (comparirà sotto carica).
+
+C = UnitOfTemperature.CELSIUS
+KM = UnitOfLength.KILOMETERS
+KPA = UnitOfPressure.KPA
+MIN = UnitOfTime.MINUTES
+VOLT = UnitOfElectricPotential.VOLT
+AMP = UnitOfElectricCurrent.AMPERE
+DIST = SensorDeviceClass.DISTANCE
+TEMP = SensorDeviceClass.TEMPERATURE
+PRESS = SensorDeviceClass.PRESSURE
+DUR = SensorDeviceClass.DURATION
+VOLTAGE = SensorDeviceClass.VOLTAGE
+CURRENT = SensorDeviceClass.CURRENT
+MEAS = SensorStateClass.MEASUREMENT
+TOTAL = SensorStateClass.TOTAL_INCREASING
+
+
+@dataclass(frozen=True)
+class _RtSpec:
+    """Spec di un sensore realtime. `numeric=False` → valore grezzo (stato/enum)."""
+
+    suffix: str           # unique_id suffix (stabile): f"{vin}_rt_<suffix>"
+    name: str             # nome → "Omoda9 <name>" → entity_id slugificato
+    field: str            # chiave nel dict realtime
+    device_class: SensorDeviceClass | None = None
+    unit: str | None = None
+    state_class: SensorStateClass | None = None
+    icon: str | None = None
+    diag: bool = False
+    numeric: bool = True
+
+
+_RT_SENSORS: list[_RtSpec] = [
+    # ── P1 · autonomia / chilometri (valori km confermati dal vivo) ──
+    _RtSpec("range_elettrico", "Autonomia elettrica", "pureElectricRange",
+            DIST, KM, MEAS, "mdi:map-marker-distance"),
+    # mileageSurplus = autonomia TOTALE residua (elettrico+benzina): 215 km dal vivo,
+    # coerente con pureElectric 60 + benzina ~155 (da oilSurplus 23 L).
+    _RtSpec("range_totale", "Autonomia totale", "mileageSurplus",
+            DIST, KM, MEAS, "mdi:map-marker-distance"),
+    # cruiseRange = stima combinata alternativa (134 km dal vivo) → diagnostico.
+    _RtSpec("range_combinato", "Autonomia combinata (stima)", "cruiseRange",
+            DIST, KM, MEAS, "mdi:map-marker-distance", diag=True),
+    _RtSpec("odometro", "Odometro", "odometer",
+            DIST, KM, TOTAL, "mdi:counter"),
+    _RtSpec("km_ibrido", "Chilometraggio ibrido", "hybridMileage",
+            DIST, KM, TOTAL, "mdi:counter", diag=True),
+    # ── P1 · TPMS pressione (kPa) ──
+    _RtSpec("gomma_ant_sx_press", "Pressione gomma ant. SX", "lFrontTyreKpa",
+            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+    _RtSpec("gomma_ant_dx_press", "Pressione gomma ant. DX", "rFrontTyreKpa",
+            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+    _RtSpec("gomma_post_sx_press", "Pressione gomma post. SX", "lRearTyreKpa",
+            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+    _RtSpec("gomma_post_dx_press", "Pressione gomma post. DX", "rRearTyreKpa",
+            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+    # ── P1 · TPMS temperatura (°C, diagnostica) ──
+    _RtSpec("gomma_ant_sx_temp", "Temperatura gomma ant. SX", "lFrontTyreTemp",
+            TEMP, C, MEAS, "mdi:thermometer", diag=True),
+    _RtSpec("gomma_ant_dx_temp", "Temperatura gomma ant. DX", "rFrontTyreTemp",
+            TEMP, C, MEAS, "mdi:thermometer", diag=True),
+    _RtSpec("gomma_post_sx_temp", "Temperatura gomma post. SX", "lRearTyreTemp",
+            TEMP, C, MEAS, "mdi:thermometer", diag=True),
+    _RtSpec("gomma_post_dx_temp", "Temperatura gomma post. DX", "rRearTyreTemp",
+            TEMP, C, MEAS, "mdi:thermometer", diag=True),
+    # ── P2 · consumi e residui (unità confermate dal vivo) ──
+    _RtSpec("consumo_carburante", "Consumo medio carburante", "averageFuel",
+            None, "L/100 km", MEAS, "mdi:gas-station"),
+    # avgHkPowerKwh50km=20.6 dal vivo → kWh/100km (il nome "50km" è fuorviante).
+    _RtSpec("consumo_elettrico", "Consumo medio elettrico", "avgHkPowerKwh50km",
+            None, "kWh/100 km", MEAS, "mdi:lightning-bolt"),
+    # oilSurplus=23 dal vivo → LITRI (confermato dal calcolo autonomia benzina).
+    _RtSpec("carburante_residuo", "Carburante residuo", "oilSurplus",
+            None, "L", MEAS, "mdi:fuel"),
+    # ── P2 · batteria alta tensione (presenti nel payload live!) ──
+    _RtSpec("tensione_hv", "Tensione batteria HV", "totalVoltage",
+            VOLTAGE, VOLT, MEAS, "mdi:flash", diag=True),
+    _RtSpec("corrente_hv", "Corrente batteria HV", "totalCurrent",
+            CURRENT, AMP, MEAS, "mdi:current-dc", diag=True),
+    # ── P2 · ricarica ──
+    # remainChargeTime: ASSENTE ad auto non in carica (comparirà sotto carica). Assunto
+    # in MINUTI — da riconfermare a vettura in carica. chargeState/appointmentChargeState/
+    # fastChargingGunStatus = codici (tutti 0 = a riposo dal vivo) → grezzi da decodificare.
+    _RtSpec("tempo_ricarica", "Tempo di ricarica residuo", "remainChargeTime",
+            DUR, MIN, None, "mdi:timer-sand"),
+    _RtSpec("stato_ricarica", "Stato ricarica", "chargeState",
+            None, None, None, "mdi:ev-station", diag=True, numeric=False),
+    _RtSpec("ricarica_prog_stato", "Ricarica programmata · stato", "appointmentChargeState",
+            None, None, None, "mdi:calendar-clock", diag=True, numeric=False),
+    _RtSpec("presa_rapida", "Presa ricarica rapida", "fastChargingGunStatus",
+            None, None, None, "mdi:ev-plug-ccs2", diag=True, numeric=False),
+    # ── P2 · clima target ──
+    _RtSpec("temp_imp_sx", "Temperatura impostata SX", "frontSetTempLeft",
+            TEMP, C, MEAS, "mdi:thermometer", diag=True),
+    _RtSpec("temp_imp_dx", "Temperatura impostata DX", "frontSetTempRight",
+            TEMP, C, MEAS, "mdi:thermometer", diag=True),
+]
+
+
+def _rt(coord, field: str) -> str | None:
+    """Valore grezzo del campo realtime, o None se assente/vuoto."""
+    rt = coord.data.get("realtime") or {}
+    v = rt.get(field)
+    if v is None or str(v).strip() in ("", "None"):
+        return None
+    return str(v)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
@@ -36,6 +168,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ]
     ents.append(Omoda9Battery(coord))
     ents.append(Omoda9Speed(coord))
+    # — sensori "ricchi" dal canale realtime (Round B): autonomia, odometro, gomme,
+    #   consumi, ricarica, clima target —
+    ents += [Omoda9RealtimeSensor(coord, s) for s in _RT_SENSORS]
     ents.append(Omoda9SessionStatus(coord))
     # — sensori diagnostici (parità col bridge) —
     ents.append(Omoda9TextSensor(coord, "Omoda9 Esito comando", "cmd_status", "cmd_status", "mdi:car-cog"))
@@ -127,6 +262,38 @@ class Omoda9Speed(_Omoda9RestoreSensor):
         rt = self.coordinator.data.get("realtime") or {}
         try:
             return float(rt["vehicleSpeed"]) if "vehicleSpeed" in rt else None
+        except (TypeError, ValueError):
+            return None
+
+
+class Omoda9RealtimeSensor(_Omoda9RestoreSensor):
+    """Sensore generico su un campo del canale realtime (vedi `_RT_SENSORS`).
+
+    Stesso pattern di `Omoda9Battery`/`Omoda9Speed` ma parametrico: device_class,
+    unità e state_class arrivano dalla spec. `numeric=True` converte a float (None
+    se non parsabile → emerge l'ultimo valore noto del RestoreSensor); `numeric=False`
+    tiene il valore grezzo (codici di stato ricarica da decodificare)."""
+
+    def __init__(self, coord, spec: _RtSpec) -> None:
+        super().__init__(coord, f"Omoda9 {spec.name}", f"rt_{spec.suffix}")
+        self._spec = spec
+        if spec.device_class:
+            self._attr_device_class = spec.device_class
+        if spec.unit:
+            self._attr_native_unit_of_measurement = spec.unit
+        if spec.state_class:
+            self._attr_state_class = spec.state_class
+        if spec.icon:
+            self._attr_icon = spec.icon
+        if spec.diag:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def _live_value(self):
+        raw = _rt(self.coordinator, self._spec.field)
+        if raw is None or not self._spec.numeric:
+            return raw
+        try:
+            return float(raw)
         except (TypeError, ValueError):
             return None
 
