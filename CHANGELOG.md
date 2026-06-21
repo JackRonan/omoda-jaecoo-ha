@@ -6,6 +6,16 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.4 — 2026-06-21
+
+- **Niente più comandi accavallati se premi troppe volte.** L'auto esegue **un comando
+  alla volta**: ora, finché un comando è in corso, le pressioni successive vengono
+  ignorate con un avviso ("attendi qualche secondo, un comando è già in corso") invece di
+  accavallarsi e farsi rifiutare dall'auto come "occupato". Appena l'auto conferma, il
+  comando successivo riparte subito. Vale per tutti i comandi che **agiscono** sull'auto
+  (clima, serrature, baule/finestrini/tetto, ricarica, sedili, antifurto, "Raffredda/
+  Riscalda tutto").
+
 ## v1.5.3 — 2026-06-21
 
 - **L'aggiornamento automatico ora parte SPENTO.** Per non svegliare l'auto senza che tu
