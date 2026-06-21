@@ -81,6 +81,18 @@ class _RtSpec:
     icon: str | None = None
     diag: bool = False
     numeric: bool = True
+    vmap: dict | None = None  # codice grezzo → testo leggibile (campi enum)
+
+
+# ── Mappe codice→testo per i campi enum di ricarica ──
+# I valori sono enum a 3 stati ("0"/"1"/"2", confermati dai confronti nel codice
+# dell'app `rus_car_state_model.dart`). `0` = stato a riposo verificato dal vivo
+# (auto parcheggiata non in carica). La semantica di 1/2 segue la convenzione EV;
+# qualunque codice non previsto resta leggibile come "Sconosciuto (N)" (vedi
+# Omoda9RealtimeSensor._live_value) → nessuna informazione persa, nessun valore inventato.
+CHARGE_STATE_MAP = {"0": "Non in ricarica", "1": "In ricarica", "2": "Ricarica completata"}
+APPT_CHARGE_STATE_MAP = {"0": "Disattivata", "1": "Attiva", "2": "In esecuzione"}
+FAST_GUN_MAP = {"0": "Scollegata", "1": "Collegata", "2": "Collegata (ricarica rapida)"}
 
 
 _RT_SENSORS: list[_RtSpec] = [
@@ -137,11 +149,14 @@ _RT_SENSORS: list[_RtSpec] = [
     _RtSpec("tempo_ricarica", "Tempo di ricarica residuo", "remainChargeTime",
             DUR, MIN, None, "mdi:timer-sand"),
     _RtSpec("stato_ricarica", "Stato ricarica", "chargeState",
-            None, None, None, "mdi:ev-station", diag=True, numeric=False),
+            None, None, None, "mdi:ev-station", diag=True, numeric=False,
+            vmap=CHARGE_STATE_MAP),
     _RtSpec("ricarica_prog_stato", "Ricarica programmata · stato", "appointmentChargeState",
-            None, None, None, "mdi:calendar-clock", diag=True, numeric=False),
+            None, None, None, "mdi:calendar-clock", diag=True, numeric=False,
+            vmap=APPT_CHARGE_STATE_MAP),
     _RtSpec("presa_rapida", "Presa ricarica rapida", "fastChargingGunStatus",
-            None, None, None, "mdi:ev-plug-ccs2", diag=True, numeric=False),
+            None, None, None, "mdi:ev-plug-ccs2", diag=True, numeric=False,
+            vmap=FAST_GUN_MAP),
     # ── P2 · clima target ──
     _RtSpec("temp_imp_sx", "Temperatura impostata SX", "frontSetTempLeft",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
@@ -290,7 +305,12 @@ class Omoda9RealtimeSensor(_Omoda9RestoreSensor):
 
     def _live_value(self):
         raw = _rt(self.coordinator, self._spec.field)
-        if raw is None or not self._spec.numeric:
+        if raw is None:
+            return None
+        if self._spec.vmap is not None:
+            key = raw[:-2] if raw.endswith(".0") else raw  # "0.0" → "0"
+            return self._spec.vmap.get(key, f"Sconosciuto ({raw})")
+        if not self._spec.numeric:
             return raw
         try:
             return float(raw)
