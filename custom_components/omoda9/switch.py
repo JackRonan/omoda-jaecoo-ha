@@ -82,10 +82,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
         "clima_riscalda_on", "clima_riscalda_off", "mdi:heat-wave")
     raffredda._exclusive = riscalda
     riscalda._exclusive = raffredda
+    antifurto = Omoda9TheftAlarmSwitch(coord)
     add([ricarica, ricarica_prog, parabrezza, lunotto, volante,
          sedile_caldo, sedile_aria, pass_caldo, pass_aria,
          psx_caldo, psx_aria, pdx_caldo, pdx_aria,
-         raffredda, riscalda])
+         raffredda, riscalda, antifurto])
 
 
 class Omoda9ComfortSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):
@@ -264,3 +265,50 @@ class Omoda9ScheduledChargeSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEnt
     async def async_turn_off(self, **kwargs) -> None:
         await self._run_command("ricarica_prog_off", False,
                                 {"mainSwitch": 0, "chargeAppointPlans": [self._plan(0)]})
+
+
+class Omoda9TheftAlarmSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):
+    """Antifurto dell'auto (theftAlarm setSwitch, endpoint /act).
+
+    ON = l'auto fa scattare l'allarme e invia avvisi in caso di movimento non autorizzato,
+    scasso porte, rottura finestrini o altre effrazioni (descrizione ufficiale dell'app).
+    A differenza dei comfort, lo stato NON è in telemetria MQTT: si legge via REST
+    (querySwitch). Strategia: seed iniziale dalla lettura reale, poi stato ottimistico dopo
+    il toggle (il setSwitch ATTUA e vuole un tasko l'auto sveglia), e ripristino dell'ultimo
+    stato noto al riavvio di HA."""
+
+    _attr_device_class = SwitchDeviceClass.SWITCH
+    _attr_icon = "mdi:shield-car"
+
+    def __init__(self, coord) -> None:
+        super().__init__(coord, "Omoda9 Antifurto", "antifurto", entity_id_format=ENTITY_ID_FORMAT)
+        self._restored: bool | None = None
+        self._real: bool | None = None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in ("on", "off"):
+            self._restored = last.state == "on"
+        # seed dello stato reale dal backend (read-only, best-effort: non deve rompere il setup)
+        try:
+            v = await self.coordinator.async_query_theft()
+            if v is not None:
+                self._real = v != 0
+                self.async_write_ha_state()
+        except Exception:  # noqa: BLE001
+            pass
+
+    @property
+    def is_on(self) -> bool | None:
+        if self._opt_value is not None:
+            return self._opt_value
+        if self._real is not None:
+            return self._real
+        return self._restored
+
+    async def async_turn_on(self, **kwargs) -> None:
+        await self._run_command("antifurto_on", True)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        await self._run_command("antifurto_off", False)

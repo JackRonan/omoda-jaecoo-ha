@@ -6,6 +6,25 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+- **Nuovo interruttore "Antifurto".** Puoi accendere e spegnere l'allarme antifurto
+  dell'auto direttamente da Home Assistant. Quando è acceso, l'auto fa scattare l'allarme
+  e ti avvisa in caso di movimento non autorizzato del veicolo, tentativi di scasso delle
+  porte, rottura dei finestrini o altre potenziali effrazioni. L'interruttore mostra anche
+  se l'antifurto è già attivo (lo legge dall'auto).
+- **Due nuovi tasti "comfort": Raffredda tutto e Riscalda tutto.** Con un solo
+  interruttore prepari l'abitacolo per la stagione. **"Raffredda tutto"** accende il
+  clima al massimo del freddo e avvia la **ventilazione di tutti i sedili**.
+  **"Riscalda tutto"** accende il clima al massimo del caldo e attiva insieme lo
+  **sbrinamento di parabrezza e lunotto, il volante riscaldato e il riscaldamento di
+  tutti i sedili**. I due tasti si escludono a vicenda: accendendone uno, l'altro si
+  spegne. Comodi per scaldare o rinfrescare l'auto in un colpo solo prima di partire.
+- **Ricarica programmata: ora scegli l'orario al minuto.** L'ora di inizio della
+  ricarica programmata era un cursore a sole ore intere (es. solo "le 8"); adesso c'è un
+  vero **selettore d'orario** "Ricarica · orario di inizio" con cui imposti anche i minuti
+  (es. **07:45**). La durata resta il cursore in ore. ⚠️ Dopo l'aggiornamento il vecchio
+  cursore "Ricarica · ora di inizio" resterà "non disponibile" e si può togliere: al suo
+  posto usa il nuovo selettore d'orario.
+
 ## v1.3.0 — 2026-06-21
 
 - **Il clima ora si imposta alla temperatura che vuoi.** Prima c'era un semplice

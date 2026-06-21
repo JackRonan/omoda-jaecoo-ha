@@ -204,6 +204,16 @@ COMMANDS = [
     # (lat/lon) che il bridge cabla nel device_tracker. È il metodo dell'app per la posizione a riposo.
     ("localizza", {"endpoint": "vehicleLocation", "body": {},
                    "name": "Localizza auto (GPS)", "icon": "mdi:crosshairs-gps", "group": "Altro"}),
+
+    # — Sicurezza — Antifurto (theftAlarm). Avvisi+sirena per movimento non autorizzato,
+    # scasso porte, rottura finestrini (descr. ufficiale app). NB: vive su /act (NON
+    # /asc/vehicleControl) → usa la chiave `path` invece di `endpoint`. Body = theftAlarmSwitch
+    # 0/1; send() aggiunge clientType/seq/vin e il taskId coniato (il backend lo pretende:
+    # A00643 senza). Stato leggibile via query_theft_switch() (/act/theftAlarm/querySwitch).
+    ("antifurto_on",  {"path": "/act/theftAlarm/setSwitch", "body": {"theftAlarmSwitch": "1"},
+                   "name": "Antifurto acceso", "icon": "mdi:shield-car", "group": "Sicurezza"}),
+    ("antifurto_off", {"path": "/act/theftAlarm/setSwitch", "body": {"theftAlarmSwitch": "0"},
+                   "name": "Antifurto spento", "icon": "mdi:shield-off-outline", "group": "Sicurezza"}),
 ]
 CMD_MAP = {k: v for k, v in COMMANDS}
 
@@ -327,7 +337,9 @@ def send(cmd_key, emit=lambda m: None, params=None):
     payload = json.dumps(m, separators=(",", ":"), ensure_ascii=False).encode()
     headers = {"Authorization": token, "timestamp": str(ts),
                "Content-Type": "application/json; charset=utf-8", "User-Agent": "okhttp/4.9.2"}
-    url = TSP_HOST + "/asc/vehicleControl/" + c["endpoint"]
+    # path esplicito (es. antifurto su /act/theftAlarm/setSwitch) oppure il classico
+    # /asc/vehicleControl/<endpoint> per i comandi veicolo standard.
+    url = TSP_HOST + (c.get("path") or ("/asc/vehicleControl/" + c["endpoint"]))
     emit(f"invio {c['name']} (taskId:{src})…")
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
@@ -352,7 +364,29 @@ def send(cmd_key, emit=lambda m: None, params=None):
     return out
 
 
+def query_theft_switch():
+    """Legge lo stato dell'antifurto (READ-ONLY, /act/theftAlarm/querySwitch).
+       Ritorna 1/0 (int) oppure None se non disponibile. NON usa taskId né attua nulla:
+       la risposta mette il valore sotto `body.theftAlarmSwitch`."""
+    token, _tuid = wake._bff_login()
+    if not token:
+        return None
+    try:
+        _status, j = wake._signed_post(token, "/act/theftAlarm/querySwitch", {"vin": VIN})
+    except Exception:
+        return None
+    if isinstance(j, dict):
+        body = j.get("body") if isinstance(j.get("body"), dict) else {}
+        v = body.get("theftAlarmSwitch")
+        if v is not None:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 if __name__ == "__main__":
     # Diagnostica: elenca i comandi (NON invia nulla).
     for k, v in COMMANDS:
-        print(f"{k:22s} {v['endpoint']:24s} {v['body']}")
+        print(f"{k:22s} {(v.get('path') or v.get('endpoint','')):28s} {v['body']}")

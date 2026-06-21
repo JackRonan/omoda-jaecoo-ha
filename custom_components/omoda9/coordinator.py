@@ -433,6 +433,15 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         CMD.send(key, emit=emit, params=params)
         return msgs[-1] if msgs else "inviato"
 
+    async def async_query_theft(self) -> int | None:
+        """Stato antifurto via REST (read-only); None se non disponibile."""
+        return await self.hass.async_add_executor_job(self._query_theft)
+
+    def _query_theft(self) -> int | None:
+        self._bind_core()
+        import commands as CMD  # core/ è sul path (vedi __init__)
+        return CMD.query_theft_switch()
+
     async def async_wake(self) -> None:
         await self.hass.async_add_executor_job(self._wake)
 
