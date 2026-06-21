@@ -5,7 +5,12 @@ PLATFORMS = ["sensor", "binary_sensor", "button", "lock", "switch", "cover", "de
 
 # Campi auto (5A02) ora rappresentati da entità native ATTUABILI (lock/switch/cover):
 # esclusi dalla creazione di sensor/binary_sensor "di sola lettura" per non duplicarli.
-FIELDS_AS_RICH_ENTITY = {"doorLock", "frontHVACState", "trunkDoor", "sunroofState"}
+# I 5 campi comfort (sbrinamenti/volante/sedili) sono ora interruttori ON/OFF (vedi switch.py).
+FIELDS_AS_RICH_ENTITY = {
+    "doorLock", "frontHVACState", "trunkDoor", "sunroofState",
+    "frontWindshieldHeat", "rWinHeatingState", "steerWheelHeating",
+    "dSeatHeatingState", "dSeatVentilateState",
+}
 
 # Comandi del catalogo ora gestiti da lock/switch/cover → esclusi dai pulsanti singoli
 # (il tap sul lock/switch/cover invoca lo stesso comando del catalogo).
@@ -14,6 +19,12 @@ COMMANDS_AS_RICH_ENTITY = {
     "baule_apri", "baule_chiudi",
     "finestrini_apri", "finestrini_chiudi",
     "tetto_apri", "tetto_chiudi",
+    # comfort: ogni funzione è uno switch (ON+OFF) → niente pulsanti singoli
+    "defrost_parabrezza", "defrost_parabrezza_off",
+    "defrost_lunotto", "defrost_lunotto_off",
+    "volante_caldo", "volante_caldo_off",
+    "sedile_guida_caldo", "sedile_guida_caldo_off",
+    "sedile_guida_aria", "sedile_guida_aria_off",
 }
 
 # Chiavi del config_entry (dati per-account, inseriti nel config flow)

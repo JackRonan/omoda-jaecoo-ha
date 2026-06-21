@@ -55,11 +55,11 @@ SENSORS = [
     {"key": "backLeftWindowState",   "name": "Finestrino posteriore SX", "comp": "binary_sensor", "dclass": "window", "kind": "open"},
     {"key": "backRightWindowState",  "name": "Finestrino posteriore DX", "comp": "binary_sensor", "dclass": "window", "kind": "open"},
     {"key": "sunroofState",   "name": "Tetto apribile",      "comp": "binary_sensor", "dclass": "window", "kind": "open"},
-    {"key": "sunshadeState",  "name": "Tendina tetto",       "comp": "binary_sensor", "dclass": "window", "kind": "open"},
+    {"key": "sunshadeState",  "name": "Tendina tetto",       "comp": "binary_sensor", "dclass": "window", "kind": "open", "diag": True},
     {"key": "frontHVACState", "name": "Clima",               "comp": "binary_sensor", "dclass": "running","kind": "onoff"},
     {"key": "airPurification","name": "Purificazione aria",  "comp": "binary_sensor", "dclass": "running","kind": "onoff"},
     {"key": "frontWindshieldHeat", "name": "Sbrinamento parabrezza", "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "fWinHeatingState","name": "Riscaldamento parabrezza", "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "fWinHeatingState","name": "Riscaldamento parabrezza", "comp": "binary_sensor", "dclass": "running", "kind": "onoff", "diag": True},
     {"key": "rWinHeatingState","name": "Riscaldamento lunotto",    "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
     {"key": "steerWheelHeating","name": "Riscaldamento volante",   "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
     {"key": "dSeatHeatingState","name": "Riscaldamento sedile guida",     "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
@@ -400,7 +400,20 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             self._update({"wake_status": str(m)[:255]})
 
         self._update({"last_wake": dt_util.utcnow()})
-        WAKE.do_wake(emit, send_sms=True)
+        # is_awake: se l'auto sta già pubblicando su MQTT non serve l'SMS.
+        result = WAKE.do_wake(emit, is_awake=lambda: bool(self.data.get("awake")), send_sms=True)
+        # [FALLBACK] smsAwaken inaffidabile (test 2026-06-21: A07900 due volte) → se non ha
+        # svegliato l'auto, ripiega su un comando REALE (vehicleLocation), che la sveglia al
+        # primo colpo e restituisce anche il GPS. A livello coordinator per non creare import
+        # circolari (wake.py è importato da commands.py).
+        if not (isinstance(result, dict) and result.get("online")):
+            if self.data.get("awake"):
+                return  # nel frattempo è arrivato un messaggio MQTT → già sveglia
+            emit("Sveglia SMS non efficace → ripiego su Localizza (vehicleLocation)…")
+            try:
+                self._send_command("localizza")
+            except Exception as err:  # noqa: BLE001 — il fallback non deve far fallire la sveglia
+                emit(f"fallback Localizza fallito: {err}")
 
     async def async_probe(self) -> None:
         await self.hass.async_add_executor_job(self._probe)

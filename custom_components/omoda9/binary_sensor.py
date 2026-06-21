@@ -70,6 +70,10 @@ class Omoda9BinarySensor(_Omoda9RestoreBinary):
         self._key = spec["key"]
         dc = spec.get("dclass")
         self._attr_device_class = BinarySensorDeviceClass(dc) if dc else None
+        # campi che l'auto non invia mai da ferma (es. tendina tetto, risc. parabrezza):
+        # restano sempre "unknown" → in categoria diagnostica, fuori dai controlli principali.
+        if spec.get("diag"):
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _live_is_on(self) -> bool | None:
         # [MED] None/"None"/"" = assente → None (emerge il restored, non un falso off);
