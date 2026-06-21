@@ -6,6 +6,14 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+- **Avviso quando un comando all'auto non riesce (opzionale).** Ora è disponibile un
+  "blueprint" pronto all'uso: se lo importi, ricevi un **popup in Home Assistant** (e, se
+  vuoi, una notifica sul telefono) ogni volta che un comando all'auto non va a buon fine —
+  ad esempio quando l'auto è occupata da un altro comando, non è raggiungibile, o la
+  sessione è scaduta. Riconosce solo i veri errori, quindi non disturba quando va tutto
+  bene. L'integrazione di suo continua a **non inviare nessuna notifica**: il blueprint è
+  del tutto facoltativo e si attiva con un clic dal README.
+
 ## v1.5.0 — 2026-06-21
 
 - **Tante nuove informazioni che arrivano direttamente dall'auto.** Quando l'auto è

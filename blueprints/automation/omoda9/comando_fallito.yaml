@@ -1,0 +1,91 @@
+blueprint:
+  name: Omoda 9 / Jaecoo — Avviso comando non riuscito
+  description: >
+    Mostra un popup in Home Assistant (e, se vuoi, invia una notifica push) quando un
+    comando inviato all'auto tramite l'integrazione **Omoda 9 / Jaecoo** non va a buon
+    fine: veicolo occupato, auto non raggiungibile, rate-limit, errore di rete, sessione
+    scaduta o problema segnalato dall'auto.
+
+
+    Riconosce solo i veri fallimenti: ignora gli esiti positivi (✅), "in corso" (⏳) e i
+    messaggi intermedi, così non ricevi falsi allarmi. Il popup usa un id fisso, quindi
+    più tentativi falliti aggiornano lo stesso avviso invece di impilarne tanti.
+  domain: automation
+  author: Caslinovich
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    esito_sensor:
+      name: Sensore "Esito comando"
+      description: >
+        Il sensore dell'integrazione che riporta l'esito dell'ultimo comando.
+        Di norma è `sensor.omoda9_esito_comando`.
+      default: sensor.omoda9_esito_comando
+      selector:
+        entity:
+          integration: omoda9
+          domain: sensor
+    popup_ha:
+      name: Popup in Home Assistant
+      description: >
+        Crea una notifica persistente, visibile in HA (app e browser) a chiunque lo stia
+        usando. È la scelta più semplice e funziona ovunque.
+      default: true
+      selector:
+        boolean: {}
+    push_service:
+      name: Notifica push (opzionale)
+      description: >
+        Per ricevere anche un push sul telefono/tablet, scrivi qui il nome del servizio
+        di notifica del tuo dispositivo, ad esempio `notify.mobile_app_il_mio_telefono`
+        (lo trovi in Strumenti per sviluppatori → Azioni). Lascia vuoto per nessun push.
+      default: ""
+      selector:
+        text: {}
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input esito_sensor
+
+variables:
+  esito: "{{ trigger.to_state.state }}"
+  popup_ha: !input popup_ha
+  push_service: !input push_service
+
+condition:
+  - condition: template
+    value_template: >
+      {% set s = esito %}
+      {{ s not in ['unknown', 'unavailable', ''] and (
+           '❌' in s or '🚫' in s
+           or ('HTTP ' in s and '✅' not in s)
+           or 'errore rete' in s or 'net_error' in s or 'fallit' in s) }}
+
+action:
+  - choose:
+      - conditions: "{{ popup_ha }}"
+        sequence:
+          - service: persistent_notification.create
+            data:
+              notification_id: omoda9_comando_fallito
+              title: "❌ Comando Omoda non riuscito"
+              message: >
+                **{{ esito }}**
+
+
+                Riprova tra qualche secondo. Se dice *occupato/non raggiungibile* l'auto
+                sta già elaborando un altro comando (ne gestisce uno alla volta). Se
+                *rate-limit* o *sessione scaduta*, attendi o rifai il login OTP.
+
+
+                _aggiornato alle {{ now().strftime('%H:%M:%S') }}_
+  - choose:
+      - conditions: "{{ push_service | trim != '' }}"
+        sequence:
+          - service: "{{ push_service }}"
+            data:
+              title: "❌ Comando Omoda non riuscito"
+              message: "{{ esito }}"

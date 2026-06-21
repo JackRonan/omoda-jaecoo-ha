@@ -164,6 +164,20 @@ Quando esce una nuova release: **HACS → Omoda 9 → Update → riavvia Home As
   valore noto dopo un riavvio di HA (persistenza `RestoreEntity`).
 - Batteria/velocità/odometro arrivano **solo ad auto in marcia**.
 
+## Notifiche di errore (blueprint opzionale)
+
+L'integrazione fornisce solo le entità: **non invia notifiche da sola** (per non essere
+invadente). Se vuoi un **popup quando un comando all'auto fallisce** (veicolo occupato,
+auto non raggiungibile, rate-limit, errore di rete, sessione scaduta…), importa il
+blueprint incluso:
+
+[![Importa il blueprint in Home Assistant](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FCaslinovich%2Fomoda9-ha%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fomoda9%2Fcomando_fallito.yaml)
+
+Poi **Impostazioni → Automazioni → Crea automazione → Da blueprint → _Omoda 9 / Jaecoo —
+Avviso comando non riuscito_**. Puoi attivare il popup in Home Assistant e/o aggiungere un
+push sul telefono. Riconosce solo i veri fallimenti: ignora gli esiti positivi (✅), "in
+corso" (⏳) e i messaggi intermedi, quindi niente falsi allarmi.
+
 ## Stato / roadmap
 
 - ✅ Telemetria, posizione/GPS, batteria/velocità, comandi, sessione/OTP.
