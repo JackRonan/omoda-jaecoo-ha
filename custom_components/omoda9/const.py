@@ -2,7 +2,7 @@
 
 DOMAIN = "omoda9"
 PLATFORMS = ["sensor", "binary_sensor", "button", "lock", "switch", "climate",
-             "number", "cover", "device_tracker", "text"]
+             "number", "time", "cover", "device_tracker", "text"]
 
 # Campi auto (5A02) ora rappresentati da entità native ATTUABILI (lock/switch/cover):
 # esclusi dalla creazione di sensor/binary_sensor "di sola lettura" per non duplicarli.

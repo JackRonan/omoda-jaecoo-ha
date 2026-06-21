@@ -3,8 +3,9 @@
 Questi cursori NON inviano nulla all'auto da soli: memorizzano le preferenze usate
 dagli altri controlli al momento dell'invio.
   - Durata clima (min): durata `times` del comando airControl della climate entity.
-  - Ricarica programmata · ora di inizio e durata (ore): compongono il piano
-    `chargeAppointControl` quando si accende lo switch "Ricarica programmata".
+  - Ricarica programmata · durata (ore): compone il piano `chargeAppointControl`
+    insieme all'orario di inizio (entità `time`, vedi time.py) quando si accende lo
+    switch "Ricarica programmata".
 
 Sono RestoreNumber → al riavvio di HA ripristinano l'ultimo valore impostato e lo
 riscrivono sul coordinator (da cui climate/switch lo leggono).
@@ -28,8 +29,8 @@ from .entity import Omoda9Entity
 NUMBERS = [
     ("Omoda9 Durata clima", "clima_durata", "clima_duration",
      5, 30, 5, 15, UnitOfTime.MINUTES, "mdi:timer-cog"),
-    ("Omoda9 Ricarica · ora di inizio", "ricarica_ora_inizio", "charge_start_hour",
-     0, 23, 1, 8, UnitOfTime.HOURS, "mdi:clock-start"),
+    # L'ORA di inizio è ora un'entità `time` (HH:MM, vedi time.py): più precisa del
+    # vecchio cursore 0–23 perché l'auto accetta i minuti. Qui resta solo la DURATA.
     ("Omoda9 Ricarica · durata", "ricarica_durata_ore", "charge_duration_hours",
      1, 12, 1, 6, UnitOfTime.HOURS, "mdi:battery-clock"),
 ]
