@@ -8,20 +8,29 @@ MQTT retained) finché non arriva un dato live. Eccezione: `auto_sveglia` NON pe
 """
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import ENTITY_ID_FORMAT, BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    ENTITY_ID_FORMAT,
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, FIELDS_AS_RICH_ENTITY
 from .coordinator import SENSORS
-from .entity import Omoda9Entity
+from .entity import Omoda9Entity, field_on
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
     coord = hass.data[DOMAIN][entry.entry_id]
-    ents = [Omoda9BinarySensor(coord, s) for s in SENSORS if s["comp"] == "binary_sensor"]
+    ents = [
+        Omoda9BinarySensor(coord, s)
+        for s in SENSORS
+        if s["comp"] == "binary_sensor" and s["key"] not in FIELDS_AS_RICH_ENTITY
+    ]
     ents.append(Omoda9Online(coord))
     ents.append(Omoda9Awake(coord))
     ents.append(Omoda9Session(coord))
@@ -59,32 +68,32 @@ class Omoda9BinarySensor(_Omoda9RestoreBinary):
     def __init__(self, coord, spec: dict) -> None:
         super().__init__(coord, f"Omoda9 {spec['name']}", spec["key"])
         self._key = spec["key"]
-        self._attr_device_class = spec.get("dclass")
+        dc = spec.get("dclass")
+        self._attr_device_class = BinarySensorDeviceClass(dc) if dc else None
 
     def _live_is_on(self) -> bool | None:
-        v = self.coordinator.data.get("fields", {}).get(self._key)
-        if v is None:
-            return None
-        return str(v) not in ("0", "", "None", "false", "False")
+        # [MED] None/"None"/"" = assente → None (emerge il restored, non un falso off);
+        # confronto numerico via field_on (allinea "0.0" con lock/switch/cover).
+        return field_on(self.coordinator.data.get("fields", {}).get(self._key))
 
 
 class Omoda9Online(_Omoda9RestoreBinary):
-    _attr_device_class = "connectivity"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
         super().__init__(coord, "Omoda9 Connessa", "online")
 
     def _live_is_on(self) -> bool | None:
         rt = self.coordinator.data.get("realtime") or {}
-        if "onlineStatus" in rt:
-            return str(rt["onlineStatus"]) not in ("0", "", "None")
-        return None
+        return field_on(rt["onlineStatus"]) if "onlineStatus" in rt else None
 
 
 class Omoda9Awake(Omoda9Entity, BinarySensorEntity):
     """Flag derivato "l'auto sta pubblicando adesso" — NON persistente (off al boot)."""
 
-    _attr_device_class = "running"
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
         super().__init__(coord, "Omoda9 Auto sveglia", "awake",
@@ -96,7 +105,8 @@ class Omoda9Awake(Omoda9Entity, BinarySensorEntity):
 
 
 class Omoda9Session(_Omoda9RestoreBinary):
-    _attr_device_class = "connectivity"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
         super().__init__(coord, "Omoda9 Sessione", "session")

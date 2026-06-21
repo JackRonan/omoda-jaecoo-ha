@@ -1,7 +1,20 @@
 """Costanti del custom component Omoda 9 / Jaecoo."""
 
 DOMAIN = "omoda9"
-PLATFORMS = ["sensor", "binary_sensor", "button", "device_tracker", "text"]
+PLATFORMS = ["sensor", "binary_sensor", "button", "lock", "switch", "cover", "device_tracker", "text"]
+
+# Campi auto (5A02) ora rappresentati da entità native ATTUABILI (lock/switch/cover):
+# esclusi dalla creazione di sensor/binary_sensor "di sola lettura" per non duplicarli.
+FIELDS_AS_RICH_ENTITY = {"doorLock", "frontHVACState", "trunkDoor", "sunroofState"}
+
+# Comandi del catalogo ora gestiti da lock/switch/cover → esclusi dai pulsanti singoli
+# (il tap sul lock/switch/cover invoca lo stesso comando del catalogo).
+COMMANDS_AS_RICH_ENTITY = {
+    "blocca", "sblocca", "clima_on", "clima_off",
+    "baule_apri", "baule_chiudi",
+    "finestrini_apri", "finestrini_chiudi",
+    "tetto_apri", "tetto_chiudi",
+}
 
 # Chiavi del config_entry (dati per-account, inseriti nel config flow)
 CONF_EMAIL = "email"

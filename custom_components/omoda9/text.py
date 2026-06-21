@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.text import ENTITY_ID_FORMAT, TextEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -21,6 +22,7 @@ class Omoda9OtpCode(Omoda9Entity, TextEntity):
     _attr_mode = "text"
     _attr_native_min = 0
     _attr_native_max = 10
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coord) -> None:
         super().__init__(coord, "Omoda9 Codice OTP", "otp_code",
