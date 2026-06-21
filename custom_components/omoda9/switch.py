@@ -12,6 +12,7 @@ subito anche nello stato ottimistico, oltre che dai campi reali quando arrivano.
 from __future__ import annotations
 
 import ast
+import asyncio
 
 from homeassistant.components.switch import (
     ENTITY_ID_FORMAT,
@@ -21,10 +22,11 @@ from homeassistant.components.switch import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, MACRO_WAKE_WAIT
 from .entity import Omoda9Entity, Omoda9OptimisticMixin, field_on
 
 
@@ -176,13 +178,16 @@ class Omoda9ClimaMacroSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, 
     TUTTI i sedili (+ sbrinatori parabrezza/lunotto e volante per il caldo) in un colpo solo,
     con un unico comando — esattamente come l'app ufficiale.
 
-    ⚠️ Come ogni comando comfort, l'auto lo esegue solo a vettura SPENTA: se è accesa/occupata
-    lo rifiuta (blocco di sicurezza, esito ❌). A motore spento accende tutti i moduli
-    (verificato dal vivo 2026-06-21).
+    ⚠️ I moduli comfort (clima+sedili) rispondono SOLO a vettura desta e con i sistemi
+    alimentati. Premendo la macro a auto dormiente (parcheggiata da poco) tutti i moduli vanno
+    in timeout. Perciò la macro SVEGLIA prima l'auto (localizza/vehicleLocation) e ATTENDE
+    MACRO_WAKE_WAIT secondi che la TBOX alimenti il bus comfort, POI invia il comando.
+    Verificato dal vivo 2026-06-21: sveglia+attesa 35s → coolingControl/heatingControl ✅.
 
-    L'auto NON pubblica uno stato "preset attivo" dedicato → switch ottimistico (mostra il
-    target dopo il comando e ripristina l'ultimo stato al riavvio). Raffredda e Riscalda si
-    escludono a vicenda: accenderne uno spegne subito l'altro."""
+    L'auto NON pubblica uno stato "preset attivo" dedicato e il preset si auto-spegne dopo
+    ~15 min → switch ottimistico che NON ripristina "on" al riavvio: riparte sempre da OFF,
+    così un tap fa sempre l'ACCENSIONE (prima invece, restando "on", il tap mandava per errore
+    lo spegnimento, che falliva). Raffredda e Riscalda si escludono a vicenda."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
 
@@ -192,28 +197,41 @@ class Omoda9ClimaMacroSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, 
         self._on_cmd = on_cmd
         self._off_cmd = off_cmd
         self._attr_icon = icon
-        self._restored: bool | None = None
         self._exclusive: "Omoda9ClimaMacroSwitch | None" = None
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        if last is not None and last.state in ("on", "off"):
-            self._restored = last.state == "on"
 
     @property
     def is_on(self) -> bool | None:
-        if self._opt_value is not None:
-            return self._opt_value
-        return self._restored
+        # nessuno stato reale dall'auto; solo ottimistico. Default OFF (vedi docstring).
+        return bool(self._opt_value) if self._opt_value is not None else False
+
+    async def _wake_then(self, cmd: str, target: bool) -> None:
+        """Sveglia l'auto, attende che i moduli comfort siano alimentati, poi invia il comando."""
+        if self.coordinator.command_busy():
+            raise HomeAssistantError(
+                "Un altro comando è ancora in corso — l'auto ne esegue uno alla volta. "
+                "Attendi qualche secondo (guarda «Esito comando») e riprova.")
+        self._set_optimistic(target)
+        # sveglia (vehicleLocation = sveglia + GPS, benigno); non bloccare la macro se fallisce
+        try:
+            await self.coordinator.async_send_command("localizza")
+        except Exception:  # noqa: BLE001
+            pass
+        await asyncio.sleep(MACRO_WAKE_WAIT)  # lascia accendere il bus comfort (e scade il lock)
+        try:
+            await self.coordinator.async_send_command(cmd)
+        except Exception as err:  # noqa: BLE001
+            self._clear_optimistic()
+            self.coordinator.clear_command_busy()
+            self.async_write_ha_state()
+            raise HomeAssistantError(f"Comando «{cmd}» non riuscito: {err}") from err
 
     async def async_turn_on(self, **kwargs) -> None:
         if self._exclusive is not None:
             self._exclusive._set_optimistic(False)
-        await self._run_command(self._on_cmd, True)
+        await self._wake_then(self._on_cmd, True)
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._run_command(self._off_cmd, False)
+        await self._wake_then(self._off_cmd, False)
 
 
 class Omoda9ScheduledChargeSwitch(Omoda9OptimisticMixin, Omoda9Entity, SwitchEntity, RestoreEntity):

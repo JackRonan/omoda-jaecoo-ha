@@ -95,6 +95,11 @@ DEFAULT_POLL_NORMAL_MIN = 60
 DEFAULT_POLL_CHARGING_MIN = 39
 # attesa tra la sveglia (localizza) e la lettura realtime forzata, perché l'auto torni online
 POLL_WAKE_WAIT = 25
+# attesa nelle macro comfort tra la sveglia (localizza) e l'invio di coolingControl/heatingControl:
+# i moduli clima+sedili rispondono solo a vettura DESTA e serve tempo perché la TBOX alimenti il
+# bus comfort. Verificato dal vivo 2026-06-21: con ~35s il comando macro va a buon fine; con
+# 14s falliva (timeout TBOX↔centraline). Sotto questo valore le macro tornano a dare errore.
+MACRO_WAKE_WAIT = 35
 
 # Anti-doppio-tap: l'auto esegue UN comando alla volta (A00082 = "veicolo occupato").
 # Dopo un comando, per questi secondi un nuovo comando ATTUATIVO viene rifiutato con un
