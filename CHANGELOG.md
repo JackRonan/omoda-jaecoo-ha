@@ -6,6 +6,24 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.2 — 2026-06-21
+
+- **Aggiornamento automatico dei dati dell'auto.** Ora Home Assistant aggiorna **da solo**,
+  a intervalli regolari, le informazioni dell'auto (posizione, batteria, autonomia, gomme,
+  consumi…) svegliando brevemente la vettura. Di **default ogni 60 minuti**, e **ogni 39
+  minuti quando l'auto è attaccata alla colonnina** (così segui meglio la ricarica).
+  - Puoi cambiare i due intervalli — o disattivarli mettendo **0** — dalle opzioni
+    dell'integrazione: **Impostazioni → Dispositivi e servizi → Omoda 9 → Configura**.
+  - C'è anche un nuovo interruttore **"Aggiornamento automatico"** per accendere o spegnere
+    tutto con un tocco, senza entrare nelle opzioni.
+  - ⚠️ Quando è attivo l'auto viene svegliata periodicamente: comodo per avere dati sempre
+    freschi, ma comporta un piccolo consumo della batteria a vettura ferma. Se preferisci,
+    spegnilo e aggiorna a mano col pulsante "Aggiorna posizione".
+
+- **Stati della ricarica più chiari.** Le informazioni "Stato ricarica", "Presa ricarica
+  rapida" e "Ricarica programmata" ora mostrano un **testo leggibile** (es. "Non in ricarica",
+  "In ricarica", "Collegata") invece di un codice numerico.
+
 ## v1.5.1 — 2026-06-21
 
 - **Correzione: le nuove informazioni dall'auto ora compaiono davvero.** Per un problema
