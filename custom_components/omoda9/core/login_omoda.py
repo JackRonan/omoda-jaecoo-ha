@@ -29,10 +29,12 @@ def _hdr_form(path):
             "Content-Type": "application/x-www-form-urlencoded"}
 
 def invia(email):
+    """Invia il codice OTP via email. Ritorna True/False (H7: l'esito è il valore di
+    ritorno; il __main__ stampa la sentinella `RESULT: OK/FAIL` per session.request_otp)."""
     print("Risolvo il captcha…")
     cv = C.risolvi()
     if not cv:
-        print("❌ captcha non risolto, riprova."); return
+        print("❌ captcha non risolto, riprova."); return False
     path = "/marketing/v2/app/code/sendMailCode"
     r = requests.post(BFF + path,
                       data={"email": email, "module": "APP-LOGIN", "captchaVerification": cv},
@@ -41,15 +43,17 @@ def invia(email):
     print(f"sendMailCode -> HTTP {r.status_code} key={j.get('key')} msg={j.get('msg')} data={j.get('data')}")
     if j.get("ok") or j.get("key") == "operation.successful":
         print("✅ Codice inviato all'email. Ora: python3 login_omoda.py token <email> <codice>")
-    elif j.get("key") == "email.not.exists":
+        return True
+    if j.get("key") == "email.not.exists":
         print("⚠️  Email non riconosciuta come account. Verifica l'indirizzo registrato nell'app.")
+    return False
 
 def invia_sms(mobile, area="39"):
     mobile = mobile.lstrip("+").replace(" ", "")
     print("Risolvo il captcha…")
     cv = C.risolvi()
     if not cv:
-        print("❌ captcha non risolto, riprova."); return
+        print("❌ captcha non risolto, riprova."); return False
     path = "/marketing/v2/app/code/sendSmsCode"
     r = requests.post(BFF + path,
                       data={"mobile": mobile, "areaCode": area, "module": "APP-LOGIN", "captchaVerification": cv},
@@ -59,6 +63,8 @@ def invia_sms(mobile, area="39"):
     print(f"sendSmsCode -> HTTP {r.status_code} {j}")
     if j.get("ok") or j.get("key") == "operation.successful":
         print("✅ Codice inviato via SMS. Ora: python3 login_omoda.py token-sms <mobile> <codice>")
+        return True
+    return False
 
 # combinazioni oauth2/token da provare (codeId NON serve)
 def _combos(email, code):
@@ -107,10 +113,12 @@ def token(email, code, sms=False, area="39"):
         if tok: win = j; break
         time.sleep(0.5)
     if not win:
-        print("❌ nessuna combinazione ha funzionato (codice scaduto/sbagliato o campi diversi)."); return
-    json.dump(win, open("token.json", "w"), indent=2, ensure_ascii=False)
+        print("❌ nessuna combinazione ha funzionato (codice scaduto/sbagliato o campi diversi)."); return False
+    with open("token.json", "w") as fh:
+        json.dump(win, fh, indent=2, ensure_ascii=False)
     tok = win.get("access_token") or (win.get("data") or {}).get("access_token")
-    print(f"\n✅ LOGIN OK — token salvato in token.json. access_token={tok[:30]}…")
+    # LOW: non stampare il token (lo stdout può finire nei log) — solo conferma
+    print("\n✅ LOGIN OK — token salvato in token.json.")
     # Stadio 2
     HB = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json", "User-Agent": "okhttp/4.9.0",
           "tenant": omoda.TENANT_CODE, "channelId": omoda.CHANNEL_ID, "countryId": omoda.COUNTRY_ID,
@@ -122,16 +130,22 @@ def token(email, code, sms=False, area="39"):
             print(f"\n=== {nome} [HTTP {r.status_code}] ===\n{r.text[:1200]}")
         except requests.RequestException as e:
             print(f"\n=== {nome}: ERRORE RETE {e} ===")
+    return True
+
+def _emit_result(ok):
+    """H7: sentinella stabile + exit code per i chiamanti (session.py)."""
+    print("RESULT: OK" if ok else "RESULT: FAIL")
+    sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
     a = sys.argv
     if len(a) >= 3 and a[1] == "invia":
-        invia(a[2])
+        _emit_result(invia(a[2]))
     elif len(a) >= 3 and a[1] == "invia-sms":
-        invia_sms(a[2], a[3] if len(a) > 3 else "39")
+        _emit_result(invia_sms(a[2], a[3] if len(a) > 3 else "39"))
     elif len(a) >= 4 and a[1] == "token":
-        token(a[2], a[3])
+        _emit_result(token(a[2], a[3]))
     elif len(a) >= 4 and a[1] == "token-sms":
-        token(a[2], a[3], sms=True)
+        _emit_result(token(a[2], a[3], sms=True))
     else:
         print(__doc__)

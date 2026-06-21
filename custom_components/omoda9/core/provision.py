@@ -49,6 +49,7 @@ import requests
 import omoda_auth as A
 import tsp_sign as S
 import wake as W          # riusa _access_token / _bff_login / _signed_post / _code_of (già verificati)
+import codes
 
 VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: vedi omoda9.env.example
 PIN        = os.environ.get("PIN", os.environ.get("OMODA_PIN", ""))   # PIN di controllo (PER-ACCOUNT)
@@ -337,7 +338,7 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
             publish(f"🟧 Ancora A07900 col car_token → resta in piedi l'ipotesi C "
                     "(body cifrato SM4) o car_token errato. Vedi data/provision.jsonl.")
         else:
-            publish(f"ℹ️ Comando {cmd}: code={code_c}.")
+            publish(f"ℹ️ Comando {cmd}: code={code_c} ({codes.meaning(code_c)}).")
         return {"ok": True, "code": code_c, "cmd": cmd, "accepted": False}
     except Exception as e:
         publish(f"⚠️ run_command errore: {type(e).__name__}: {e}")

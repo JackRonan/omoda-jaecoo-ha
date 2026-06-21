@@ -50,10 +50,26 @@ def call(email, code, secret="prod", emailfmt="module", codefmt="plain", verbose
     except Exception: j = {"_raw": r.text[:300]}
     tok = j.get("access_token") or (j.get("data") or {}).get("access_token")
     if verbose:
+        # LOW: lo stdout di questo script passa per HA → redigi i token nei dump
         print(f"[secret={secret} email={emailfmt} code={codefmt}] HTTP {r.status_code}")
         print("  url:", r.url)
-        print("  resp:", json.dumps(j, ensure_ascii=False)[:400])
+        print("  resp:", json.dumps(_redact(j), ensure_ascii=False)[:400])
     return r.status_code, j, tok
+
+
+def _redact(obj):
+    """Copia con access_token/refresh_token oscurati (per le stampe che vanno in HA)."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            if k in ("access_token", "refresh_token") and v:
+                out[k] = f"<{len(str(v))}ch redatto>"
+            else:
+                out[k] = _redact(v)
+        return out
+    if isinstance(obj, list):
+        return [_redact(x) for x in obj]
+    return obj
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
@@ -64,5 +80,11 @@ if __name__ == "__main__":
     codefmt = sys.argv[5] if len(sys.argv) > 5 else "plain"
     sc, j, tok = call(email, code, secret, emailfmt, codefmt)
     if tok:
-        json.dump(j, open(_TOKEN_OUT, "w"), indent=2, ensure_ascii=False)
+        with open(_TOKEN_OUT, "w") as fh:
+            json.dump(j, fh, indent=2, ensure_ascii=False)
         print(f"\n✅ LOGIN OK — token salvato in {_TOKEN_OUT}")
+        print("RESULT: OK")          # H7: sentinella stabile per session.confirm_otp
+        sys.exit(0)
+    # H7: conio fallito → sentinella + exit code != 0 (session.py si basa su questi)
+    print("RESULT: FAIL")
+    sys.exit(1)

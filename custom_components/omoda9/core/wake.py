@@ -27,6 +27,13 @@ if HERE not in sys.path:
 import requests
 import omoda_auth as A
 import tsp_sign as S
+import codes
+
+# C1: serializza i refresh del token. keep-alive (coordinator) e un comando possono
+# innescare _refresh_token() insieme: senza lock entrambi userebbero lo STESSO
+# refresh_token, Chery lo ruota a ogni uso → il secondo refresh invalida il token
+# del primo e la sessione cade. Il lock + double-check (sotto) evita il doppio refresh.
+_TOKEN_LOCK = threading.Lock()
 
 TSP_HOST   = os.environ.get("TSP_HOST", "https://tspconsole-eu.cheryinternational.com")   # regione (default EU)
 VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: vedi omoda9.env.example
@@ -72,49 +79,76 @@ def _save_last_sms(ts: float):
 
 
 # ───────────────────────── chiamate REST (patchabili nei test) ──────────────────
-def _access_token() -> str:
+def _access_token():
+    """Legge l'access_token dal token.json. Difensivo: gestisce sia {data:{...}} sia
+    il formato flat, e non esplode con KeyError se il campo manca (ritorna None).
+    Unico punto di lettura del token: commands/provision usano questo."""
     with open(_token_path()) as fh:
         tok = json.load(fh)
-    tok = tok.get("data", tok)
-    return tok["access_token"]
+    if not isinstance(tok, dict):
+        return None
+    d = tok.get("data", tok)
+    if isinstance(d, dict) and d.get("access_token"):
+        return d["access_token"]
+    return tok.get("access_token")
 
 def _refresh_token() -> bool:
     """Rinnova l'access_token col grant `refresh_token` (NIENTE OTP) e riscrive token.json.
     Stesso endpoint/headers del login OTP (login_otp.py), che NON è dietro il firewall Aliyun.
-    Ritorna True se ha ottenuto un nuovo access_token, False altrimenti (es. refresh scaduto → serve OTP)."""
+    Ritorna True se ha ottenuto un nuovo access_token, False altrimenti (es. refresh scaduto → serve OTP).
+
+    C1: protetto da `_TOKEN_LOCK` con double-check. Fotografo l'access_token che il
+    chiamante ha visto (PRIMA del lock); dentro il lock rileggo token.json: se sul
+    disco l'access_token è già cambiato, un altro thread ha già rinnovato → NON rifaccio
+    il refresh (rifarlo brucerebbe il nuovo refresh_token e invaliderebbe la sessione)."""
+    # snapshot pre-lock: il token che il chiamante considerava scaduto
     try:
         with open(_token_path()) as fh:
-            tok = json.load(fh)
+            tok0 = json.load(fh)
     except Exception:
         return False
-    rt = (tok.get("data", tok) or {}).get("refresh_token")
-    if not rt:
-        return False
-    # Ricetta verificata (= identica all'OTP login di prova_token.py): firma applicativa
-    # via headers_post + parametri in QUERY STRING. Senza firma il gateway risponde 428.
-    TP = "/auth/oauth2/token"
-    params = {"grant_type": "refresh_token", "refresh_token": rt, "scope": "server"}
-    try:
-        H = A.headers_post(TP, secret=A.SIGN_SECRET)
-        r = requests.post(A.BFF + TP, params=params, headers=H, timeout=20)
-        j = r.json()
-    except Exception:
-        return False
-    if not isinstance(j, dict):
-        return False
-    at = j.get("access_token") or (j.get("data") or {}).get("access_token")
-    if not at:
-        return False
-    # scrittura atomica: nuovo token su file temporaneo poi rename (token.json mai corrotto)
-    try:
-        path = _token_path()
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(j, f, ensure_ascii=False)
-        os.replace(tmp, path)
-    except Exception:
-        return False
-    return True
+    seen_at = (tok0.get("data", tok0) or {}).get("access_token") if isinstance(tok0, dict) else None
+
+    with _TOKEN_LOCK:
+        # double-check DENTRO il lock: rileggo lo stato corrente del file
+        try:
+            with open(_token_path()) as fh:
+                tok = json.load(fh)
+        except Exception:
+            return False
+        d = (tok.get("data", tok) or {}) if isinstance(tok, dict) else {}
+        cur_at = d.get("access_token")
+        if seen_at and cur_at and cur_at != seen_at:
+            # già rinnovato da un altro thread: il token su disco è valido, non toccarlo
+            return True
+        rt = d.get("refresh_token")
+        if not rt:
+            return False
+        # Ricetta verificata (= identica all'OTP login di prova_token.py): firma applicativa
+        # via headers_post + parametri in QUERY STRING. Senza firma il gateway risponde 428.
+        TP = "/auth/oauth2/token"
+        params = {"grant_type": "refresh_token", "refresh_token": rt, "scope": "server"}
+        try:
+            H = A.headers_post(TP, secret=A.SIGN_SECRET)
+            r = requests.post(A.BFF + TP, params=params, headers=H, timeout=20)
+            j = r.json()
+        except Exception:
+            return False
+        if not isinstance(j, dict):
+            return False
+        at = j.get("access_token") or (j.get("data") or {}).get("access_token")
+        if not at:
+            return False
+        # scrittura atomica: nuovo token su file temporaneo poi rename (token.json mai corrotto)
+        try:
+            path = _token_path()
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(j, f, ensure_ascii=False)
+            os.replace(tmp, path)
+        except Exception:
+            return False
+        return True
 
 def _bff_login(_allow_refresh=True):
     """Ritorna (userToken, tUserId). Solleva su errore di rete; (None,None) se rifiutato.
@@ -218,7 +252,7 @@ def _do_wake_inner(publish, is_awake, send_sms):
             publish("🚫 Rate-limit sveglia (A07312): l'auto rifiuta altre sveglie ora. Riprova più tardi")
             return {"ok": False, "online": False, "code": code, "reason": "rate_limit"}
         else:
-            publish(f"⚠️ Sveglia non accettata (codice {code}). Provo comunque ad ascoltare…")
+            publish(f"⚠️ Sveglia non accettata ({code}: {codes.meaning(code)}). Provo comunque ad ascoltare…")
     else:
         publish("🧪 (test) smsAwaken NON inviato; passo solo al poll")
 

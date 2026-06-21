@@ -34,6 +34,7 @@ if HERE not in sys.path:
 
 # Riusa l'infrastruttura già verificata di wake.py: login BFF + POST firmato tspconsole.
 import wake as W
+import codes
 
 VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: vedi omoda9.env.example
 PROBE_LOG  = os.environ.get("OMODA_PROBE_LOG", os.path.join(HERE, "data", "probe.jsonl"))
@@ -125,7 +126,8 @@ def probe_once(publish, force=False, on_data=None):
                     "codes": [c1, c2, c3], "rich": rich}
 
         publish(f"🟡 Sonda: ancora niente posizione ad auto sveglia "
-                f"(realtime={c1}, location={c2}, travel={c3}). Confermato: serve un altro passo")
+                f"(realtime={c1} [{codes.meaning(c1)}], location={c2}, travel={c3}). "
+                "Confermato: serve un altro passo")
         return {"ok": True, "online": False, "got_data": False, "codes": [c1, c2, c3]}
     except Exception as e:
         publish(f"⚠️ Sonda errore: {type(e).__name__}: {e}")

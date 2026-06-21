@@ -18,7 +18,12 @@ Questo modulo espone le primitive che il ponte cabla a 3 entità HA:
 request_otp/confirm_otp girano login_omoda.py / prova_token.py COME SOTTOPROCESSO nella
 cartella OMODA_SRC_DIR (default = questa stessa cartella `core/`, dove vivono anche
 captcha_solver/omoda) col python corrente (sys.executable). Nel component HA = il python
-di HA, che ha le requirements del manifest (requests/pycryptodome/numpy/opencv/pillow).
+di HA, che ha le requirements del manifest (requests/pycryptodome/numpy/pillow).
+
+Contratto sottoprocessi (H7): login_omoda.py e prova_token.py stampano su stdout una
+riga-sentinella stabile `RESULT: OK` / `RESULT: FAIL` e usano il returncode (0 ok, !=0
+errore). request_otp/confirm_otp decidono l'esito su returncode + sentinella, NON su
+sottostringhe localizzate (che cambierebbero con la lingua dei messaggi).
 """
 import os, sys, subprocess
 
@@ -65,7 +70,8 @@ def request_otp(emit=lambda m: None):
         emit("timeout invio OTP — riprova")
         return False
     out = (r.stdout or "") + (r.stderr or "")
-    if r.returncode == 0 and ("Codice inviato" in out or "✅" in out):
+    # H7: esito su returncode + sentinella stabile, non su sottostringhe localizzate
+    if r.returncode == 0 and "RESULT: OK" in out:
         emit(f"📧 Codice inviato a {EMAIL} — inseriscilo nel campo «Codice OTP» e premi «Conferma»")
         return True
     tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"
@@ -85,7 +91,8 @@ def confirm_otp(code, emit=lambda m: None):
     except subprocess.TimeoutExpired:
         return False, "timeout conio token"
     out = (r.stdout or "") + (r.stderr or "")
-    if r.returncode == 0 and ("LOGIN OK" in out or "token salvato" in out):
+    # H7: esito su returncode + sentinella stabile, non su sottostringhe localizzate
+    if r.returncode == 0 and "RESULT: OK" in out:
         ok, detail = check()
         return ok, ("Sessione ripristinata ✅" if ok else "token coniato ma login ancora KO")
     tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"

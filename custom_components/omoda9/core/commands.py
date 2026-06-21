@@ -22,7 +22,6 @@ import sys
 import json
 import time
 import hashlib
-import importlib
 import urllib.request
 import urllib.error
 
@@ -32,7 +31,9 @@ if HERE not in sys.path:
 import wake
 import tsp_sign
 import omoda_auth as A
-importlib.reload(tsp_sign)
+import codes
+# H8: rimosso `importlib.reload(tsp_sign)` a import-time (side-effect inutile; tsp_sign
+# non viene mutato altrove e ricaricarlo all'import poteva azzerare eventuali monkeypatch).
 
 # Dati PER-ACCOUNT: nessun default — forniti via omoda9.env (vedi omoda9.env.example).
 VIN        = os.environ.get("VIN", "")
@@ -100,29 +101,37 @@ COMMANDS = [
 ]
 CMD_MAP = {k: v for k, v in COMMANDS}
 
-# Codici risposta tspconsole noti → testo leggibile
-CODE_MEANING = {
-    "A00079": "comando accettato ✅",
-    "000000": "ok ✅",
-    "A00089": "taskId non valido ❌ (manca un taskId benedetto: vedi obiettivo #1)",
-    "A07900": "firma rifiutata ❌",
-    "A00000": "token scaduto/non valido ❌",
-    "A00567": "parametri checkPassword incompleti ❌",
-}
+# Codici risposta tspconsole → testo leggibile: ora dalla mappa UNICA core/codes.py.
+CODE_MEANING = codes.CODE_MEANING
 
-
-def _access_token():
-    with open(wake._token_path()) as fh:
-        tok = json.load(fh)
-    return tok.get("data", tok).get("access_token") if isinstance(tok.get("data", tok), dict) else tok.get("access_token")
+# H6 anti-lockout: stop dopo N checkPassword falliti consecutivi entro una finestra,
+# per non far scattare il blocco PIN dell'account (un PIN sbagliato incrementa gli
+# errori lato Chery). Un successo (taskId ottenuto) azzera il contatore.
+_PIN_FAIL = {"n": 0, "ts": 0.0}
+_PIN_FAIL_MAX = int(os.environ.get("OMODA_PIN_FAIL_MAX", "2"))
+_PIN_FAIL_WINDOW = int(os.environ.get("OMODA_PIN_FAIL_WINDOW", "600"))
+# codici checkPassword che NON indicano un PIN errato (sessione/token) → non contano
+# per l'anti-lockout (altrimenti un token scaduto bloccherebbe a torto il conio).
+_NON_PIN_CODES = {"A00000"}
 
 
 def _mint_taskid(tuid):
     """Conia un taskId con la catena BFF dell'app (queryList→setVecDefault→checkPassword).
        FIX S26 (2026-06-20): scene=0 (NON 2) → il taskId coniato è benedetto da tspconsole
-       (airControl A00079). scene=2 dava A00089; scene=1 A00089; scene>=3 A00546. Obiettivo #1 RISOLTO."""
+       (airControl A00079). scene=2 dava A00089; scene=1 A00089; scene>=3 A00546. Obiettivo #1 RISOLTO.
+
+       H6: rifiuta il conio se il PIN è vuoto (NON chiama checkPassword a vuoto) e si
+       auto-blocca dopo troppi PIN errati consecutivi per evitare il lockout account."""
+    if not (PIN or "").strip():
+        raise ValueError("PIN non configurato (OMODA_PIN vuoto): impossibile coniare il taskId")
+    now = time.time()
+    if _PIN_FAIL["n"] >= _PIN_FAIL_MAX and (now - _PIN_FAIL["ts"]) < _PIN_FAIL_WINDOW:
+        raise RuntimeError(
+            f"conio bloccato: {_PIN_FAIL['n']} PIN errati consecutivi — verifica OMODA_PIN "
+            "prima di riprovare (anti-lockout account)")
+
     import requests
-    access = _access_token()
+    access = wake._access_token()
     extra = {"Authorization": f"Bearer {access}",
              "Content-Type": "application/json; charset=UTF-8",
              "Accept": "application/json, text/plain, */*"}
@@ -131,9 +140,11 @@ def _mint_taskid(tuid):
         H = A.headers_post(path, extra=extra)
         r = requests.post(A.BFF + path, data=json.dumps(body), headers=H, timeout=25)
         try:
-            return r.json()
+            j = r.json()
         except Exception:
             return {"_raw": r.text[:200]}
+        # MED: il BFF può restituire un top-level non-dict (stringa) → normalizza a {}
+        return j if isinstance(j, dict) else {}
 
     bff("/tsp/v1/app/vmc/queryList", {})
     bff("/tsp/v1/app/vmc/setVecDefault", {"vin": VIN})
@@ -143,7 +154,16 @@ def _mint_taskid(tuid):
             {"vin": VIN, "tUserId": str(tuid), "channelId": A.CHANNEL_ID,
              "password": password, "needDecode": 0, "scene": 0, "type": 0})
     data = j.get("data") if isinstance(j.get("data"), dict) else {}
-    return data.get("taskId") or j.get("taskId")
+    tid = data.get("taskId") or j.get("taskId")
+    if tid:
+        _PIN_FAIL["n"] = 0          # successo → azzera il contatore anti-lockout
+        return tid
+    # nessun taskId: se NON è un errore di sessione/token, conta come possibile PIN errato
+    code = j.get("code")
+    if str(code) not in _NON_PIN_CODES:
+        _PIN_FAIL["n"] += 1
+        _PIN_FAIL["ts"] = now
+    return None
 
 
 def get_taskid(tuid, emit=lambda m: None):
@@ -153,10 +173,11 @@ def get_taskid(tuid, emit=lambda m: None):
         return t.strip(), "env"
     try:
         if os.path.exists(TASKID_FILE):
-            v = open(TASKID_FILE).read().strip()
+            with open(TASKID_FILE) as fh:
+                v = fh.read().strip()
             if v:
                 return v, "file"
-    except Exception:
+    except OSError:
         pass
     if MINT_TASKID:
         emit("conio taskId (checkPassword)…")
