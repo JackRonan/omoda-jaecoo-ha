@@ -34,6 +34,7 @@ from .const import (
     CONF_BFF, CONF_TSP_HOST, CONF_CAR_MQTT_HOST, CONF_CAR_MQTT_PORT, CONF_CHANNEL_ID,
     CONF_POLL_NORMAL, CONF_POLL_CHARGING, DEFAULT_POLL_NORMAL_MIN,
     DEFAULT_POLL_CHARGING_MIN, POLL_WAKE_WAIT, COMMAND_LOCK_S,
+    HV_ON_POLL_EVERY, HV_ON_POLL_MAX,
     DEFAULTS,
 )
 
@@ -144,6 +145,11 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         self.poll_charging_min = int(opt.get(CONF_POLL_CHARGING, DEFAULT_POLL_CHARGING_MIN))
         self._poll_unsub = None       # cancella il timer del poll (async_call_later)
         self._poll_busy = False       # evita sovrapposizioni tra cicli
+        # follow-up "alta tensione accesa": quando l'HV è on (marcia/ricarica) la telemetria
+        # realtime è VERA → rileggiamo a raffica per catturare odometro/SOC che salgono, poi
+        # smettiamo da soli quando si rispegne. Zero comandi all'auto (vedi HV_ON_POLL_* in const).
+        self._hv_poll_unsub = None    # timer auto-rischedulante del follow-up HV
+        self._hv_poll_count = 0       # letture ravvicinate fatte nella finestra HV-on (cap HV_ON_POLL_MAX)
         # interruttore "Aggiornamento automatico" (switch): SPENTO di default — il poll
         # sveglia l'auto, quindi parte solo se l'utente lo accende esplicitamente. La
         # scelta dell'utente viene poi ricordata tra i riavvii (switch RestoreEntity).
@@ -386,6 +392,9 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         if self._poll_unsub is not None:
             self._poll_unsub()
             self._poll_unsub = None
+        if self._hv_poll_unsub is not None:
+            self._hv_poll_unsub()
+            self._hv_poll_unsub = None
         if self._car is not None:
             try:
                 self._car.disconnect()
@@ -450,6 +459,20 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         if not was_awake:
             self.hass.loop.call_soon_threadsafe(
                 lambda: self.hass.async_create_task(self.async_probe())
+            )
+
+        # [HV] l'auto è IN MARCIA (motore acceso) → l'alta tensione è ON e il realtime ha i
+        # valori VERI (odometro/SOC che salgono). Forziamo una lettura realtime (bypassa il
+        # cooldown della sonda) che a sua volta avvia il follow-up ravvicinato finché l'HV resta
+        # acceso. Solo se non c'è già un follow-up in corso, per non accavallare letture.
+        driving = False
+        try:
+            driving = int(float(fields_copy.get("engineState", 0))) == 1
+        except (TypeError, ValueError):
+            driving = False
+        if driving and self._hv_poll_unsub is None and not is_confirmation:
+            self.hass.loop.call_soon_threadsafe(
+                lambda: self.hass.async_create_task(self.async_probe(force=True))
             )
 
     @staticmethod
@@ -584,8 +607,48 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             except Exception as err:  # noqa: BLE001 — il fallback non deve far fallire la sveglia
                 emit(f"fallback Localizza fallito: {err}")
 
+    def _is_hv_on(self) -> bool:
+        """True se l'alta tensione è accesa (marcia, ricarica o clima): è l'UNICO stato in cui
+        /asr/manager/realtime riporta odometro/SOC/tensione REALI. Ad HV spento sono valori
+        stantii/segnaposto (odometro vecchio, dumpEnergy=0, totalVoltage=0, totalCurrent=-1000).
+        Legge il realtime più fresco (sonda) con ripiego sull'ultimo 5A02 via MQTT."""
+        rt = self.data.get("realtime") or {}
+        with self._state_lock:
+            fields = dict(self._fields)
+        for k in ("hVoltageState", "engineState"):
+            v = rt.get(k)
+            if v is None:
+                v = fields.get(k)
+            try:
+                if int(float(v)) == 1:
+                    return True
+            except (TypeError, ValueError):
+                pass
+        return False
+
+    @callback
+    def _arm_hv_followup(self) -> None:
+        """Dopo ogni lettura realtime: se l'HV è acceso pianifica un'altra lettura ravvicinata
+        (per seguire odometro/SOC che salgono durante marcia/ricarica); quando si rispegne, o
+        raggiunto il cap, ferma il loop. Niente comandi all'auto: si limita a leggere."""
+        if self._hv_poll_unsub is not None:
+            self._hv_poll_unsub()
+            self._hv_poll_unsub = None
+        if self._is_hv_on() and self._hv_poll_count < HV_ON_POLL_MAX:
+            self._hv_poll_count += 1
+            self._hv_poll_unsub = async_call_later(
+                self.hass, HV_ON_POLL_EVERY, self._hv_followup_cb)
+        else:
+            self._hv_poll_count = 0
+
+    async def _hv_followup_cb(self, _now) -> None:
+        self._hv_poll_unsub = None
+        await self.async_probe(force=True)
+
     async def async_probe(self, force: bool = False) -> None:
         await self.hass.async_add_executor_job(self._probe, force)
+        # se la lettura ha trovato l'HV acceso, segui la finestra di freschezza (auto-loop)
+        self._arm_hv_followup()
 
     def _probe(self, force: bool = False) -> None:
         self._bind_core()
@@ -612,6 +675,52 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             patch["position"] = pos_copy
             patch["last_pos_fix"] = dt_util.utcnow()
         self._update(patch)
+
+    async def async_refresh_full_status(self) -> None:
+        """Pulsante «Aggiorna stato completo»: porta in HA odometro/batteria/tensione VERI.
+
+        Il canale realtime dà i valori reali SOLO con l'alta tensione accesa; non esiste un
+        comando "leggero" che forzi un report fresco (verificato dal reverse-engineering della
+        SDK Chery). Quindi: se l'HV è già acceso (marcia/ricarica) legge e basta; altrimenti
+        accende BREVEMENTE il clima (unico modo per accendere l'alta tensione), legge i dati
+        reali, poi rispegne il clima. ⚠️ ATTUA sull'auto: il clima resta acceso ~1 minuto."""
+        def emit(m):
+            _LOGGER.info("[refresh] %s", m)
+            self._update({"probe_status": str(m)[:255]})
+
+        # 1) lettura immediata: se l'HV è già acceso, è già tutto fresco
+        await self.async_probe(force=True)
+        if self._is_hv_on():
+            emit("Stato aggiornato — alta tensione già accesa ✅")
+            return
+
+        # 2) accendi il clima per svegliare l'alta tensione
+        emit("Accendo il clima per ~1 min per leggere i dati reali (odometro/batteria)…")
+        try:
+            await self.async_send_command("clima_on")
+        except Exception as err:  # noqa: BLE001
+            emit(f"Non riesco ad accendere il clima: {err}")
+            return
+
+        # 3) leggi il realtime finché l'alta tensione non è su (max ~2,5 min)
+        got = False
+        for _ in range(6):
+            await asyncio.sleep(POLL_WAKE_WAIT)
+            try:
+                await self.async_probe(force=True)
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("[refresh] lettura realtime fallita: %s", err)
+            if self._is_hv_on():
+                got = True
+                break
+
+        # 4) rispegni sempre il clima (anche in caso di insuccesso)
+        try:
+            await self.async_send_command("clima_off")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("[refresh] spegnimento clima fallito: %s", err)
+        emit("Stato aggiornato con dati reali ✅" if got
+             else "L'auto non si è accesa in tempo — riprova, o si aggiornerà al prossimo viaggio")
 
     async def async_check_session(self) -> tuple[bool, str]:
         ok, detail = await self.hass.async_add_executor_job(self._check_session)

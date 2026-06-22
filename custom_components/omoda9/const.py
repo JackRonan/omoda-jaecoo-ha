@@ -95,6 +95,16 @@ DEFAULT_POLL_NORMAL_MIN = 60
 DEFAULT_POLL_CHARGING_MIN = 39
 # attesa tra la sveglia (localizza) e la lettura realtime forzata, perché l'auto torni online
 POLL_WAKE_WAIT = 25
+# Alta tensione (HV) e telemetria FRESCA. Scoperta verificata dal vivo 2026-06-22: il canale
+# /asr/manager/realtime riporta odometro/SOC/tensione/corrente VERI solo quando l'alta tensione
+# è accesa (hVoltageState=1: marcia, ricarica o clima acceso); ad HV spento ritorna uno snapshot
+# stantio (odometro vecchio, dumpEnergy=0, totalVoltage=0, totalCurrent=-1000). Non esiste un
+# comando "leggero" che forzi un report fresco (confermato dal reverse-engineering della SDK
+# nativa Chery): l'unico modo è leggere mentre l'HV è GIÀ acceso. Perciò, appena vediamo l'HV
+# acceso, rileggiamo il realtime a raffica per catturare i valori che salgono (odometro/batteria),
+# poi smettiamo da soli quando si rispegne. Zero comandi all'auto.
+HV_ON_POLL_EVERY = 60   # secondi tra due letture realtime mentre l'alta tensione è accesa
+HV_ON_POLL_MAX = 90     # cap di sicurezza al numero di letture ravvicinate (~90 min di marcia)
 # attesa nelle macro comfort tra la sveglia (localizza) e l'invio di coolingControl/heatingControl:
 # i moduli clima+sedili rispondono solo a vettura DESTA e serve tempo perché la TBOX alimenti il
 # bus comfort. Verificato dal vivo 2026-06-21: con ~35s il comando macro va a buon fine; con

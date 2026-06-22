@@ -275,6 +275,18 @@ class Omoda9Battery(_Omoda9RestoreSensor):
             return None
         return soc
 
+    @property
+    def native_value(self):
+        live = self._live_value()
+        if live is not None:
+            return live
+        # non riproporre uno "0%" stantio salvato prima del fix dei segnaposto: 0 non è un
+        # ultimo-valore-noto valido per la batteria → meglio "sconosciuto" finché non arriva
+        # una lettura vera (primo viaggio/ricarica o pulsante "Aggiorna stato completo").
+        if self._restored in (0, 0.0, "0", "0.0"):
+            return None
+        return self._restored
+
 
 class Omoda9Speed(_Omoda9RestoreSensor):
     _attr_native_unit_of_measurement = UnitOfSpeed.KILOMETERS_PER_HOUR

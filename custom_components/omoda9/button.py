@@ -27,6 +27,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
         ents.append(Omoda9CommandButton(coord, key, spec))
     ents.append(Omoda9ActionButton(coord, "Omoda9 Sveglia auto", "wake", coord.async_wake))
     ents.append(Omoda9ActionButton(coord, "Omoda9 Aggiorna posizione", "refresh_pos", coord.async_probe))
+    # Aggiorna stato completo: forza odometro/batteria/tensione REALI accendendo brevemente il
+    # clima (unico modo per accendere l'alta tensione, da cui dipendono i dati freschi).
+    ents.append(Omoda9ActionButton(coord, "Omoda9 Aggiorna stato completo", "refresh_full",
+                                    coord.async_refresh_full_status))
     # recupero sessione: azioni "di servizio" → categoria diagnostica (fuori dai controlli)
     ents.append(Omoda9ActionButton(coord, "Omoda9 Richiedi codice OTP", "otp_request",
                                     coord.async_request_otp, category=EntityCategory.DIAGNOSTIC))
@@ -61,6 +65,7 @@ class Omoda9ActionButton(Omoda9Entity, ButtonEntity):
     _ICONS = {
         "wake": "mdi:car-connected",
         "refresh_pos": "mdi:crosshairs-gps",
+        "refresh_full": "mdi:car-info",
         "otp_request": "mdi:email-fast",
         "otp_confirm": "mdi:check-decagram",
     }
