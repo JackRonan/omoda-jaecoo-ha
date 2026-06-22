@@ -6,6 +6,16 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.10 — 2026-06-22
+
+- **Più facile chiedere aiuto se qualcosa non va.** Aggiunto il pulsante **"Scarica
+  diagnostica"** nella pagina dell'integrazione (menù ⋮): con un clic scarichi un file da
+  inviare per farti aiutare, **già reso anonimo** — la tua email, il PIN, il numero di
+  telaio e soprattutto la **posizione dell'auto** sono nascosti automaticamente, e di
+  password e certificati non viene mai mostrato il contenuto. Nel manuale (README) trovi ora
+  una sezione **"Risoluzione problemi"** che spiega in parole semplici dove trovare i log e
+  come inviarli in sicurezza.
+
 ## v1.5.9 — 2026-06-22
 
 - **"Raffredda tutto" e "Riscalda tutto" ora si spengono davvero del tutto (sedili
