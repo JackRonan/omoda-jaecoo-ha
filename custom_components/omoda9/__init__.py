@@ -41,22 +41,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # stato sessione iniziale + avvio connessione MQTT all'auto
     await coordinator.async_check_session()
-    # [H4] se il connect MQTT iniziale fallisce, async_start solleva ConfigEntryNotReady:
-    #      ripuliamo hass.data (niente coordinator appeso) e rilanciamo → HA ritenta il setup.
+    # [H4] se QUALSIASI passo dell'avvio fallisce (connect MQTT, avvio timer, forward
+    #      delle piattaforme) ripuliamo TUTTE le risorse già avviate — client paho e
+    #      timer keepalive/poll — e togliamo il coordinator da hass.data, così non
+    #      restano thread/timer orfani; poi rilanciamo → HA ritenta il setup.
     try:
         await coordinator.async_start()
+        # keep-alive: refresh sessione periodico per non far scadere il token da fermi
+        coordinator.async_start_keepalive()
+        # poll telemetria periodico (sveglia + lettura); intervalli dalle opzioni
+        coordinator.async_start_telemetry_poll()
+        # ricarica l'entry quando l'utente cambia le opzioni (es. intervalli di poll)
+        entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         await hass.async_add_executor_job(coordinator.async_stop)
         raise
-    # keep-alive: refresh sessione periodico per non far scadere il token da fermi
-    coordinator.async_start_keepalive()
-    # poll telemetria periodico (sveglia + lettura); intervalli dalle opzioni
-    coordinator.async_start_telemetry_poll()
-    # ricarica l'entry quando l'utente cambia le opzioni (es. intervalli di poll)
-    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
@@ -68,9 +69,13 @@ async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Scarica l'integrazione."""
     ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-    if coordinator is not None:
-        # [MED] async_stop è bloccante (loop_stop fa join del thread paho) → executor,
-        #       per non bloccare l'event loop durante l'unload.
-        await hass.async_add_executor_job(coordinator.async_stop)
+    # [MED] solo se l'unload delle piattaforme è riuscito smontiamo il coordinator: se
+    #       una piattaforma rifiuta l'unload (ok=False) HA considera l'entry ancora
+    #       caricato → non distruggiamo il coordinator sotto entità ancora vive (stato
+    #       coerente; HA ritenterà l'unload).
+    if ok:
+        coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        if coordinator is not None:
+            # async_stop è bloccante (loop_stop fa join del thread paho) → executor.
+            await hass.async_add_executor_job(coordinator.async_stop)
     return ok

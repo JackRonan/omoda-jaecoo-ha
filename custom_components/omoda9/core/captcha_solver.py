@@ -99,9 +99,14 @@ def trova_gap_x(orig_b64, jigsaw_b64):
     return int(best_x) - x      # gapLeft - x0_jig
 
 def crea():
+    """Crea un puzzle. Ritorna repData (dict) o None se il gateway risponde
+    non-JSON / shape inattesa (WAF Aliyun, manutenzione): il chiamante ritenta."""
     r = requests.post(f"{ROOT}/code/create", json={"captchaType": "blockPuzzle"},
                       headers=_signed_headers("/code/create"), timeout=15)
-    return r.json()["data"]["repData"]
+    try:
+        return (r.json().get("data") or {}).get("repData")
+    except Exception:
+        return None
 
 def _signed_headers_query(path, keys_csv, vals_csv):
     """Firma per richieste con parametri in QUERY: MD5(secret+nonce+path+ts+'[vals]') + header keys."""
@@ -123,13 +128,22 @@ def check(token, point, secret):
     vals = f"blockPuzzle,{enc},{token}"
     r = requests.post(f"{ROOT}/code/check", params=params,
                       headers=_signed_headers_query("/code/check", keys, vals), timeout=15)
-    return r.json()
+    try:
+        j = r.json()
+    except Exception:
+        return {}
+    return j if isinstance(j, dict) else {}
 
 def risolvi(max_tentativi=12, verbose=True):
     """create+solve+check finche' non passa (token monouso). Ritorna captchaVerification o None.
     y del punto = 5 (costante, dalla decompilazione dell'app)."""
     for t in range(1, max_tentativi + 1):
         rep = crea()
+        if not isinstance(rep, dict) or not all(
+                rep.get(k) for k in ("token", "secretKey", "originalImageBase64", "jigsawImageBase64")):
+            if verbose: print(f"  tentativo {t}: create non valido (gateway non-JSON?)")
+            time.sleep(0.3)
+            continue
         token, secret = rep["token"], rep["secretKey"]
         x = trova_gap_x(rep["originalImageBase64"], rep["jigsawImageBase64"])
         point = {"x": x, "y": 5}

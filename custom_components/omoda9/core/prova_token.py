@@ -80,8 +80,11 @@ if __name__ == "__main__":
     codefmt = sys.argv[5] if len(sys.argv) > 5 else "plain"
     sc, j, tok = call(email, code, secret, emailfmt, codefmt)
     if tok:
-        with open(_TOKEN_OUT, "w") as fh:
+        # scrittura atomica: tmp + rename (token.json mai troncato se il processo muore)
+        tmp = _TOKEN_OUT + ".tmp"
+        with open(tmp, "w") as fh:
             json.dump(j, fh, indent=2, ensure_ascii=False)
+        os.replace(tmp, _TOKEN_OUT)
         print(f"\n✅ LOGIN OK — token salvato in {_TOKEN_OUT}")
         print("RESULT: OK")          # H7: sentinella stabile per session.confirm_otp
         sys.exit(0)

@@ -308,7 +308,11 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         except Exception as err:  # noqa: BLE001 — un errore non deve fermare il timer
             _LOGGER.debug("[poll] errore non bloccante: %s", err)
         finally:
-            self._schedule_next_poll()
+            # rischedula SOLO se il poll è ancora attivo: se set_poll_enabled(False) è
+            # arrivato durante il ciclo (await), trovava _poll_unsub=None e non poteva
+            # cancellare nulla → senza questa guardia riarmeremmo un timer "zombie".
+            if self.poll_enabled:
+                self._schedule_next_poll()
 
     async def _do_poll_cycle(self) -> None:
         """Un ciclo: sveglia (posizione via vehicleLocation/1301) + lettura realtime."""

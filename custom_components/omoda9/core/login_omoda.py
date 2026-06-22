@@ -39,7 +39,8 @@ def invia(email):
     r = requests.post(BFF + path,
                       data={"email": email, "module": "APP-LOGIN", "captchaVerification": cv},
                       headers=_hdr_form(path), timeout=15)
-    j = r.json()
+    try: j = r.json()
+    except Exception: j = {"_t": r.text[:200]}
     print(f"sendMailCode -> HTTP {r.status_code} key={j.get('key')} msg={j.get('msg')} data={j.get('data')}")
     if j.get("ok") or j.get("key") == "operation.successful":
         print("✅ Codice inviato all'email. Ora: python3 login_omoda.py token <email> <codice>")
