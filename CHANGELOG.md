@@ -6,6 +6,18 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.12 — 2026-06-22
+
+- **La batteria non va più a 0 quando l'auto è parcheggiata.** Quando l'auto è
+  ferma e spenta non comunica la carica reale della batteria (manda uno "zero"
+  segnaposto): prima questo faceva apparire la **batteria allo 0%** e la
+  **tensione/corrente** dell'alta tensione azzerate. Ora l'integrazione riconosce
+  questi valori finti e **mantiene l'ultimo valore reale** — esattamente come fa
+  l'app ufficiale, che mostra sempre l'ultima carica nota. I valori "veri" di
+  batteria, tensione, corrente e consumo elettrico tornano ad aggiornarsi da soli
+  quando l'auto è **in marcia o in ricarica** (gli unici momenti in cui l'auto li
+  trasmette davvero).
+
 ## v1.5.11 — 2026-06-22
 
 - **Login e avvio più robusti.** Migliorata la stabilità in alcune situazioni
