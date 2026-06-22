@@ -100,6 +100,10 @@ POLL_WAKE_WAIT = 25
 # bus comfort. Verificato dal vivo 2026-06-21: con ~35s il comando macro va a buon fine; con
 # 14s falliva (timeout TBOX↔centraline). Sotto questo valore le macro tornano a dare errore.
 MACRO_WAKE_WAIT = 35
+# durata del preset comfort (coolingControl/heatingControl usano duration/times = 15 min):
+# l'auto lo spegne da sola dopo questo tempo → lo switch macro torna OFF da solo per non
+# restare "acceso" a vuoto. +60s di margine.
+MACRO_PRESET_S = 15 * 60 + 60
 
 # Anti-doppio-tap: l'auto esegue UN comando alla volta (A00082 = "veicolo occupato").
 # Dopo un comando, per questi secondi un nuovo comando ATTUATIVO viene rifiutato con un
