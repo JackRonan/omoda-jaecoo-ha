@@ -35,6 +35,7 @@ from .const import (
     CONF_POLL_NORMAL, CONF_POLL_CHARGING, DEFAULT_POLL_NORMAL_MIN,
     DEFAULT_POLL_CHARGING_MIN, POLL_WAKE_WAIT, COMMAND_LOCK_S,
     HV_ON_POLL_EVERY, HV_ON_POLL_MAX,
+    CHARGING_POLL_EVERY, CHARGING_POLL_MAX,
     DEFAULTS,
 )
 
@@ -470,7 +471,12 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             driving = int(float(fields_copy.get("engineState", 0))) == 1
         except (TypeError, ValueError):
             driving = False
-        if driving and self._hv_poll_unsub is None and not is_confirmation:
+        # [Ricarica] spina collegata → carica in corso: avvia anche qui il follow-up ravvicinato,
+        # così il refresh automatico parte appena si attacca la colonnina (senza attendere il poll
+        # periodico dei 39 min) e segue l'avanzamento. `field_on` come in _is_plugged().
+        from .entity import field_on
+        plugged = field_on(fields_copy.get("chargeGunState"))
+        if (driving or plugged) and self._hv_poll_unsub is None and not is_confirmation:
             self.hass.loop.call_soon_threadsafe(
                 lambda: self.hass.async_create_task(self.async_probe(force=True))
             )
@@ -628,16 +634,29 @@ class Omoda9Coordinator(DataUpdateCoordinator):
 
     @callback
     def _arm_hv_followup(self) -> None:
-        """Dopo ogni lettura realtime: se l'HV è acceso pianifica un'altra lettura ravvicinata
-        (per seguire odometro/SOC che salgono durante marcia/ricarica); quando si rispegne, o
-        raggiunto il cap, ferma il loop. Niente comandi all'auto: si limita a leggere."""
+        """Dopo ogni lettura realtime: se c'è freschezza da seguire pianifica un'altra lettura
+        ravvicinata, altrimenti (o raggiunto il cap) ferma il loop. Niente comandi all'auto: si
+        limita a leggere. Due casi che tengono vivo il loop:
+          - **HV acceso** (marcia/clima): segue odometro/SOC che salgono, intervallo 60s, cap ~90 min;
+          - **spina collegata** (ricarica): segue l'avanzamento della carica per ORE, intervallo più
+            rilassato (`CHARGING_POLL_EVERY`) e cap molto più alto (`CHARGING_POLL_MAX`).
+        Durante una ricarica l'HV è acceso, quindi il realtime ha batteria/corrente/tempo-residuo
+        veri: è proprio questo che permette il refresh automatico mentre la spina è collegata."""
         if self._hv_poll_unsub is not None:
             self._hv_poll_unsub()
             self._hv_poll_unsub = None
-        if self._is_hv_on() and self._hv_poll_count < HV_ON_POLL_MAX:
+        plugged = self._is_plugged()
+        # la spina ha priorità: cap/intervallo "da ricarica" (più lunghi) coprono anche l'HV acceso
+        if plugged:
+            every, cap = CHARGING_POLL_EVERY, CHARGING_POLL_MAX
+        elif self._is_hv_on():
+            every, cap = HV_ON_POLL_EVERY, HV_ON_POLL_MAX
+        else:
+            self._hv_poll_count = 0
+            return
+        if self._hv_poll_count < cap:
             self._hv_poll_count += 1
-            self._hv_poll_unsub = async_call_later(
-                self.hass, HV_ON_POLL_EVERY, self._hv_followup_cb)
+            self._hv_poll_unsub = async_call_later(self.hass, every, self._hv_followup_cb)
         else:
             self._hv_poll_count = 0
 

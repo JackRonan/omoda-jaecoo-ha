@@ -105,6 +105,13 @@ POLL_WAKE_WAIT = 25
 # poi smettiamo da soli quando si rispegne. Zero comandi all'auto.
 HV_ON_POLL_EVERY = 60   # secondi tra due letture realtime mentre l'alta tensione è accesa
 HV_ON_POLL_MAX = 90     # cap di sicurezza al numero di letture ravvicinate (~90 min di marcia)
+# RICARICA: quando la spina è collegata l'auto carica per ORE (es. 246 min visti dal vivo 2026-06-23)
+# e l'HV è acceso → il realtime ha batteria/corrente/tensione/tempo-residuo VERI. Lo stesso loop
+# ravvicinato segue allora l'avanzamento della carica, ma con intervallo più rilassato e cap molto
+# più alto della marcia (una carica AC piena può durare diverse ore). Verificato 2026-06-23: ad auto
+# in ricarica una lettura realtime dà subito stato_ricarica/corrente_hv/tempo_residuo aggiornati.
+CHARGING_POLL_EVERY = 120   # secondi tra due letture realtime mentre la spina è collegata (carica)
+CHARGING_POLL_MAX = 300     # cap di sicurezza (~10h: copre una carica AC completa con margine)
 # attesa nelle macro comfort tra la sveglia (localizza) e l'invio di coolingControl/heatingControl:
 # i moduli clima+sedili rispondono solo a vettura DESTA e serve tempo perché la TBOX alimenti il
 # bus comfort. Verificato dal vivo 2026-06-21: con ~35s il comando macro va a buon fine; con
