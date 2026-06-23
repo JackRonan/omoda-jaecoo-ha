@@ -40,8 +40,10 @@ def field_on(v) -> bool | None:
 class Omoda9Entity(CoordinatorEntity[Omoda9Coordinator]):
     """Entità base: device unico 'Omoda 9' identificato dal VIN."""
 
-    # has_entity_name=False + nomi espliciti "Omoda9 …" → entity_id stile bridge.
-    _attr_has_entity_name = False
+    # has_entity_name=True + translation_key → il NOME dell'entità è TRADOTTO (it/en) e HA lo
+    # antepone al device → "Omoda 9 Battery" / "Jaecoo 7 Battery". L'entity_id resta lo stile
+    # bridge "omoda9_*" (impostato esplicito sotto, da `name`/`object_id`) → storico intatto.
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -53,11 +55,17 @@ class Omoda9Entity(CoordinatorEntity[Omoda9Coordinator]):
         entity_id_format: str | None = None,
     ) -> None:
         super().__init__(coordinator)
-        self._attr_name = name
+        # `name` NON è più il friendly name (lo dà translation_key): lo teniamo solo per
+        # calcolare l'object_id dell'entity_id e per i log. NON impostare _attr_name, altrimenti
+        # vincerebbe sul translation_key.
+        self._raw_name = name
         self._attr_unique_id = f"{coordinator.vin}_{unique_suffix}"
+        oid = object_id or slugify(name)          # es. "omoda9_batteria"
+        # translation_key = object_id senza il prefisso dominio → chiave in translations/*.json
+        self._attr_translation_key = oid[len(DOMAIN) + 1:] if oid.startswith(f"{DOMAIN}_") else oid
         # entity_id ESPLICITO = continuità col bridge (default = slugify(name)).
         if entity_id_format:
-            self.entity_id = entity_id_format.format(object_id or slugify(name))
+            self.entity_id = entity_id_format.format(oid)
         # device dinamico: il nome riflette il veicolo reale (Omoda 9, Jaecoo 7…), letto
         # dal coordinator (nickname/modello da queryList, o override manuale). Il device è
         # identificato dal VIN → rinominarlo NON tocca entity_id né storico.

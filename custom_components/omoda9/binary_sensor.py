@@ -103,10 +103,11 @@ class Omoda9Online(_Omoda9RestoreBinary):
 
     def __init__(self, coord) -> None:
         super().__init__(coord, "Omoda9 Connessione", "online")
-        # nome cambiato da "Connessa"→"Connessione" (si legge bene anche da disconnesso, lo
-        # stato Connesso/Disconnesso lo dà il device_class). entity_id PINNED allo storico
-        # `omoda9_connessa` così dashboard/automazioni esistenti non si rompono.
+        # entity_id PINNED allo storico `omoda9_connessa` (dashboard/automazioni non si rompono);
+        # translation_key forzato a "connessa" per combaciare con la chiave in translations/*.json
+        # (altrimenti la base la deriverebbe da "Connessione" → "connessione", chiave inesistente).
         self.entity_id = ENTITY_ID_FORMAT.format("omoda9_connessa")
+        self._attr_translation_key = "connessa"
 
     def _live_is_on(self) -> bool | None:
         rt = self.coordinator.data.get("realtime") or {}

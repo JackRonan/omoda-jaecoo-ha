@@ -83,4 +83,4 @@ class Omoda9ActionButton(Omoda9Entity, ButtonEntity):
         try:
             await self._action()
         except Exception:  # noqa: BLE001
-            _LOGGER.exception("Omoda9: azione «%s» non riuscita", self._attr_name)
+            _LOGGER.exception("Omoda9: azione «%s» non riuscita", self._raw_name)
