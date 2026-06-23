@@ -6,6 +6,18 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.14 — 2026-06-23
+
+- **La carica si segue da sola: mentre l'auto è attaccata alla colonnina, batteria,
+  tempo che manca alla fine e potenza di ricarica si aggiornano automaticamente.**
+  Prima, anche durante la ricarica i dati potevano restare "fermi" all'ultimo valore
+  per ore (l'auto non li manda da sola): bisognava premere "Aggiorna stato completo"
+  per vederli. Ora, **appena colleghi il cavo, l'integrazione inizia a rileggere i
+  dati di carica ogni paio di minuti** e li tiene aggiornati per tutta la durata della
+  ricarica — vedi la percentuale che sale e il tempo residuo che scende senza fare
+  nulla. Quando stacchi il cavo, smette da sola. Tutto in sola lettura: **nessun
+  comando viene inviato all'auto** (durante la carica i dati veri sono già disponibili).
+
 ## v1.5.13 — 2026-06-23
 
 - **I chilometri e la batteria ora si aggiornano da soli quando guidi.** Era
