@@ -84,15 +84,17 @@ DEFAULT_AWAKE_WINDOW = 300
 # Poll telemetria periodico (sveglia + lettura realtime). DUE intervalli in MINUTI,
 # personalizzabili dalle opzioni dell'integrazione; 0 = disattivato:
 #   - CONF_POLL_NORMAL  : a riposo/parcheggiata (default 60 min)
-#   - CONF_POLL_CHARGING: quando è attaccata alla colonnina (default 39 min, più frequente
-#     per seguire la ricarica; mentre carica l'auto è alimentata → costo 12V trascurabile)
+#   - CONF_POLL_CHARGING: quando è attaccata alla colonnina (default 30 min). Da v1.5.14 NON è
+#     più il meccanismo che segue la ricarica (lo fa il loop a 2 min di CHARGING_POLL_EVERY, in
+#     sola lettura): qui resta solo come BACKSTOP che avvia quel loop se l'auto non annuncia da
+#     sola l'attacco del cavo, + refresh GPS periodico. Mentre carica l'auto è alimentata.
 # Lo stato "attaccata" si rileva da `chargeGunState` (spina collegata).
 # ⚠️ ogni ciclo SVEGLIA l'auto (vehicleLocation) per posizione + telemetria fresche anche
 # a vettura parcheggiata → micro-consumo 12V e possibile contesa con l'app ufficiale.
 CONF_POLL_NORMAL = "poll_normal_min"
 CONF_POLL_CHARGING = "poll_charging_min"
 DEFAULT_POLL_NORMAL_MIN = 60
-DEFAULT_POLL_CHARGING_MIN = 39
+DEFAULT_POLL_CHARGING_MIN = 30
 # attesa tra la sveglia (localizza) e la lettura realtime forzata, perché l'auto torni online
 POLL_WAKE_WAIT = 25
 # Alta tensione (HV) e telemetria FRESCA. Scoperta verificata dal vivo 2026-06-22: il canale
