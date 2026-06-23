@@ -6,6 +6,19 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.17 — 2026-06-23
+
+- **"Autonomia totale" corretta + nuovo dato "Autonomia benzina".** Il valore che
+  l'integrazione chiamava "Autonomia totale" (215 km) in realtà era **solo l'autonomia
+  a benzina**, non la somma con l'elettrico: lo si è verificato perché restava fermo a
+  215 km mentre l'autonomia elettrica calava (e il serbatoio era invariato). Ora:
+  **"Autonomia benzina"** mostra i km col solo motore termico, e **"Autonomia totale"**
+  mostra il valore corretto = **elettrico + benzina** (es. 27 + 215 = 242 km).
+- **Pressione gomme in bar (come nell'app).** Le quattro pressioni degli pneumatici ora
+  sono mostrate in **bar** invece che in kPa (es. 2,79 bar invece di 279 kPa), così
+  coincidono con quanto vedi nell'app dell'auto. Potresti vedere una notifica una-tantum
+  di "unità cambiata": si risolve da sola, lo storico viene convertito automaticamente.
+
 ## v1.5.16 — 2026-06-23
 
 - **L'aggiornamento automatico della ricarica ora parte subito anche dopo un riavvio
