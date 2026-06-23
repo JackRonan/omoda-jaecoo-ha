@@ -6,6 +6,8 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.21 — 2026-06-23
+
 - **Risolto: non si riusciva più ad aggiungere l'integrazione (errore "not_implemented").**
   Chi installava l'integrazione da zero, alla voce **Aggiungi integrazione → Omoda 9 / Jaecoo**,
   riceveva subito un errore "not_implemented" e non riusciva a inserire email e PIN. La schermata
