@@ -52,6 +52,15 @@ CONF_PIN = "pin"
 CONF_VIN = "vin"
 CONF_TUSERID = "tuserid"
 
+# Identità veicolo per il device HA (nome dinamico: "Omoda 9", "Jaecoo 7"…). `vehicle_name`
+# = nickname/modello dall'app, salvato in entry.data (catturato al config flow o backfillato);
+# è anche un'OPZIONE per l'override manuale. model/brand restano solo in entry.data.
+CONF_VEHICLE_NAME = "vehicle_name"
+DATA_VEHICLE_MODEL = "vehicle_model"
+DATA_VEHICLE_BRAND = "vehicle_brand"
+# fallback quando il modello non è (ancora) noto
+DEFAULT_VEHICLE_NAME = "Omoda 9 / Jaecoo"
+
 # Parametri di REGIONE (default = Europa). Esposti come options per supportare altre regioni.
 CONF_BFF = "bff"
 CONF_TSP_HOST = "tsp_host"

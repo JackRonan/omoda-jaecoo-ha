@@ -54,6 +54,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # ricarica l'entry quando l'utente cambia le opzioni (es. intervalli di poll)
         entry.async_on_unload(entry.add_update_listener(_async_options_updated))
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        # backfill identità veicolo (nome device dinamico) per gli entry creati prima che il
+        # config flow la salvasse: in background, così un eventuale reload avviene a setup finito.
+        hass.async_create_background_task(
+            coordinator.async_ensure_vehicle_identity(), "omoda9_vehicle_identity")
     except Exception:
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         await hass.async_add_executor_job(coordinator.async_stop)

@@ -47,7 +47,8 @@
         "description": "Ogni quanto svegliare l'auto e aggiornare telemetria + posizione GPS. 0 = disattivato. L'intervallo \"in ricarica\" si usa quando l'auto è attaccata alla colonnina (la telemetria si aggiorna più spesso per seguire la ricarica).",
         "data": {
           "poll_normal_min": "Intervallo di aggiornamento da parcheggiata (minuti, 0 = off)",
-          "poll_charging_min": "Intervallo di aggiornamento alla colonnina (minuti, 0 = off)"
+          "poll_charging_min": "Intervallo di aggiornamento alla colonnina (minuti, 0 = off)",
+          "vehicle_name": "Nome del veicolo (vuoto = usa quello rilevato dall'auto)"
         }
       }
     }

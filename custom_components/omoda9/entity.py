@@ -14,7 +14,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 
-from .const import DOMAIN
+from .const import DEFAULT_VEHICLE_NAME, DOMAIN
 from .coordinator import Omoda9Coordinator
 
 
@@ -58,11 +58,14 @@ class Omoda9Entity(CoordinatorEntity[Omoda9Coordinator]):
         # entity_id ESPLICITO = continuità col bridge (default = slugify(name)).
         if entity_id_format:
             self.entity_id = entity_id_format.format(object_id or slugify(name))
+        # device dinamico: il nome riflette il veicolo reale (Omoda 9, Jaecoo 7…), letto
+        # dal coordinator (nickname/modello da queryList, o override manuale). Il device è
+        # identificato dal VIN → rinominarlo NON tocca entity_id né storico.
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.vin)},
-            name="Omoda 9",
-            manufacturer="Omoda",
-            model="Omoda 9",
+            name=coordinator.vehicle_name or DEFAULT_VEHICLE_NAME,
+            manufacturer=coordinator.vehicle_brand or "Omoda",
+            model=coordinator.vehicle_model or None,
         )
 
 

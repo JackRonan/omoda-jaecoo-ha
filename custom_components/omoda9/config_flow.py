@@ -30,6 +30,7 @@ from .const import (
     CONF_CAR_MQTT_HOST, CONF_CAR_MQTT_PORT, DEFAULTS,
     CONF_POLL_NORMAL, CONF_POLL_CHARGING,
     DEFAULT_POLL_NORMAL_MIN, DEFAULT_POLL_CHARGING_MIN,
+    CONF_VEHICLE_NAME,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -161,6 +162,8 @@ class Omoda9OptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
         opt = self._entry.options or {}
+        # nome veicolo corrente (override o quello rilevato), per pre-riempire il campo
+        cur_name = opt.get(CONF_VEHICLE_NAME) or self._entry.data.get(CONF_VEHICLE_NAME) or ""
         schema = vol.Schema({
             vol.Optional(
                 CONF_POLL_NORMAL,
@@ -170,6 +173,11 @@ class Omoda9OptionsFlow(config_entries.OptionsFlow):
                 CONF_POLL_CHARGING,
                 default=opt.get(CONF_POLL_CHARGING, DEFAULT_POLL_CHARGING_MIN),
             ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
+            # override manuale del nome del veicolo (vuoto = usa quello rilevato dall'auto)
+            vol.Optional(
+                CONF_VEHICLE_NAME,
+                description={"suggested_value": cur_name},
+            ): str,
         })
         return self.async_show_form(step_id="init", data_schema=schema)
 

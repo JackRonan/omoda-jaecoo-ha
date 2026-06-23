@@ -36,6 +36,7 @@ from .const import (
     DEFAULT_POLL_CHARGING_MIN, POLL_WAKE_WAIT, COMMAND_LOCK_S,
     HV_ON_POLL_EVERY, HV_ON_POLL_MAX,
     CHARGING_POLL_EVERY, CHARGING_POLL_MAX,
+    CONF_VEHICLE_NAME, DATA_VEHICLE_MODEL, DATA_VEHICLE_BRAND,
     DEFAULTS,
 )
 
@@ -43,6 +44,17 @@ from .const import (
 REQUIRED_CERTS = ("ca.pem", "client.pem", "client.key")
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _derive_brand(text: str | None) -> str:
+    """Marca dal nome/modello veicolo (es. fullName 'JAECOO 7' → 'Jaecoo')."""
+    t = (text or "").upper()
+    if "JAECOO" in t:
+        return "Jaecoo"
+    if "OMODA" in t:
+        return "Omoda"
+    return "Chery"
+
 
 # Mappa campo-auto → entità (identica al bridge: ha_bridge.py SENSORS).
 # kind: open|onoff → binary_sensor ON se != 0 ; lock → 0=Bloccata/1=Sbloccata ; level → sensor 0-3
@@ -122,6 +134,14 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         self.pin = cfg.get(CONF_PIN, "")
         self.bff = cfg[CONF_BFF]
         self.email = cfg.get(CONF_EMAIL, "")
+
+        # identità veicolo per il device HA. Priorità: override manuale (opzioni) →
+        # valore salvato in entry.data (config flow / backfill) → None (→ fallback in entity.py).
+        opt = entry.options or {}
+        override = str(opt.get(CONF_VEHICLE_NAME) or "").strip()
+        self.vehicle_name = override or cfg.get(CONF_VEHICLE_NAME) or None
+        self.vehicle_model = cfg.get(DATA_VEHICLE_MODEL) or None
+        self.vehicle_brand = cfg.get(DATA_VEHICLE_BRAND) or None
 
         # env per i moduli core/ (li importeremo DOPO aver settato l'ambiente).
         # [H1] Assegnazione DIRETTA (non setdefault): con più entry/reload nello stesso
@@ -758,6 +778,67 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             _LOGGER.debug("[refresh] spegnimento clima fallito: %s", err)
         emit("Stato aggiornato con dati reali ✅" if got
              else "L'auto non si è accesa in tempo — riprova, o si aggiornerà al prossimo viaggio")
+
+    async def async_ensure_vehicle_identity(self) -> None:
+        """Backfill best-effort dell'identità veicolo (nome/modello/marca) per il device HA.
+
+        Serve agli entry creati PRIMA che il config flow la salvasse: se manca in entry.data
+        (e non c'è override manuale) la legge UNA volta da queryList e la persiste, così ai
+        restart successivi è già in cache (niente nuove chiamate). Sola lettura, non blocca il
+        setup: su errore resta il fallback "Omoda 9 / Jaecoo"."""
+        if str((self.entry.options or {}).get(CONF_VEHICLE_NAME) or "").strip():
+            return  # override manuale: non sovrascrivere
+        if self.entry.data.get(CONF_VEHICLE_NAME):
+            return  # già in cache
+        info = await self.hass.async_add_executor_job(self._fetch_vehicle_identity)
+        if not info or not info.get(CONF_VEHICLE_NAME):
+            return
+        self.vehicle_name = info.get(CONF_VEHICLE_NAME)
+        self.vehicle_model = info.get(DATA_VEHICLE_MODEL)
+        self.vehicle_brand = info.get(DATA_VEHICLE_BRAND)
+        self.hass.config_entries.async_update_entry(
+            self.entry, data={**self.entry.data, **info})  # → un reload (poi è in cache)
+
+    def _fetch_vehicle_identity(self) -> dict | None:
+        """queryList (sola lettura) → {vehicle_name, vehicle_model, vehicle_brand} per il VIN."""
+        try:
+            self._bind_core()
+            import wake, omoda_auth as A, requests
+            wake._bff_login()
+            access = wake._access_token()
+            headers = A.headers_post("/tsp/v1/app/vmc/queryList", extra={
+                "Authorization": f"Bearer {access}",
+                "Content-Type": "application/json; charset=UTF-8",
+                "Accept": "application/json, text/plain, */*"})
+            j = requests.post(A.BFF + "/tsp/v1/app/vmc/queryList",
+                              data="{}", headers=headers, timeout=20).json()
+            data = j.get("data")
+            cands = []
+            if isinstance(data, list):
+                cands = data
+            elif isinstance(data, dict):
+                for k in ("controlCarList", "authorizedControlCarList", "carList", "vehicles"):
+                    if isinstance(data.get(k), list):
+                        cands += data[k]
+                if not cands and "vin" in data:
+                    cands = [data]
+            item = next((x for x in cands if isinstance(x, dict)
+                         and str(x.get("vin")) == self.vin), None)
+            if item is None and cands and isinstance(cands[0], dict):
+                item = cands[0]
+            if not item:
+                return None
+            nick = str(item.get("nickname") or "").strip()
+            full = str(item.get("fullName") or "").strip()
+            name = nick or (full.title() if full else "")
+            if not name:
+                return None
+            return {CONF_VEHICLE_NAME: name,
+                    DATA_VEHICLE_MODEL: (full.title() if full else None),
+                    DATA_VEHICLE_BRAND: _derive_brand(full or nick)}
+        except Exception as err:  # noqa: BLE001 — best-effort, non deve far fallire il setup
+            _LOGGER.debug("[veicolo] identità non recuperata: %s", err)
+            return None
 
     async def async_check_session(self) -> tuple[bool, str]:
         ok, detail = await self.hass.async_add_executor_job(self._check_session)

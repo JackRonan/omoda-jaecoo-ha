@@ -47,7 +47,8 @@
         "description": "How often to wake the car and refresh telemetry + GPS position. 0 = disabled. The charging interval is used while the car is plugged in (telemetry refreshes more often to follow the charge).",
         "data": {
           "poll_normal_min": "Update interval when parked (minutes, 0 = off)",
-          "poll_charging_min": "Update interval while plugged in (minutes, 0 = off)"
+          "poll_charging_min": "Update interval while plugged in (minutes, 0 = off)",
+          "vehicle_name": "Vehicle name (leave empty to use the name detected from the car)"
         }
       }
     }
