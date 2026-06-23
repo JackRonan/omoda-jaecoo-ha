@@ -1,190 +1,191 @@
 # Omoda 9 / Jaecoo → Home Assistant
 
-🌐 **Italiano** · [English](README.en.md)
+🌐 **English** · [Italiano](README.it.md)
 
-Porta la tua auto **Omoda 9 / Jaecoo** dentro **Home Assistant**: stato del
-veicolo, posizione e comandi, come nell'app ufficiale ma integrati in HA.
+Bring your **Omoda 9 / Jaecoo** car into **Home Assistant**: vehicle status,
+location and commands — just like the official app, but integrated into HA.
 
-> ✅ **Pronto all'uso.** Per partire bastano **email + PIN** del tuo account
-> Omoda/Jaecoo (più un **codice OTP** ricevuto via email al primo accesso). VIN e
-> certificati vengono rilevati e installati **da soli**. Il pacchetto **non
-> contiene alcun dato personale**: token e credenziali restano solo nel *tuo*
-> Home Assistant.
+> ✅ **Ready to use.** All you need to get started is the **email + PIN** of your
+> Omoda/Jaecoo account (plus a **one-time OTP code** received by email on first
+> login). VIN and certificates are detected and installed **automatically**. The
+> package contains **no personal data**: tokens and credentials stay only in
+> *your* Home Assistant.
 
-> ⚠️ **Software NON ufficiale**, reverse-engineered. Nessuna affiliazione con
-> Omoda / Jaecoo / Chery. Fornito "as is", usalo a tuo rischio e solo sul tuo
-> veicolo. Vedi [`LICENSE`](LICENSE).
+> ⚠️ **UNOFFICIAL software**, reverse-engineered. Not affiliated with Omoda /
+> Jaecoo / Chery. Provided "as is", use at your own risk and only on your own
+> vehicle. See [`LICENSE`](LICENSE).
 
-## Cosa puoi fare
+## What you can do
 
-- **Stato dell'auto** — porte, serrature, baule, cofano, finestrini, tetto,
-  clima, riscaldamento/ventilazione dei sedili e altro, come entità di HA.
-- **Posizione / GPS** — un pulsante localizza l'auto (`device_tracker` + sensori
-  posizione), anche da parcheggiata.
-- **Batteria, velocità, autonomia, km** — si aggiornano da soli quando l'auto è
-  **in marcia o in ricarica**; durante la carica il monitoraggio segue
-  l'avanzamento.
-- **Comandi** — pulsanti per clima, localizzazione, sveglia e altro, che agiscono
-  davvero sull'auto.
-- **Notifiche** — blueprint opzionale per un avviso quando un comando fallisce.
+- **Car status** — doors, locks, trunk, hood, windows, roof, climate, seat
+  heating/ventilation and more, as HA entities.
+- **Location / GPS** — a button locates the car (`device_tracker` + location
+  sensors), even while parked.
+- **Battery, speed, range, mileage** — update automatically when the car is
+  **driving or charging**; during charging the monitor follows the progress.
+- **Commands** — buttons for climate, locate, wake-up and more, that actually act
+  on the car.
+- **Notifications** — optional blueprint for an alert when a command fails.
 
-## Installazione
+## Installation
 
-1. **HACS → menu ⋮ → Custom repositories** → aggiungi l'URL di questo repo,
-   categoria **Integration**.
-2. Cerca **Omoda 9 / Jaecoo** → **Download** → **riavvia Home Assistant**.
-3. **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → Omoda 9**.
+1. **HACS → ⋮ menu → Custom repositories** → add this repo's URL, category
+   **Integration**.
+2. Search for **Omoda 9 / Jaecoo** → **Download** → **restart Home Assistant**.
+3. **Settings → Devices & Services → Add Integration → Omoda 9**.
 
-## Primo accesso (login)
+## First login
 
-Tutto avviene **dentro Home Assistant**, niente strumenti esterni:
+Everything happens **inside Home Assistant**, no external tools:
 
-1. Inserisci **email** e **PIN** dell'account (gli endpoint regionali sono
-   opzionali, default Europa). HA invia un **codice OTP** alla tua email.
-2. Inserisci il **codice OTP** → HA crea la sessione e scopre i tuoi veicoli.
-3. Se hai più auto scegli il **VIN**; se è una sola viene aggiunta direttamente,
-   con tutte le entità.
+1. Enter your account **email** and **PIN** (regional endpoints are optional,
+   Europe by default). HA sends an **OTP code** to your email.
+2. Enter the **OTP code** → HA creates the session and discovers your vehicles.
+3. If you have multiple cars, pick the **VIN**; if there's only one it is added
+   directly, with all its entities.
 
-Se in futuro la sessione scade (di solito perché hai aperto l'app ufficiale),
-usa i pulsanti **«Richiedi codice OTP» / «Conferma OTP»** (con l'entità testo
-«Codice OTP») per rientrare senza riconfigurare nulla.
+If the session later expires (usually because you opened the official app), use
+the **"Request OTP code" / "Confirm OTP"** buttons (with the "OTP code" text
+entity) to log back in without reconfiguring anything.
 
-## Uso quotidiano
+## Daily use
 
-- **Non aprire l'app ufficiale** mentre l'integrazione è attiva: stesso account →
-  si scollegano (e può servire un nuovo OTP).
-- Molte entità sono `unknown` ad **auto in standby** (è normale); dopo un riavvio
-  di HA mostrano l'ultimo valore noto.
-- Batteria, velocità e km si aggiornano solo **ad auto in marcia o in ricarica**.
-  Per una lettura immediata da fermo c'è il pulsante **«Aggiorna stato completo»**,
-  che accende il clima ~1 minuto per risvegliare l'auto e poi lo rispegne.
+- **Don't open the official app** while the integration is active: same account →
+  they disconnect each other (and a new OTP may be required).
+- Many entities are `unknown` while the car is in **standby** (this is normal);
+  after an HA restart they show the last known value.
+- Battery, speed and mileage only update when the car is **driving or charging**.
+  For an immediate reading while parked there's the **"Refresh full status"**
+  button, which turns on the climate for ~1 minute to wake the car, then turns it
+  off again.
 
-## Aggiornamento
+## Updating
 
-Quando esce una nuova versione: **HACS → Omoda 9 → Update → riavvia Home
-Assistant**. Lo storico delle novità è nel [CHANGELOG](CHANGELOG.md).
+When a new version is released: **HACS → Omoda 9 → Update → restart Home
+Assistant**. The change history is in the [CHANGELOG](CHANGELOG.md).
 
-## Notifiche quando un comando fallisce (opzionale)
+## Notifications when a command fails (optional)
 
-L'integrazione fornisce solo le entità: **non invia notifiche da sola**. Se vuoi
-un **popup quando un comando all'auto fallisce** (veicolo occupato, non
-raggiungibile, sessione scaduta…), importa il blueprint incluso:
+The integration only provides the entities: it **doesn't send notifications on
+its own**. If you want a **popup when a command to the car fails** (vehicle busy,
+unreachable, expired session…), import the included blueprint:
 
-[![Importa il blueprint in Home Assistant](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FCaslinovich%2Fomoda9-ha%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fomoda9%2Fcomando_fallito.yaml)
+[![Import the blueprint into Home Assistant](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FCaslinovich%2Fomoda9-ha%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fomoda9%2Fcomando_fallito.yaml)
 
-Poi **Impostazioni → Automazioni → Crea automazione → Da blueprint → _Omoda 9 /
-Jaecoo — Avviso comando non riuscito_**. Riconosce solo i veri fallimenti
-(ignora ✅ e ⏳), quindi niente falsi allarmi.
+Then **Settings → Automations → Create automation → From blueprint → _Omoda 9 /
+Jaecoo — Failed command alert_**. It recognizes only real failures (it ignores ✅
+and ⏳), so no false alarms.
 
-## Se qualcosa non funziona
+## If something doesn't work
 
-1. **Diagnostica (consigliata):** **Impostazioni → Dispositivi e servizi → Omoda
-   9 / Jaecoo → ⋮ → Scarica diagnostica**. È **già anonimizzata** (email, PIN,
-   VIN, tUserId e GPS oscurati; di token/certificati appare solo «presente:
-   sì/no») → sicura da condividere in una
+1. **Diagnostics (recommended):** **Settings → Devices & Services → Omoda 9 /
+   Jaecoo → ⋮ → Download diagnostics**. It is **already anonymized** (email, PIN,
+   VIN, tUserId and GPS redacted; tokens/certificates show only "present:
+   yes/no") → safe to share in an
    [issue](https://github.com/Caslinovich/omoda9-ha/issues).
-2. **Log dettagliati:** stessa pagina → **⋮ → Abilita registrazione di debug** →
-   riproduci il problema → **Disabilita registrazione di debug**: HA scarica il
-   log. PIN, OTP e token **non vengono mai scritti nei log**; l'unico dato
-   sensibile possibile è il **VIN** (la diagnostica del punto 1 lo nasconde già).
+2. **Detailed logs:** same page → **⋮ → Enable debug logging** → reproduce the
+   problem → **Disable debug logging**: HA downloads the log. PIN, OTP and tokens
+   are **never written to the logs**; the only possibly sensitive value is the
+   **VIN** (the diagnostics from step 1 already hide it).
 
-## Requisiti
+## Requirements
 
-- Home Assistant 2024.1.0+ con HACS.
-- Un account Omoda/Jaecoo con il veicolo associato (proprietario).
-- **Non** serve un broker MQTT locale: l'integrazione si connette **da sola** al
-  cloud dell'auto.
+- Home Assistant 2024.1.0+ with HACS.
+- An Omoda/Jaecoo account with the vehicle associated (owner).
+- A local MQTT broker is **not** needed: the integration connects to the car's
+  cloud **on its own**.
 
 ---
 
-# Sotto il cofano (tecnico)
+# Under the hood (technical)
 
-Tutto ciò che segue è **automatico**: serve solo per capire il flusso, per il
-debug o per portare l'integrazione su una regione non ancora coperta. In
-un'installazione normale **non va eseguito nulla a mano**.
+Everything below is **automatic**: it's here only to understand the flow, for
+debugging, or to bring the integration to a region not yet covered. In a normal
+install **nothing needs to be run by hand**.
 
-### 1. Login e token (OTP)
+### 1. Login and token (OTP)
 
-Il primo accesso conia un **token di sessione** per-account da email + PIN + OTP.
-Catena orchestrata dal config flow (codice in `custom_components/omoda9/core/`):
+The first login mints a per-account **session token** from email + PIN + OTP.
+Chain orchestrated by the config flow (code in
+`custom_components/omoda9/core/`):
 
-| Passo | Modulo | Cosa fa |
+| Step | Module | What it does |
 |---|---|---|
-| invio OTP | `login_omoda.py invia <email>` | risolve il captcha del gateway (§2) e fa partire il codice via **email** |
-| conio token | `prova_token.py <email> <code>` | chiama `/auth/oauth2/token` replicando l'app (cifratura SM4) e salva il token |
-| orchestrazione | `session.py` | espone `request_otp()` / `confirm_otp(code)` / `check()` / `refresh()` |
+| send OTP | `login_omoda.py invia <email>` | solves the gateway captcha (§2) and triggers the code by **email** |
+| mint token | `prova_token.py <email> <code>` | calls `/auth/oauth2/token` replicating the app (SM4 encryption) and saves the token |
+| orchestration | `session.py` | exposes `request_otp()` / `confirm_otp(code)` / `check()` / `refresh()` |
 
-Il token finisce in **`<config>/omoda9_<VIN>_token.json`** (mai nel repo). Finché
-il **refresh_token** è valido, `session.refresh()` rinnova la sessione **senza**
-nuovo OTP. Un nuovo OTP serve solo se token e refresh muoiono entrambi — tipico
-caso: **apertura dell'app ufficiale** (sessione singola lato cloud).
+The token ends up in **`<config>/omoda9_<VIN>_token.json`** (never in the repo).
+As long as the **refresh_token** is valid, `session.refresh()` renews the session
+**without** a new OTP. A new OTP is needed only if both token and refresh die —
+typical case: **opening the official app** (single session on the cloud side).
 
-### 2. Captcha (slider) — risolto dentro Home Assistant
+### 2. Captcha (slider) — solved inside Home Assistant
 
-L'invio dell'OTP è protetto da uno **slider-captcha**. `captcha_solver.py` lo
-risolve **in-process** con **solo `numpy` + `Pillow`** (cross-correlation e
-morfologia reimplementate da zero, **niente OpenCV**): così gira anche su **Home
-Assistant OS** (musllinux, dove `opencv-python-headless` non ha wheel). Nessuna
-interazione utente, nessuna dipendenza pesante.
+Sending the OTP is protected by a **slider captcha**. `captcha_solver.py` solves
+it **in-process** with **only `numpy` + `Pillow`** (cross-correlation and
+morphology reimplemented from scratch, **no OpenCV**): so it works even on **Home
+Assistant OS** (musllinux, where `opencv-python-headless` has no wheel). No user
+interaction, no heavy dependencies.
 
-### 3. Certificati MQTT mutual-TLS — auto-provisioning
+### 3. Mutual-TLS MQTT certificates — auto-provisioning
 
-La telemetria si connette al broker **EMQX** dell'auto in **mutual-TLS**. I
-certificati client (`ca.pem`, `client.pem`, `client.key`) sono **costanti
-universali per-regione** — **identiche per tutti gli utenti**, prese dagli asset
-**pubblici** dell'APK — **non** dati per-account: l'isolamento tra account è dato
-da username/password MQTT e dalle ACL sui topic, come fa l'app ufficiale.
+Telemetry connects to the car's **EMQX** broker over **mutual-TLS**. The client
+certificates (`ca.pem`, `client.pem`, `client.key`) are **universal per-region
+constants** — **identical for all users**, taken from the APK's **public**
+assets — **not** per-account data: account isolation comes from the MQTT
+username/password and the topic ACLs, exactly like the official app.
 
-Al primo avvio `coordinator.async_provision_certs()` deobfusca i cert dal bundle
-(`custom_components/omoda9/certs/store.json`) e li scrive in
-**`<config>/omoda9_<VIN>_certs/`**. Override manuale: il campo **`certs_src`** del
-config flow. Per una regione **non** presente nel bundle l'avvio fallisce con un
-messaggio che indica dove mettere i cert.
+On first start `coordinator.async_provision_certs()` deobfuscates the certs from
+the bundle (`custom_components/omoda9/certs/store.json`) and writes them to
+**`<config>/omoda9_<VIN>_certs/`**. Manual override: the **`certs_src`** field in
+the config flow. For a region **not** present in the bundle, startup fails with a
+message indicating where to put the certs.
 
-### 4. Provisioning dei comandi (car_token)
+### 4. Command provisioning (car_token)
 
-Inviare comandi richiede un **car_token per-veicolo** (non lo `userToken` del
-BFF). Catena replicata dall'app, gestita da `commands.py`:
+Sending commands requires a per-vehicle **car_token** (not the BFF `userToken`).
+Chain replicated from the app, handled by `commands.py`:
 
 ```
 getTuserId → loginTSP (= car_token) → queryList → setVecDefault(vin)
-           → checkPassword(PIN, scene) → comando   (Authorization = car_token)
+           → checkPassword(PIN, scene) → command   (Authorization = car_token)
 ```
 
-Il **PIN** è quello dell'account. ⚠️ Un PIN **errato** rischia il **lockout**
-dell'account: non va indovinato. Il VIN deve risultare tra i veicoli autorizzati
-(`authorizeType` 2 = proprietario, 0 = delegato). `provision.py` offre una
-**diagnostica in sola lettura** (`diagnose()`) che verifica appartenenza veicolo
-e `authorizeType` **senza toccare l'auto**.
+The **PIN** is the account's. ⚠️ A **wrong** PIN risks **locking out** the
+account: it must not be guessed. The VIN must be among the authorized vehicles
+(`authorizeType` 2 = owner, 0 = delegate). `provision.py` provides a
+**read-only diagnostic** (`diagnose()`) that checks vehicle membership and
+`authorizeType` **without touching the car**.
 
-### File generati (nel tuo HA, mai nel repo)
+### Generated files (in your HA, never in the repo)
 
-- `<config>/omoda9_<VIN>_token.json` — token di sessione per-account.
-- `<config>/omoda9_<VIN>_certs/` — certificati mutual-TLS del broker MQTT.
+- `<config>/omoda9_<VIN>_token.json` — per-account session token.
+- `<config>/omoda9_<VIN>_certs/` — mutual-TLS certificates for the MQTT broker.
 
-Coperti da `.gitignore`, non lasciano mai la tua installazione.
+Covered by `.gitignore`, they never leave your installation.
 
-### Provisioning / login manuale (avanzato, fuori da HA)
+### Manual provisioning / login (advanced, outside HA)
 
-Per debug si possono usare gli script CLI in `custom_components/omoda9/core/` con
-un Python che abbia i `requirements` del manifest, configurando l'ambiente via
-variabili (vedi [`omoda9.env.example`](omoda9.env.example)):
+For debugging you can use the CLI scripts in `custom_components/omoda9/core/`
+with a Python that has the manifest `requirements`, configuring the environment
+via variables (see [`omoda9.env.example`](omoda9.env.example)):
 
 ```bash
-# 1) invia il codice OTP via email (risolve il captcha)
+# 1) send the OTP code by email (solves the captcha)
 python3 login_omoda.py invia <email>
 
-# 2) conia il token e salvalo in $OMODA_TOKEN_PATH (default ./token.json)
-python3 prova_token.py <email> <codice>
+# 2) mint the token and save it in $OMODA_TOKEN_PATH (default ./token.json)
+python3 prova_token.py <email> <code>
 
-# 3) (opzionale) diagnostica veicolo/autorizzazione — SOLA LETTURA
+# 3) (optional) vehicle/authorization diagnostic — READ-ONLY
 python3 provision.py
 ```
 
-Il token così coniato è lo **stesso** file che legge l'integrazione: puntando
-`OMODA_TOKEN_PATH` a `<config>/omoda9_<VIN>_token.json` si può sbloccare un setup
-anche senza rifare l'OTP dal config flow.
+The token minted this way is the **same** file the integration reads: by pointing
+`OMODA_TOKEN_PATH` at `<config>/omoda9_<VIN>_token.json` you can unblock a setup
+even without redoing the OTP from the config flow.
 
-## Licenza
+## License
 
-[MIT](LICENSE). Progetto indipendente, non ufficiale.
+[MIT](LICENSE). Independent, unofficial project.
