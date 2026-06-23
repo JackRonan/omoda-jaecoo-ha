@@ -6,6 +6,15 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+## v1.5.19 — 2026-06-23
+
+- **Il dispositivo prende il nome reale della tua auto (Omoda 9, Jaecoo 7…).** Prima il
+  dispositivo si chiamava sempre "Omoda 9", anche per chi ha un Jaecoo. Ora il nome (e
+  marca/modello) vengono **rilevati automaticamente dall'auto** — è lo stesso nome che vedi
+  nell'app. Se preferisci, puoi cambiarlo a mano in **Impostazioni → Dispositivi e servizi →
+  Omoda 9 / Jaecoo → Configura → "Nome veicolo"**. Gli `entity_id`, lo storico, le automazioni
+  e le dashboard **non cambiano** (il dispositivo è identificato dal numero di telaio).
+
 ## v1.5.18 — 2026-06-23
 
 - **Il sensore "Connessa" si chiama ora "Connessione".** È sempre lo stesso sensore (uno
