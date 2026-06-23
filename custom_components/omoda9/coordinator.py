@@ -151,6 +151,7 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         # smettiamo da soli quando si rispegne. Zero comandi all'auto (vedi HV_ON_POLL_* in const).
         self._hv_poll_unsub = None    # timer auto-rischedulante del follow-up HV
         self._hv_poll_count = 0       # letture ravvicinate fatte nella finestra HV-on (cap HV_ON_POLL_MAX)
+        self._startup_probe_unsub = None  # one-shot: semina il follow-up subito dopo l'avvio
         # interruttore "Aggiornamento automatico" (switch): SPENTO di default — il poll
         # sveglia l'auto, quindi parte solo se l'utente lo accende esplicitamente. La
         # scelta dell'utente viene poi ricordata tra i riavvii (switch RestoreEntity).
@@ -270,6 +271,20 @@ class Omoda9Coordinator(DataUpdateCoordinator):
             return
         if self._poll_unsub is None:
             self._schedule_next_poll()
+        # SEED iniziale: una lettura realtime ~15s dopo l'avvio (dato il tempo alla MQTT di
+        # connettersi). Se l'auto è in carica/marcia (HV acceso) il follow-up ravvicinato a 2 min
+        # parte SUBITO, senza attendere il primo poll periodico (fino a 30 min) — l'auto a riposo
+        # NON manda MQTT, quindi senza questo seed dopo un riavvio in carica i sensori restavano
+        # fermi finché non scattava il poll. Sola lettura: nessun comando all'auto. One-shot.
+        if self._startup_probe_unsub is None:
+            self._startup_probe_unsub = async_call_later(self.hass, 15, self._startup_probe_cb)
+
+    async def _startup_probe_cb(self, _now) -> None:
+        self._startup_probe_unsub = None
+        try:
+            await self.async_probe(force=True)
+        except Exception as err:  # noqa: BLE001 — il seed non deve far fallire l'avvio
+            _LOGGER.debug("[poll] probe iniziale (seed) fallito: %s", err)
 
     @callback
     def set_poll_enabled(self, on: bool) -> None:
@@ -396,6 +411,9 @@ class Omoda9Coordinator(DataUpdateCoordinator):
         if self._hv_poll_unsub is not None:
             self._hv_poll_unsub()
             self._hv_poll_unsub = None
+        if self._startup_probe_unsub is not None:
+            self._startup_probe_unsub()
+            self._startup_probe_unsub = None
         if self._car is not None:
             try:
                 self._car.disconnect()
