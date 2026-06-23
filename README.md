@@ -8,7 +8,8 @@ telematica Chery) a **Home Assistant**. Progetto di reverse-engineering.
   clima, riscaldamento/ventilazione sedili…).
 - **Posizione/GPS** — comando di localizzazione → `device_tracker` + sensori
   posizione (on-demand, anche ad auto parcheggiata).
-- **Batteria / velocità / odometro** — disponibili ad auto **in marcia**.
+- **Batteria / velocità / odometro** — si aggiornano da soli ad auto **in marcia
+  o in ricarica**; durante la carica il monitoraggio parte e segue l'avanzamento.
 - **Comandi** — pulsanti (clima on/off, localizza, sveglia, ecc.) che agiscono
   sull'auto coniando un `taskId` proprio.
 - **Sessione/OTP** — config flow per-utente + entità di recupero sessione.
@@ -154,7 +155,9 @@ Quando esce una nuova release: **HACS → Omoda 9 → Update → riavvia Home As
 
 - Home Assistant 2024.1.0+ con HACS.
 - Un account Omoda/Jaecoo con il veicolo associato (proprietario).
-- Un broker MQTT raggiungibile da Home Assistant (es. add-on Mosquitto).
+
+L'integrazione si connette **da sola** al broker MQTT cloud dell'auto: **non**
+serve un broker MQTT locale (es. Mosquitto) in Home Assistant.
 
 ## Note d'uso
 
@@ -162,7 +165,10 @@ Quando esce una nuova release: **HACS → Omoda 9 → Update → riavvia Home As
   stesso clientId → si scollegano (e può invalidare il token → nuovo OTP).
 - Molte entità sono `unknown` ad **auto in standby** (atteso); mostrano l'ultimo
   valore noto dopo un riavvio di HA (persistenza `RestoreEntity`).
-- Batteria/velocità/odometro arrivano **solo ad auto in marcia**.
+- Batteria, velocità e odometro si aggiornano **ad auto in marcia o in ricarica**
+  (gli unici momenti in cui l'auto trasmette i valori reali). Per una lettura
+  immediata ad auto parcheggiata c'è il pulsante **«Aggiorna stato completo»**, che
+  accende il clima ~1 minuto per risvegliare i dati e poi lo rispegne da solo.
 
 ## Risoluzione problemi — log e diagnostica
 
@@ -206,19 +212,14 @@ Avviso comando non riuscito_**. Puoi attivare il popup in Home Assistant e/o agg
 push sul telefono. Riconosce solo i veri fallimenti: ignora gli esiti positivi (✅), "in
 corso" (⏳) e i messaggi intermedi, quindi niente falsi allarmi.
 
-## Stato / roadmap
+## Stato
 
-- ✅ Telemetria, posizione/GPS, batteria/velocità, comandi, sessione/OTP.
-- ✅ **OTP da zero su Home Assistant OS** (v0.2.1): il captcha è risolto
-  interamente in HA con `numpy`+`Pillow` (niente più `opencv`/`cv2`), quindi il
-  login dal config flow funziona su qualsiasi installazione, anche senza un token
-  preesistente. Con un token valido la sessione si auto-rinnova senza captcha.
-- ✅ **Provisioning automatico dei certificati** mutual-TLS (v0.2.4): cert client
-  EMQX universali per-regione auto-installati al setup → onboarding solo email+PIN,
-  senza estrarre nulla a mano.
-- ✅ **Persistenza stato al riavvio di HA** (v0.2.5–v0.2.6): posizione, batteria,
-  velocità e tutte le entità di stato ripristinano l'ultimo valore noto via
-  `RestoreEntity`/`RestoreSensor`.
+Integrazione completa e in uso quotidiano: telemetria, posizione/GPS,
+batteria/velocità/odometro, comandi e sessione/OTP. Login da zero anche su Home
+Assistant OS (captcha risolto in-process con `numpy`+`Pillow`, senza `opencv`),
+provisioning automatico di certificati e comandi, e ripristino dell'ultimo valore
+noto dopo un riavvio di HA. Lo storico versione-per-versione è nel
+[CHANGELOG](CHANGELOG.md).
 
 ## Licenza
 
