@@ -102,7 +102,11 @@ class Omoda9Online(_Omoda9RestoreBinary):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda9 Connessa", "online")
+        super().__init__(coord, "Omoda9 Connessione", "online")
+        # nome cambiato da "Connessa"→"Connessione" (si legge bene anche da disconnesso, lo
+        # stato Connesso/Disconnesso lo dà il device_class). entity_id PINNED allo storico
+        # `omoda9_connessa` così dashboard/automazioni esistenti non si rompono.
+        self.entity_id = ENTITY_ID_FORMAT.format("omoda9_connessa")
 
     def _live_is_on(self) -> bool | None:
         rt = self.coordinator.data.get("realtime") or {}
