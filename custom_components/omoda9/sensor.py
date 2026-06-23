@@ -8,6 +8,7 @@ arriva un dato live dall'auto.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -55,6 +56,7 @@ from .entity import Omoda9Entity
 C = UnitOfTemperature.CELSIUS
 KM = UnitOfLength.KILOMETERS
 KPA = UnitOfPressure.KPA
+BAR = UnitOfPressure.BAR
 MIN = UnitOfTime.MINUTES
 VOLT = UnitOfElectricPotential.VOLT
 AMP = UnitOfElectricCurrent.AMPERE
@@ -83,6 +85,9 @@ class _RtSpec:
     numeric: bool = True
     vmap: dict | None = None  # codice grezzo → testo leggibile (campi enum)
     invalid: tuple = ()       # valori (float) = segnaposto "nessuna lettura" (HV spenta) → tieni l'ultimo noto
+    compute: Callable | None = None  # valore CALCOLATO da più campi realtime (ignora `field`)
+    scale: float | None = None  # fattore moltiplicativo sul valore grezzo (es. kPa→bar = 0.01)
+    precision: int | None = None  # cifre decimali suggerite per la UI
 
 
 # ── Mappe codice→testo per i campi enum di ricarica ──
@@ -96,14 +101,29 @@ APPT_CHARGE_STATE_MAP = {"0": "Disattivata", "1": "Attiva", "2": "In esecuzione"
 FAST_GUN_MAP = {"0": "Scollegata", "1": "Collegata", "2": "Collegata (ricarica rapida)"}
 
 
+def _range_totale(rt: dict):
+    """Autonomia totale REALE = elettrica (`pureElectricRange`) + benzina (`mileageSurplus`).
+    None se manca un pezzo → resta l'ultimo valore noto (RestoreSensor)."""
+    try:
+        return float(rt["pureElectricRange"]) + float(rt["mileageSurplus"])
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
 _RT_SENSORS: list[_RtSpec] = [
     # ── P1 · autonomia / chilometri (valori km confermati dal vivo) ──
     _RtSpec("range_elettrico", "Autonomia elettrica", "pureElectricRange",
             DIST, KM, MEAS, "mdi:map-marker-distance"),
-    # mileageSurplus = autonomia TOTALE residua (elettrico+benzina): 215 km dal vivo,
-    # coerente con pureElectric 60 + benzina ~155 (da oilSurplus 23 L).
-    _RtSpec("range_totale", "Autonomia totale", "mileageSurplus",
-            DIST, KM, MEAS, "mdi:map-marker-distance"),
+    # mileageSurplus = autonomia a BENZINA (motore termico), NON il totale: verificato dal
+    # vivo 2026-06-23 che resta 215 km mentre l'autonomia elettrica scende (60→27 km) e il
+    # carburante è invariato (oilSurplus 23 L) → segue il serbatoio, non la batteria.
+    _RtSpec("range_benzina", "Autonomia benzina", "mileageSurplus",
+            DIST, KM, MEAS, "mdi:gas-station"),
+    # Autonomia TOTALE reale = elettrica + benzina (campo CALCOLATO, non un field grezzo).
+    # Riusa la suffix storica "range_totale" → l'entità sensor.omoda9_autonomia_totale resta,
+    # ma ora mostra la somma corretta invece del solo mileageSurplus.
+    _RtSpec("range_totale", "Autonomia totale", "",
+            DIST, KM, MEAS, "mdi:map-marker-distance", compute=_range_totale),
     # cruiseRange = stima combinata alternativa (134 km dal vivo) → diagnostico.
     _RtSpec("range_combinato", "Autonomia combinata (stima)", "cruiseRange",
             DIST, KM, MEAS, "mdi:map-marker-distance", diag=True),
@@ -111,15 +131,15 @@ _RT_SENSORS: list[_RtSpec] = [
             DIST, KM, TOTAL, "mdi:counter"),
     _RtSpec("km_ibrido", "Chilometraggio ibrido", "hybridMileage",
             DIST, KM, TOTAL, "mdi:counter", diag=True),
-    # ── P1 · TPMS pressione (kPa) ──
+    # ── P1 · TPMS pressione (campo auto in kPa → mostrata in BAR come nell'app: ÷100) ──
     _RtSpec("gomma_ant_sx_press", "Pressione gomma ant. SX", "lFrontTyreKpa",
-            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+            PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
     _RtSpec("gomma_ant_dx_press", "Pressione gomma ant. DX", "rFrontTyreKpa",
-            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+            PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
     _RtSpec("gomma_post_sx_press", "Pressione gomma post. SX", "lRearTyreKpa",
-            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+            PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
     _RtSpec("gomma_post_dx_press", "Pressione gomma post. DX", "rRearTyreKpa",
-            PRESS, KPA, MEAS, "mdi:car-tire-alert"),
+            PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
     # ── P1 · TPMS temperatura (°C, diagnostica) ──
     _RtSpec("gomma_ant_sx_temp", "Temperatura gomma ant. SX", "lFrontTyreTemp",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
@@ -323,10 +343,17 @@ class Omoda9RealtimeSensor(_Omoda9RestoreSensor):
             self._attr_state_class = spec.state_class
         if spec.icon:
             self._attr_icon = spec.icon
+        if spec.precision is not None:
+            self._attr_suggested_display_precision = spec.precision
         if spec.diag:
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _live_value(self):
+        # campo CALCOLATO da più field realtime (es. autonomia totale = elettrica + benzina)
+        if self._spec.compute is not None:
+            rt = self.coordinator.data.get("realtime") or {}
+            val = self._spec.compute(rt)
+            return None if (val is None or val in self._spec.invalid) else val
         raw = _rt(self.coordinator, self._spec.field)
         if raw is None:
             return None
@@ -342,7 +369,7 @@ class Omoda9RealtimeSensor(_Omoda9RestoreSensor):
         # segnaposto "nessuna lettura" (es. HV spenta) → None ⇒ resta l'ultimo valore noto
         if val in self._spec.invalid:
             return None
-        return val
+        return val * self._spec.scale if self._spec.scale is not None else val
 
 
 class Omoda9SessionStatus(_Omoda9RestoreSensor):
