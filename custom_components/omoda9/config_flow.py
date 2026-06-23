@@ -148,39 +148,6 @@ class Omoda9ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> "Omoda9OptionsFlow":
         return Omoda9OptionsFlow(config_entry)
 
-
-class Omoda9OptionsFlow(config_entries.OptionsFlow):
-    """Opzioni: i due intervalli (minuti) del poll telemetria. 0 = disattiva.
-
-    `poll_normal_min` = a riposo/parcheggiata; `poll_charging_min` = quando l'auto è
-    attaccata alla colonnina (di norma più breve, per seguire la ricarica)."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self._entry = config_entry
-
-    async def async_step_init(self, user_input: dict | None = None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-        opt = self._entry.options or {}
-        # nome veicolo corrente (override o quello rilevato), per pre-riempire il campo
-        cur_name = opt.get(CONF_VEHICLE_NAME) or self._entry.data.get(CONF_VEHICLE_NAME) or ""
-        schema = vol.Schema({
-            vol.Optional(
-                CONF_POLL_NORMAL,
-                default=opt.get(CONF_POLL_NORMAL, DEFAULT_POLL_NORMAL_MIN),
-            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
-            vol.Optional(
-                CONF_POLL_CHARGING,
-                default=opt.get(CONF_POLL_CHARGING, DEFAULT_POLL_CHARGING_MIN),
-            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
-            # override manuale del nome del veicolo (vuoto = usa quello rilevato dall'auto)
-            vol.Optional(
-                CONF_VEHICLE_NAME,
-                description={"suggested_value": cur_name},
-            ): str,
-        })
-        return self.async_show_form(step_id="init", data_schema=schema)
-
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -260,3 +227,36 @@ class Omoda9OptionsFlow(config_entries.OptionsFlow):
             await self.hass.async_add_executor_job(_cleanup_pending, self.hass)
             return self.async_abort(reason="token_move_failed")
         return self.async_create_entry(title=f"Omoda 9 ({vin})", data=self._data)
+
+
+class Omoda9OptionsFlow(config_entries.OptionsFlow):
+    """Opzioni: i due intervalli (minuti) del poll telemetria. 0 = disattiva.
+
+    `poll_normal_min` = a riposo/parcheggiata; `poll_charging_min` = quando l'auto è
+    attaccata alla colonnina (di norma più breve, per seguire la ricarica)."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self._entry = config_entry
+
+    async def async_step_init(self, user_input: dict | None = None):
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+        opt = self._entry.options or {}
+        # nome veicolo corrente (override o quello rilevato), per pre-riempire il campo
+        cur_name = opt.get(CONF_VEHICLE_NAME) or self._entry.data.get(CONF_VEHICLE_NAME) or ""
+        schema = vol.Schema({
+            vol.Optional(
+                CONF_POLL_NORMAL,
+                default=opt.get(CONF_POLL_NORMAL, DEFAULT_POLL_NORMAL_MIN),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
+            vol.Optional(
+                CONF_POLL_CHARGING,
+                default=opt.get(CONF_POLL_CHARGING, DEFAULT_POLL_CHARGING_MIN),
+            ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
+            # override manuale del nome del veicolo (vuoto = usa quello rilevato dall'auto)
+            vol.Optional(
+                CONF_VEHICLE_NAME,
+                description={"suggested_value": cur_name},
+            ): str,
+        })
+        return self.async_show_form(step_id="init", data_schema=schema)

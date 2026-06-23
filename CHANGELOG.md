@@ -6,6 +6,13 @@ dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
 
 ## [Non rilasciato]
 
+- **Risolto: non si riusciva più ad aggiungere l'integrazione (errore "not_implemented").**
+  Chi installava l'integrazione da zero, alla voce **Aggiungi integrazione → Omoda 9 / Jaecoo**,
+  riceveva subito un errore "not_implemented" e non riusciva a inserire email e PIN. La schermata
+  di accesso non veniva proposta per niente. Ora la procedura di configurazione (email → codice
+  ricevuto via mail → eventuale scelta dell'auto) funziona di nuovo correttamente. Chi aveva già
+  configurato l'integrazione in precedenza non era interessato dal problema.
+
 ## v1.5.20 — 2026-06-23
 
 - **Nomi delle entità in italiano o inglese, in automatico secondo la lingua di Home
