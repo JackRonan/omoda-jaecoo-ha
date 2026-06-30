@@ -16,6 +16,7 @@ import sys
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN, PLATFORMS
 
@@ -35,7 +36,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Registra il path per la card Lovelace custom
     if hasattr(hass, "http") and hass.http is not None:
         lovelace_dir = os.path.join(os.path.dirname(__file__), "lovelace")
-        hass.http.register_static_path("/omoda_jaecoo_card", lovelace_dir, cache_headers=False)
+        await hass.http.async_register_static_paths([
+            StaticPathConfig("/omoda_jaecoo_card", lovelace_dir, False)
+        ])
 
     # FASE 3c: i cert mutual-TLS devono esserci PRIMA di connettere l'MQTT auto.
     ok, detail = await coordinator.async_provision_certs()
