@@ -54,8 +54,8 @@ def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None)
     os.environ["CHANNEL_ID"] = str(data.get(CONF_CHANNEL_ID, DEFAULTS[CONF_CHANNEL_ID]))
     os.environ["OMODA_BFF"] = data.get(CONF_BFF, DEFAULTS[CONF_BFF])
     os.environ["TSP_HOST"] = data.get(CONF_TSP_HOST, DEFAULTS[CONF_TSP_HOST])
-    os.environ["OMODA_LANGUAGE"] = "en-GB"
-    os.environ["OMODA_DEPT_ID"] = "44"
+    os.environ["OMODA_LANGUAGE"] = "it-IT"
+    os.environ["OMODA_DEPT_ID"] = "39"
     os.environ["OMODA_TOKEN_PATH"] = token_path or _pending_token_path(hass)
     os.environ["OMODA_SRC_DIR"] = _CORE
 

@@ -45,11 +45,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 # (device_class BATTERY → on = "low"). Convenzione ON/OFF (1=avviso) da confermare dal
 # vivo. (suffix, nome, campo realtime, device_class)
 _RT_BINARIES = [
-    ("front_left_tire_warning", "Front left tire warning", "lFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
-    ("front_right_tire_warning", "Front right tire warning", "rFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
-    ("rear_left_tire_warning", "Rear left tire warning", "lRearTyreCall", BinarySensorDeviceClass.PROBLEM),
-    ("rear_right_tire_warning", "Rear right tire warning", "rRearTyreCall", BinarySensorDeviceClass.PROBLEM),
-    ("battery_low", "Battery low", "socLowCall", BinarySensorDeviceClass.BATTERY),
+    ("front_left_tire_warning", "Tire Front Left Warning", "lFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("front_right_tire_warning", "Tire Front Right Warning", "rFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("rear_left_tire_warning", "Tire Rear Left Warning", "lRearTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("rear_right_tire_warning", "Tire Rear Right Warning", "rRearTyreCall", BinarySensorDeviceClass.PROBLEM),
+    ("battery_low", "Battery Low", "socLowCall", BinarySensorDeviceClass.BATTERY),
 ]
 
 
@@ -82,7 +82,7 @@ class OmodaJaecooBinarySensor(_OmodaJaecooRestoreBinary):
     """ON se il campo è != 0 (open/onoff)."""
 
     def __init__(self, coord, spec: dict) -> None:
-        super().__init__(coord, f"Omoda / Jaecoo {spec['name']}", spec["key"])
+        super().__init__(coord, spec["name"], spec["key"])
         self._key = spec["key"]
         dc = spec.get("dclass")
         self._attr_device_class = BinarySensorDeviceClass(dc) if dc else None
@@ -102,7 +102,7 @@ class OmodaJaecooOnline(_OmodaJaecooRestoreBinary):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Connection", "online")
+        super().__init__(coord, "Diagnostic Connection", "online")
         self._attr_translation_key = "connection"
 
     def _live_is_on(self) -> bool | None:
@@ -120,7 +120,7 @@ class OmodaJaecooRealtimeBinary(_OmodaJaecooRestoreBinary):
 
     def __init__(self, coord, name: str, suffix: str, field: str,
                  device_class: BinarySensorDeviceClass) -> None:
-        super().__init__(coord, f"Omoda / Jaecoo {name}", f"rt_{suffix}")
+        super().__init__(coord, name, f"rt_{suffix}")
         self._field = field
         self._attr_device_class = device_class
 
@@ -136,7 +136,7 @@ class OmodaJaecooAwake(OmodaJaecooEntity, BinarySensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Car awake", "awake",
+        super().__init__(coord, "Diagnostic Car Awake", "awake",
                          entity_id_format=ENTITY_ID_FORMAT)
 
     @property
@@ -149,7 +149,7 @@ class OmodaJaecooSession(_OmodaJaecooRestoreBinary):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Session", "session")
+        super().__init__(coord, "Diagnostic Session", "session")
 
     def _live_is_on(self) -> bool | None:
         return self.coordinator.data.get("session_ok")

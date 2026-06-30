@@ -28,16 +28,16 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .entity import OmodaJaecooEntity
+from .entity import OmodaJaecooEntity, get_rt_field
 
 _LOGGER = logging.getLogger(__name__)
 
 # (name, suffix, coord_attr, min, max, step, default, unit, icon)
 NUMBERS = [
-    ("Omoda / Jaecoo Climate duration", "climate_duration", "clima_duration",
+    ("Climate Duration", "climate_duration", "clima_duration",
      5, 30, 5, 15, UnitOfTime.MINUTES, "mdi:timer-cog"),
     # Start time is now a `time` entity (HH:MM, see time.py); only duration remains here.
-    ("Omoda / Jaecoo Charging duration", "charging_duration", "charge_duration_hours",
+    ("Charge Duration", "charging_duration", "charge_duration_hours",
      1, 12, 1, 6, UnitOfTime.HOURS, "mdi:battery-clock"),
 ]
 
@@ -113,7 +113,7 @@ class OmodaJaecooChargeLimitNumber(OmodaJaecooEntity, RestoreNumber):
     _attr_icon = "mdi:battery-lock"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Charge limit", "charge_limit_number",
+        super().__init__(coord, "Charge Limit", "charge_limit_number",
                          entity_id_format=ENTITY_ID_FORMAT)
         self._stored: float = 80.0   # sane default until telemetry or restore arrives
 
@@ -127,7 +127,7 @@ class OmodaJaecooChargeLimitNumber(OmodaJaecooEntity, RestoreNumber):
     def native_value(self) -> float:
         """Return live value from telemetry, falling back to last stored."""
         rt = self.coordinator.data.get("realtime") or {}
-        raw = rt.get("maxSocPercent")
+        raw = get_rt_field(rt, "maxSocPercent")
         try:
             v = float(raw)
             if 50 <= v <= 100:

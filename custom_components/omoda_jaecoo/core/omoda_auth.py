@@ -111,7 +111,7 @@ def sign_post(url_path: str, ts_ms: int=None, secret: str=SIGN_SECRET, nonce: st
     sig = hashlib.sha256(f"{secret}{nonce}{url_path}{ts}".encode("utf-8")).hexdigest()
     return sig, ts
 
-DEPT_ID = os.environ.get("OMODA_DEPT_ID", "44")   # CountryArea.value() per Italia (mappa paese->prefisso, da area_config.dart). Francia=33, Germania=49...
+DEPT_ID = os.environ.get("OMODA_DEPT_ID", "39")   # CountryArea.value() per Italia (mappa paese->prefisso, da area_config.dart). Francia=33, Germania=49...
 
 def headers_post(url_path: str, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE, dept_id: str=DEPT_ID, extra=None):
     sig, ts = sign_post(url_path, secret=secret, nonce=nonce)
@@ -120,7 +120,7 @@ def headers_post(url_path: str, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE, 
     h = {
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/x-www-form-urlencoded",
-        "Accept-Language": os.environ.get("OMODA_LANGUAGE", "en-GB"),
+        "Accept-Language": os.environ.get("OMODA_LANGUAGE", "it-IT"),
         "Accept-Encoding": "gzip, deflate",
         "agent": "android",
         "version": APP_VERSION,

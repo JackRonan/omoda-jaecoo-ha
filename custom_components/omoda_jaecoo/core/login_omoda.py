@@ -23,7 +23,7 @@ def _hdr_form(path):
             "TENANT-CODE": omoda.TENANT_CODE, "TENANT-ID": omoda.TENANT_CODE,
             "tenantCode": omoda.TENANT_CODE, "tenantID": omoda.TENANT_CODE, "tenant": omoda.TENANT_CODE,
             "channelId": omoda.CHANNEL_ID, "countryId": omoda.COUNTRY_ID,
-            "appversion": omoda.APP_VERSION, "User-Agent": "okhttp/4.9.0", "Accept-Language": os.environ.get("OMODA_LANGUAGE", "en-GB"),
+            "appversion": omoda.APP_VERSION, "User-Agent": "okhttp/4.9.0", "Accept-Language": os.environ.get("OMODA_LANGUAGE", "it-IT"),
             "nonce": NONCE, "timestamp": str(ts), "url": path,
             "signature": _md5(f"{SECRET}{NONCE}{path}{ts}"),
             "Content-Type": "application/x-www-form-urlencoded"}
@@ -96,7 +96,7 @@ def _token_headers(path, params):
             "TENANT-CODE": omoda.TENANT_CODE, "TENANT-ID": omoda.TENANT_CODE,
             "tenantCode": omoda.TENANT_CODE, "tenantID": omoda.TENANT_CODE, "tenant": omoda.TENANT_CODE,
             "channelId": omoda.CHANNEL_ID, "countryId": omoda.COUNTRY_ID,
-            "appversion": omoda.APP_VERSION, "Accept-Language": os.environ.get("OMODA_LANGUAGE", "en-GB"),
+            "appversion": omoda.APP_VERSION, "Accept-Language": os.environ.get("OMODA_LANGUAGE", "it-IT"),
             "nonce": NONCE, "timestamp": str(ts), "url": path, "keys": ",".join(keys),
             "signature": _md5(f"{SECRET}{NONCE}{path}{ts}[{vals_csv}]")}
 

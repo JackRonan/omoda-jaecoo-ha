@@ -37,7 +37,7 @@ class OmodaJaecooTracker(OmodaJaecooEntity, TrackerEntity, RestoreEntity):
     _attr_icon = "mdi:car"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Position", "position",
+        super().__init__(coord, "Location", "position",
                          entity_id_format=ENTITY_ID_FORMAT)
         self._restored_lat: float | None = None
         self._restored_lon: float | None = None

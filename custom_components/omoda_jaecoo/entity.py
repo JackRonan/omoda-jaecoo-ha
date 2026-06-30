@@ -9,6 +9,8 @@ HA slugifica il solo nome). Dove il bridge usa un id non derivabile dal nome
 """
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -35,6 +37,19 @@ def field_on(v) -> bool | None:
         return float(s) != 0.0
     except (TypeError, ValueError):
         return s.lower() not in ("false", "off", "no")
+
+
+def get_rt_field(rt: dict, field: str) -> Any:
+    """Look up a field in the realtime dict, checking both the root and nested objects."""
+    if not isinstance(rt, dict):
+        return None
+    if field in rt:
+        return rt[field]
+    for k, v in rt.items():
+        if isinstance(v, dict):
+            if field in v:
+                return v[field]
+    return None
 
 
 class OmodaJaecooEntity(CoordinatorEntity[OmodaJaecooCoordinator]):

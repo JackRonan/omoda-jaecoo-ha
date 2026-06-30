@@ -27,13 +27,13 @@ from .entity import OmodaJaecooEntity, OmodaJaecooOptimisticMixin, field_on
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
     coord = hass.data[DOMAIN][entry.entry_id]
     add([
-        OmodaJaecooCover(coord, "Omoda / Jaecoo Trunk", "baule", ["trunkDoor"],
+        OmodaJaecooCover(coord, "Door Trunk", "baule", ["trunkDoor"],
                     "baule_apri", "baule_chiudi", CoverDeviceClass.DOOR, "mdi:car-back"),
-        OmodaJaecooCover(coord, "Omoda / Jaecoo Windows", "finestrini",
+        OmodaJaecooCover(coord, "Window Control", "finestrini",
                     ["frontLeftWindowState", "frontRightWindowState",
                      "backLeftWindowState", "backRightWindowState"],
                     "finestrini_apri", "finestrini_chiudi", CoverDeviceClass.WINDOW, "mdi:car-door"),
-        OmodaJaecooCover(coord, "Omoda / Jaecoo Sunroof", "tetto", ["sunroofState"],
+        OmodaJaecooCover(coord, "Window Sunroof", "tetto", ["sunroofState"],
                     "tetto_apri", "tetto_chiudi", CoverDeviceClass.SHADE, "mdi:car-select"),
     ])
 

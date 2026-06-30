@@ -30,7 +30,7 @@ class OmodaJaecooLock(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, LockEntity,
     _attr_icon = "mdi:car-door-lock"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Lock", "lock", entity_id_format=ENTITY_ID_FORMAT)
+        super().__init__(coord, "Lock", "lock", entity_id_format=ENTITY_ID_FORMAT)
         self._restored: bool | None = None
 
     async def async_added_to_hass(self) -> None:

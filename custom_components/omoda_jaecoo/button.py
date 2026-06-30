@@ -25,16 +25,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
         if key in COMMANDS_AS_RICH_ENTITY:
             continue
         ents.append(OmodaJaecooCommandButton(coord, key, spec))
-    ents.append(OmodaJaecooActionButton(coord, "Omoda / Jaecoo Wake car", "wake", coord.async_wake))
-    ents.append(OmodaJaecooActionButton(coord, "Omoda / Jaecoo Refresh location", "refresh_pos", coord.async_probe))
+    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Wake Car", "wake", coord.async_wake))
+    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Refresh Location", "refresh_pos", coord.async_probe))
     # Aggiorna stato completo: forza odometro/batteria/tensione REALI accendendo brevemente il
     # clima (unico modo per accendere l'alta tensione, da cui dipendono i dati freschi).
-    ents.append(OmodaJaecooActionButton(coord, "Omoda / Jaecoo Refresh full status", "refresh_full",
+    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Refresh Full Status", "refresh_full",
                                     coord.async_refresh_full_status))
     # recupero sessione: azioni "di servizio" → categoria diagnostica (fuori dai controlli)
-    ents.append(OmodaJaecooActionButton(coord, "Omoda / Jaecoo Request OTP code", "otp_request",
+    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Request OTP Code", "otp_request",
                                     coord.async_request_otp, category=EntityCategory.DIAGNOSTIC))
-    ents.append(OmodaJaecooActionButton(coord, "Omoda / Jaecoo Confirm OTP", "otp_confirm",
+    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Confirm OTP", "otp_confirm",
                                     coord.async_confirm_otp, category=EntityCategory.DIAGNOSTIC))
     add(ents)
 
@@ -44,7 +44,7 @@ class OmodaJaecooCommandButton(OmodaJaecooEntity, ButtonEntity):
 
     def __init__(self, coord, key: str, spec: dict) -> None:
         # entity_id = button.omoda_jaecoo_<key> (come il bridge), NON derivato dal nome lungo.
-        super().__init__(coord, f"Omoda / Jaecoo {spec['name']}", f"cmd_{key}",
+        super().__init__(coord, spec['name'], f"cmd_{key}",
                          object_id=f"omoda_jaecoo_{key}", entity_id_format=ENTITY_ID_FORMAT)
         self._key = key
         if spec.get("icon"):

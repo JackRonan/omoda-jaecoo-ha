@@ -39,39 +39,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ricarica = OmodaJaecooChargeSwitch(coord)
     ricarica_prog = OmodaJaecooScheduledChargeSwitch(coord)
     parabrezza = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Windshield defrost", "frontWindshieldHeat", "frontWindshieldHeat",
+        coord, "Climate Windshield Defrost", "frontWindshieldHeat", "frontWindshieldHeat",
         "defrost_parabrezza", "defrost_parabrezza_off", "mdi:car-defrost-front")
     lunotto = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Rear window defrost", "rWinHeatingState", "rWinHeatingState",
+        coord, "Climate Rear Window Defrost", "rWinHeatingState", "rWinHeatingState",
         "defrost_lunotto", "defrost_lunotto_off", "mdi:car-defrost-rear")
     volante = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Steering wheel heating", "steerWheelHeating", "steerWheelHeating",
+        coord, "Climate Steering Wheel Heating", "steerWheelHeating", "steerWheelHeating",
         "volante_caldo", "volante_caldo_off", "mdi:steering")
     sedile_caldo = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Driver seat heating", "dSeatHeatingState", "dSeatHeatingState",
+        coord, "Seat Driver Heating", "dSeatHeatingState", "dSeatHeatingState",
         "sedile_guida_caldo", "sedile_guida_caldo_off", "mdi:car-seat-heater")
     sedile_aria = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Driver seat ventilation", "dSeatVentilateState", "dSeatVentilateState",
+        coord, "Seat Driver Ventilation", "dSeatVentilateState", "dSeatVentilateState",
         "sedile_guida_aria", "sedile_guida_aria_off", "mdi:car-seat-cooler")
     # sedili passeggero e posteriori SX/DX: stesso modello del guida (telemetria *State*
     # ↔ comando seatControl). Posteriore centrale escluso (nessun comando dedicato).
     pass_caldo = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Passenger seat heating", "pSeatHeatingState", "pSeatHeatingState",
+        coord, "Seat Passenger Heating", "pSeatHeatingState", "pSeatHeatingState",
         "sedile_passeggero_caldo", "sedile_passeggero_caldo_off", "mdi:car-seat-heater")
     pass_aria = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Passenger seat ventilation", "pSeatVentilateState", "pSeatVentilateState",
+        coord, "Seat Passenger Ventilation", "pSeatVentilateState", "pSeatVentilateState",
         "sedile_passeggero_aria", "sedile_passeggero_aria_off", "mdi:car-seat-cooler")
     psx_caldo = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Rear left seat heating", "lSeatHeatingState2", "lSeatHeatingState2",
+        coord, "Seat Rear Left Heating", "lSeatHeatingState2", "lSeatHeatingState2",
         "sedile_post_sx_caldo", "sedile_post_sx_caldo_off", "mdi:car-seat-heater")
     psx_aria = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Rear left seat ventilation", "lSeatVentilateState2", "lSeatVentilateState2",
+        coord, "Seat Rear Left Ventilation", "lSeatVentilateState2", "lSeatVentilateState2",
         "sedile_post_sx_aria", "sedile_post_sx_aria_off", "mdi:car-seat-cooler")
     pdx_caldo = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Rear right seat heating", "rSeatHeatingState2", "rSeatHeatingState2",
+        coord, "Seat Rear Right Heating", "rSeatHeatingState2", "rSeatHeatingState2",
         "sedile_post_dx_caldo", "sedile_post_dx_caldo_off", "mdi:car-seat-heater")
     pdx_aria = OmodaJaecooComfortSwitch(
-        coord, "Omoda / Jaecoo Rear right seat ventilation", "rSeatVentilateState2", "rSeatVentilateState2",
+        coord, "Seat Rear Right Ventilation", "rSeatVentilateState2", "rSeatVentilateState2",
         "sedile_post_dx_aria", "sedile_post_dx_aria_off", "mdi:car-seat-cooler")
     # caldo e aria si escludono a vicenda su OGNI sedile → wiring reciproco per coppia
     for caldo, aria in ((sedile_caldo, sedile_aria), (pass_caldo, pass_aria),
@@ -82,10 +82,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     # e sbrinatori per il caldo) in un unico comando, come l'app. Funzionano a auto SPENTA.
     # Raffredda e riscalda si escludono a vicenda.
     raffredda = OmodaJaecooClimaMacroSwitch(
-        coord, "Omoda / Jaecoo Cool down all", "raffredda_tutto",
+        coord, "Climate Cool Down All", "raffredda_tutto",
         "clima_raffredda_on", "clima_raffredda_off", "mdi:snowflake")
     riscalda = OmodaJaecooClimaMacroSwitch(
-        coord, "Omoda / Jaecoo Heat up all", "riscalda_tutto",
+        coord, "Climate Heat Up All", "riscalda_tutto",
         "clima_riscalda_on", "clima_riscalda_off", "mdi:heat-wave")
     raffredda._exclusive = riscalda
     riscalda._exclusive = raffredda
@@ -153,7 +153,7 @@ class OmodaJaecooChargeSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, Swi
     _attr_icon = "mdi:battery-charging"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Charging", "ricarica", entity_id_format=ENTITY_ID_FORMAT)
+        super().__init__(coord, "Charge Switch", "ricarica", entity_id_format=ENTITY_ID_FORMAT)
         self._restored: bool | None = None
 
     async def async_added_to_hass(self) -> None:
@@ -288,7 +288,7 @@ class OmodaJaecooScheduledChargeSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEn
     _attr_icon = "mdi:calendar-clock"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Scheduled charging", "ricarica_programmata",
+        super().__init__(coord, "Charge Scheduled Switch", "ricarica_programmata",
                          entity_id_format=ENTITY_ID_FORMAT)
         self._restored: bool | None = None
 
@@ -349,7 +349,7 @@ class OmodaJaecooPollingSwitch(OmodaJaecooEntity, SwitchEntity, RestoreEntity):
     _attr_icon = "mdi:autorenew"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Auto update", "polling_auto",
+        super().__init__(coord, "Auto Update", "polling_auto",
                          entity_id_format=ENTITY_ID_FORMAT)
 
     async def async_added_to_hass(self) -> None:
@@ -386,7 +386,7 @@ class OmodaJaecooTheftAlarmSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
     _attr_icon = "mdi:shield-car"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Theft alarm", "antifurto", entity_id_format=ENTITY_ID_FORMAT)
+        super().__init__(coord, "Alarm Theft", "antifurto", entity_id_format=ENTITY_ID_FORMAT)
         self._restored: bool | None = None
         self._real: bool | None = None
 

@@ -36,7 +36,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, FIELDS_AS_RICH_ENTITY
 from .coordinator import SENSORS
-from .entity import OmodaJaecooEntity
+from .entity import OmodaJaecooEntity, get_rt_field
 
 
 # ───────────────────────── sensori "realtime" (Round B) ─────────────────────────
@@ -112,84 +112,84 @@ def _range_totale(rt: dict):
 
 _RT_SENSORS: list[_RtSpec] = [
     # ── P1 · autonomia / chilometri (valori km confermati dal vivo) ──
-    _RtSpec("range_elettrico", "Electric range", "pureElectricRange",
+    _RtSpec("range_elettrico", "Range Electric", "pureElectricRange",
             DIST, KM, MEAS, "mdi:map-marker-distance"),
     # mileageSurplus = autonomia a BENZINA (motore termico), NON il totale: verificato dal
     # vivo 2026-06-23 che resta 215 km mentre l'autonomia elettrica scende (60→27 km) e il
     # carburante è invariato (oilSurplus 23 L) → segue il serbatoio, non la batteria.
-    _RtSpec("range_benzina", "Gasoline range", "mileageSurplus",
+    _RtSpec("range_benzina", "Range Gasoline", "mileageSurplus",
             DIST, KM, MEAS, "mdi:gas-station"),
     # Autonomia TOTALE reale = elettrica + benzina (campo CALCOLATO, non un field grezzo).
     # Riusa la suffix storica "range_totale" → l'entità sensor.omoda_jaecoo_autonomia_totale resta,
     # ma ora mostra la somma corretta invece del solo mileageSurplus.
-    _RtSpec("range_totale", "Total range", "",
+    _RtSpec("range_totale", "Range Total", "",
             DIST, KM, MEAS, "mdi:map-marker-distance", compute=_range_totale),
     # cruiseRange = stima combinata alternativa (134 km dal vivo) → diagnostico.
-    _RtSpec("range_combinato", "Combined range (estimate)", "cruiseRange",
+    _RtSpec("range_combinato", "Range Combined (Estimate)", "cruiseRange",
             DIST, KM, MEAS, "mdi:map-marker-distance", diag=True),
     _RtSpec("odometro", "Odometer", "odometer",
             DIST, KM, TOTAL, "mdi:counter"),
-    _RtSpec("km_ibrido", "Hybrid mileage", "hybridMileage",
+    _RtSpec("km_ibrido", "Hybrid Mileage", "hybridMileage",
             DIST, KM, TOTAL, "mdi:counter", diag=True),
     # ── P1 · TPMS pressione (campo auto in kPa → mostrata in BAR come nell'app: ÷100) ──
-    _RtSpec("gomma_ant_sx_press", "Front left tire pressure", "lFrontTyreKpa",
+    _RtSpec("gomma_ant_sx_press", "Tire Front Left Pressure", "lFrontTyreKpa",
             PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
-    _RtSpec("gomma_ant_dx_press", "Front right tire pressure", "rFrontTyreKpa",
+    _RtSpec("gomma_ant_dx_press", "Tire Front Right Pressure", "rFrontTyreKpa",
             PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
-    _RtSpec("gomma_post_sx_press", "Rear left tire pressure", "lRearTyreKpa",
+    _RtSpec("gomma_post_sx_press", "Tire Rear Left Pressure", "lRearTyreKpa",
             PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
-    _RtSpec("gomma_post_dx_press", "Rear right tire pressure", "rRearTyreKpa",
+    _RtSpec("gomma_post_dx_press", "Tire Rear Right Pressure", "rRearTyreKpa",
             PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
     # ── P1 · TPMS temperatura (°C, diagnostica) ──
-    _RtSpec("gomma_ant_sx_temp", "Front left tire temperature", "lFrontTyreTemp",
+    _RtSpec("gomma_ant_sx_temp", "Tire Front Left Temperature", "lFrontTyreTemp",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
-    _RtSpec("gomma_ant_dx_temp", "Front right tire temperature", "rFrontTyreTemp",
+    _RtSpec("gomma_ant_dx_temp", "Tire Front Right Temperature", "rFrontTyreTemp",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
-    _RtSpec("gomma_post_sx_temp", "Rear left tire temperature", "lRearTyreTemp",
+    _RtSpec("gomma_post_sx_temp", "Tire Rear Left Temperature", "lRearTyreTemp",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
-    _RtSpec("gomma_post_dx_temp", "Rear right tire temperature", "rRearTyreTemp",
+    _RtSpec("gomma_post_dx_temp", "Tire Rear Right Temperature", "rRearTyreTemp",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
     # ── P2 · consumi e residui (unità confermate dal vivo) ──
-    _RtSpec("consumo_carburante", "Average fuel consumption", "averageFuel",
+    _RtSpec("consumo_carburante", "Fuel Average Consumption", "averageFuel",
             None, "L/100 km", MEAS, "mdi:gas-station"),
     # avgHkPowerKwh50km=20.6 dal vivo → kWh/100km (il nome "50km" è fuorviante).
     # -100 = segnaposto "nessun dato" ad auto ferma (HV spenta) → tieni l'ultimo noto.
-    _RtSpec("consumo_elettrico", "Average electric consumption", "avgHkPowerKwh50km",
+    _RtSpec("consumo_elettrico", "Electric Average Consumption", "avgHkPowerKwh50km",
             None, "kWh/100 km", MEAS, "mdi:lightning-bolt", invalid=(-100.0,)),
     # oilSurplus=23 dal vivo → LITRI (confermato dal calcolo autonomia benzina).
-    _RtSpec("carburante_residuo", "Remaining fuel", "oilSurplus",
+    _RtSpec("carburante_residuo", "Fuel Remaining", "oilSurplus",
             None, "L", MEAS, "mdi:fuel"),
     # ── P2 · batteria alta tensione (valide SOLO ad auto in marcia/ricarica) ──
     # Da ferma l'auto manda 0 V / -1000 A = segnaposto "HV spenta", non letture reali:
     # marcati invalidi → il sensore tiene l'ultimo valore noto invece di azzerarsi.
-    _RtSpec("tensione_hv", "HV battery voltage", "totalVoltage",
+    _RtSpec("tensione_hv", "HV Battery Voltage", "totalVoltage",
             VOLTAGE, VOLT, MEAS, "mdi:flash", diag=True, invalid=(0.0,)),
-    _RtSpec("corrente_hv", "HV battery current", "totalCurrent",
+    _RtSpec("corrente_hv", "HV Battery Current", "totalCurrent",
             CURRENT, AMP, MEAS, "mdi:current-dc", diag=True, invalid=(-1000.0,)),
     # ── P2 · ricarica ──
     # remainChargeTime: ASSENTE ad auto non in carica (comparirà sotto carica). Assunto
     # in MINUTI — da riconfermare a vettura in carica. chargeState/appointmentChargeState/
     # fastChargingGunStatus = codici (tutti 0 = a riposo dal vivo) → grezzi da decodificare.
-    _RtSpec("tempo_ricarica", "Remaining charge time", "remainChargeTime",
+    _RtSpec("tempo_ricarica", "Charge Remaining Time", "remainChargeTime",
             DUR, MIN, None, "mdi:timer-sand"),
-    _RtSpec("stato_ricarica", "Charging state", "chargeState",
+    _RtSpec("stato_ricarica", "Charge State", "chargeState",
             None, None, None, "mdi:ev-station", diag=True, numeric=False,
             vmap=CHARGE_STATE_MAP),
-    _RtSpec("ricarica_prog_stato", "Scheduled charging status", "appointmentChargeState",
+    _RtSpec("ricarica_prog_stato", "Charge Scheduled Status", "appointmentChargeState",
             None, None, None, "mdi:calendar-clock", diag=True, numeric=False,
             vmap=APPT_CHARGE_STATE_MAP),
-    _RtSpec("presa_rapida", "Fast charging outlet", "fastChargingGunStatus",
+    _RtSpec("presa_rapida", "Charge Fast Port", "fastChargingGunStatus",
             None, None, None, "mdi:ev-plug-ccs2", diag=True, numeric=False,
             vmap=FAST_GUN_MAP),
     # ── P2 · clima target ──
-    _RtSpec("temp_imp_sx", "Target temperature left", "frontSetTempLeft",
+    _RtSpec("temp_imp_sx", "Climate Target Temp Left", "frontSetTempLeft",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
-    _RtSpec("temp_imp_dx", "Target temperature right", "frontSetTempRight",
+    _RtSpec("temp_imp_dx", "Climate Target Temp Right", "frontSetTempRight",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
     # ── P2 · limite di carica (charge depth) ──
     # maxSocPercent: percentuale massima di carica impostata (0 = non impostata / sconosciuta).
     # Letto dal canale realtime; il numero interattivo in number.py lo usa come valore corrente.
-    _RtSpec("charge_limit", "Charge limit", "maxSocPercent",
+    _RtSpec("charge_limit", "Charge Limit", "maxSocPercent",
             None, "%", MEAS, "mdi:battery-lock", diag=True),
 ]
 
@@ -197,7 +197,7 @@ _RT_SENSORS: list[_RtSpec] = [
 def _rt(coord, field: str) -> str | None:
     """Valore grezzo del campo realtime, o None se assente/vuoto."""
     rt = coord.data.get("realtime") or {}
-    v = rt.get(field)
+    v = get_rt_field(rt, field)
     if v is None or str(v).strip() in ("", "None"):
         return None
     return str(v)
@@ -217,12 +217,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents += [OmodaJaecooRealtimeSensor(coord, s) for s in _RT_SENSORS]
     ents.append(OmodaJaecooSessionStatus(coord))
     # — sensori diagnostici (parità col bridge) —
-    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Command result", "cmd_status", "cmd_status", "mdi:car-cog"))
-    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Wake-up result", "wake_status", "wake_status", "mdi:car-connected"))
-    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Location probe result", "probe_status", "probe_status", "mdi:crosshairs-gps"))
-    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Last seen", "lastseen", "last_seen", "mdi:car-clock"))
-    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Last wake-up", "wake_ts", "last_wake", "mdi:car-clock"))
-    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Last position", "pos_fix", "last_pos_fix", "mdi:map-marker-clock"))
+    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Command Result", "cmd_status", "cmd_status", "mdi:car-cog"))
+    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Wake-up Result", "wake_status", "wake_status", "mdi:car-connected"))
+    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Location Probe Result", "probe_status", "probe_status", "mdi:crosshairs-gps"))
+    ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Seen", "lastseen", "last_seen", "mdi:car-clock"))
+    ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Wake-up", "wake_ts", "last_wake", "mdi:car-clock"))
+    ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Position", "pos_fix", "last_pos_fix", "mdi:map-marker-clock"))
     add(ents)
 
 
@@ -284,14 +284,15 @@ class OmodaJaecooBattery(_OmodaJaecooRestoreSensor):
     _attr_native_unit_of_measurement = PERCENTAGE
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Battery", "battery")
+        super().__init__(coord, "Battery", "battery")
 
     def _live_value(self):
         rt = self.coordinator.data.get("realtime") or {}
-        if "dumpEnergy" not in rt:
+        raw = get_rt_field(rt, "dumpEnergy")
+        if raw is None:
             return None
         try:
-            soc = float(rt["dumpEnergy"])
+            soc = float(raw)
         except (TypeError, ValueError):
             return None
         # dumpEnergy=0 = segnaposto "alta tensione spenta" (auto ferma), NON una carica
@@ -319,12 +320,13 @@ class OmodaJaecooSpeed(_OmodaJaecooRestoreSensor):
     _attr_icon = "mdi:speedometer"
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Speed", "speed")
+        super().__init__(coord, "Speed", "speed")
 
     def _live_value(self):
         rt = self.coordinator.data.get("realtime") or {}
+        v = get_rt_field(rt, "vehicleSpeed")
         try:
-            return float(rt["vehicleSpeed"]) if "vehicleSpeed" in rt else None
+            return float(v) if v is not None else None
         except (TypeError, ValueError):
             return None
 
@@ -382,7 +384,7 @@ class OmodaJaecooSessionStatus(_OmodaJaecooRestoreSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Session status", "session_detail")
+        super().__init__(coord, "Diagnostic Session Status", "session_detail")
 
     def _live_value(self):
         return self.coordinator.data.get("session_detail") or None

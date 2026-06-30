@@ -61,7 +61,7 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         # entity_id FORZATO a climate.omoda_jaecoo_clima (come le altre entità del componente,
         # altrimenti HA lo deriva "sporco" col nome device: climate.omoda_9_omoda_jaecoo_clima).
         # unique_id distinto dal vecchio switch (suffix "climate") → entità nuova, non rename.
-        super().__init__(coord, "Omoda / Jaecoo Climate", "climate", entity_id_format=ENTITY_ID_FORMAT)
+        super().__init__(coord, "Climate", "climate", entity_id_format=ENTITY_ID_FORMAT)
         self._target = DEFAULT_TEMP
         self._opt_on: bool | None = None
         self._opt_anchor = None

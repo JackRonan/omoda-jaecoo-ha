@@ -29,7 +29,7 @@ from .entity import OmodaJaecooEntity
 
 # (nome, suffix, attributo-minuti sul coordinator, default HH, default MM, icona)
 TIMES = [
-    ("Omoda / Jaecoo Charging start time", "charging_start_time",
+    ("Charge Start Time", "charging_start_time",
      "charge_start_minutes", 8, 0, "mdi:clock-start"),
 ]
 

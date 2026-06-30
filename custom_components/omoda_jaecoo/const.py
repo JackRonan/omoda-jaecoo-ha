@@ -44,6 +44,8 @@ COMMANDS_AS_RICH_ENTITY = {
     "sedile_post_sx_aria", "sedile_post_sx_aria_off",
     "sedile_post_dx_caldo", "sedile_post_dx_caldo_off",
     "sedile_post_dx_aria", "sedile_post_dx_aria_off",
+    # ricarica limit (number entity in number.py)
+    "charge_limit_set",
 }
 
 # Chiavi del config_entry (dati per-account, inseriti nel config flow)

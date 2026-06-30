@@ -59,48 +59,48 @@ def _derive_brand(text: str | None) -> str:
 # Mappa campo-auto → entità (identica al bridge: ha_bridge.py SENSORS).
 # kind: open|onoff → binary_sensor ON se != 0 ; lock → 0=Bloccata/1=Sbloccata ; level → sensor 0-3
 SENSORS = [
-    {"key": "frontLeftDoor",  "name": "Front left door",  "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
-    {"key": "frontRightDoor", "name": "Front right door",  "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
-    {"key": "backLeftDoor",   "name": "Rear left door", "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
-    {"key": "backRightDoor",  "name": "Rear right door", "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
-    {"key": "trunkDoor",      "name": "Trunk",               "comp": "binary_sensor", "dclass": "opening","kind": "open"},
-    {"key": "hood",           "name": "Hood",              "comp": "binary_sensor", "dclass": "opening","kind": "open"},
-    {"key": "liftgateOperateState", "name": "Tailgate moving", "comp": "binary_sensor", "dclass": "moving", "kind": "onoff"},
+    {"key": "frontLeftDoor",  "name": "Door Front Left",  "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
+    {"key": "frontRightDoor", "name": "Door Front Right",  "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
+    {"key": "backLeftDoor",   "name": "Door Rear Left", "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
+    {"key": "backRightDoor",  "name": "Door Rear Right", "comp": "binary_sensor", "dclass": "door",   "kind": "open"},
+    {"key": "trunkDoor",      "name": "Door Trunk",               "comp": "binary_sensor", "dclass": "opening","kind": "open"},
+    {"key": "hood",           "name": "Door Hood",              "comp": "binary_sensor", "dclass": "opening","kind": "open"},
+    {"key": "liftgateOperateState", "name": "Door Tailgate Moving", "comp": "binary_sensor", "dclass": "moving", "kind": "onoff"},
     {"key": "doorLock",       "name": "Lock",           "comp": "sensor",        "dclass": None,     "kind": "lock"},
-    {"key": "frontLeftWindowState",  "name": "Front left window",  "comp": "binary_sensor", "dclass": "window", "kind": "open"},
-    {"key": "frontRightWindowState", "name": "Front right window",  "comp": "binary_sensor", "dclass": "window", "kind": "open"},
-    {"key": "backLeftWindowState",   "name": "Rear left window", "comp": "binary_sensor", "dclass": "window", "kind": "open"},
-    {"key": "backRightWindowState",  "name": "Rear right window", "comp": "binary_sensor", "dclass": "window", "kind": "open"},
-    {"key": "sunroofState",   "name": "Sunroof",      "comp": "binary_sensor", "dclass": "window", "kind": "open"},
-    {"key": "sunshadeState",  "name": "Sunshade",       "comp": "binary_sensor", "dclass": "window", "kind": "open", "diag": True},
+    {"key": "frontLeftWindowState",  "name": "Window Front Left",  "comp": "binary_sensor", "dclass": "window", "kind": "open"},
+    {"key": "frontRightWindowState", "name": "Window Front Right",  "comp": "binary_sensor", "dclass": "window", "kind": "open"},
+    {"key": "backLeftWindowState",   "name": "Window Rear Left", "comp": "binary_sensor", "dclass": "window", "kind": "open"},
+    {"key": "backRightWindowState",  "name": "Window Rear Right", "comp": "binary_sensor", "dclass": "window", "kind": "open"},
+    {"key": "sunroofState",   "name": "Window Sunroof",      "comp": "binary_sensor", "dclass": "window", "kind": "open"},
+    {"key": "sunshadeState",  "name": "Window Sunshade",       "comp": "binary_sensor", "dclass": "window", "kind": "open", "diag": True},
     {"key": "frontHVACState", "name": "Climate",               "comp": "binary_sensor", "dclass": "running","kind": "onoff"},
-    {"key": "airPurification","name": "Air purification",  "comp": "binary_sensor", "dclass": "running","kind": "onoff"},
-    {"key": "frontWindshieldHeat", "name": "Windshield defrost", "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "fWinHeatingState","name": "Windshield heating", "comp": "binary_sensor", "dclass": "running", "kind": "onoff", "diag": True},
-    {"key": "rWinHeatingState","name": "Rear window defrost",    "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "steerWheelHeating","name": "Steering wheel heating",   "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "dSeatHeatingState","name": "Driver seat heating",     "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "pSeatHeatingState","name": "Passenger seat heating","comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "dSeatVentilateState","name": "Driver seat ventilation",      "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "pSeatVentilateState","name": "Passenger seat ventilation", "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
-    {"key": "lSeatHeatingState2","name": "Rear left seat heating",      "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-heater"},
-    {"key": "rSeatHeatingState2","name": "Rear right seat heating",      "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-heater"},
-    {"key": "mSeatHeatingState2","name": "Rear middle seat heating","comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-heater"},
-    {"key": "lSeatVentilateState2","name": "Rear left seat ventilation",       "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
-    {"key": "rSeatVentilateState2","name": "Rear right seat ventilation",       "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
-    {"key": "mSeatVentilateState2","name": "Rear middle seat ventilation", "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
+    {"key": "airPurification","name": "Climate Air Purification",  "comp": "binary_sensor", "dclass": "running","kind": "onoff"},
+    {"key": "frontWindshieldHeat", "name": "Climate Windshield Defrost", "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "fWinHeatingState","name": "Climate Windshield Heating", "comp": "binary_sensor", "dclass": "running", "kind": "onoff", "diag": True},
+    {"key": "rWinHeatingState","name": "Climate Rear Window Defrost",    "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "steerWheelHeating","name": "Climate Steering Wheel Heating",   "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "dSeatHeatingState","name": "Seat Driver Heating",     "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "pSeatHeatingState","name": "Seat Passenger Heating","comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "dSeatVentilateState","name": "Seat Driver Ventilation",      "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "pSeatVentilateState","name": "Seat Passenger Ventilation", "comp": "binary_sensor", "dclass": "running", "kind": "onoff"},
+    {"key": "lSeatHeatingState2","name": "Seat Rear Left Heating",      "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-heater"},
+    {"key": "rSeatHeatingState2","name": "Seat Rear Right Heating",      "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-heater"},
+    {"key": "mSeatHeatingState2","name": "Seat Rear Center Heating","comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-heater"},
+    {"key": "lSeatVentilateState2","name": "Seat Rear Left Ventilation",       "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
+    {"key": "rSeatVentilateState2","name": "Seat Rear Right Ventilation",       "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
+    {"key": "mSeatVentilateState2","name": "Seat Rear Center Ventilation", "comp": "sensor", "dclass": None, "kind": "level", "icon": "mdi:car-seat-cooler"},
     # — telemetria aggiuntiva (campi già inviati dall'auto nel 5A02) —
-    {"key": "chargeGunState", "name": "Charging plug",  "comp": "binary_sensor", "dclass": "plug",    "kind": "onoff"},
+    {"key": "chargeGunState", "name": "Charge Plug",  "comp": "binary_sensor", "dclass": "plug",    "kind": "onoff"},
     {"key": "engineState",    "name": "Engine",          "comp": "binary_sensor", "dclass": "running", "kind": "onoff", "icon": "mdi:engine"},
     # sunroofMoveState = codice di FASE di movimento del tetto (valori 1/2/3/4/8, mai 0):
     # non è un on/off pulito (non c'è un valore "fermo" noto) → sensore diagnostico raw.
-    {"key": "sunroofMoveState", "name": "Sunroof motion state", "comp": "sensor", "dclass": None, "kind": "value", "icon": "mdi:car-select", "diag": True},
-    # NB campi NON mappati di proposito (verificato su events.jsonl reali, 2026-06-21):
-    #   rangeUnit / averageFuelUnit / tirePressureUnit valgono SEMPRE "1" = sono FLAG di
-    #   unità di misura, NON il valore. L'auto non invia su questo canale il valore reale
-    #   di autonomia/consumo/pressione gomme → mapparli mostrerebbe "1" fisso. Rimandati:
-    #   serve l'altro canale (realtime /asr/manager o struttura TPMS annidata) → Round B.
+    {"key": "sunroofMoveState", "name": "Window Sunroof Motion State", "comp": "sensor", "dclass": None, "kind": "value", "icon": "mdi:car-select", "diag": True},
 ]
+# NB campi NON mappati di proposito (verificato su events.jsonl reali, 2026-06-21):
+#   rangeUnit / averageFuelUnit / tirePressureUnit valgono SEMPRE "1" = sono FLAG di
+#   unità di misura, NON il valore. L'auto non invia su questo canale il valore reale
+#   di autonomia/consumo/pressione gomme → mapparli mostrerebbe "1" fisso. Rimandati:
+#   serve l'altro canale (realtime /asr/manager o struttura TPMS annidata) → Round B.
 META = {s["key"]: s for s in SENSORS}
 
 # Meta-campi dei push di CONFERMA comando (110x/1105/1135…): NON sono telemetria di
@@ -152,8 +152,8 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         os.environ["OMODA_TOKEN_PATH"] = self.token_path
         os.environ["OMODA_BFF"] = self.bff
         os.environ["TSP_HOST"] = self.tsp_host
-        os.environ["OMODA_LANGUAGE"] = os.environ.get("OMODA_LANGUAGE", "en-GB")
-        os.environ["OMODA_DEPT_ID"] = os.environ.get("OMODA_DEPT_ID", "44")
+        os.environ["OMODA_LANGUAGE"] = os.environ.get("OMODA_LANGUAGE", "it-IT")
+        os.environ["OMODA_DEPT_ID"] = os.environ.get("OMODA_DEPT_ID", "39")
         if self.pin:
             os.environ["OMODA_PIN"] = self.pin
         if self.email:

@@ -169,7 +169,7 @@ COMMANDS = [
     ("finestrini_chiudi", {"endpoint": "windowControl", "body": {"controlType": "0"},
                    "name": "Close windows", "icon": "mdi:car-door", "group": "Finestrini e tetto"}),
     ("finestrini_ventila", {"endpoint": "windowControl", "body": {"controlType": "2"},
-                   "name": "Ventilate windows", "icon": "mdi:weather-windy", "group": "Finestrini e tetto"}),
+                   "name": "Window Ventilate", "icon": "mdi:weather-windy", "group": "Finestrini e tetto"}),
     ("tetto_apri",   {"endpoint": "skylightControl", "body": {"controlType": "1", "skylightType": "1"},
                    "name": "Open sunroof", "icon": "mdi:car-select", "group": "Finestrini e tetto"}),
     ("tetto_chiudi", {"endpoint": "skylightControl", "body": {"controlType": "0", "skylightType": "1"},
@@ -206,7 +206,7 @@ COMMANDS = [
 
     # — Altro —
     ("trova_auto", {"endpoint": "findCar", "body": {},
-                   "name": "Find car (flash)", "icon": "mdi:car-search", "group": "Altro"}),
+                   "name": "Diagnostic Find Car (Flash)", "icon": "mdi:car-search", "group": "Altro"}),
     # NB: remoteStart (avvio motore da remoto) RIMOSSO: provato dal vivo (2026-06-21) →
     # l'auto risponde A00084 "No vehicle control command permission" (permesso negato per
     # questo veicolo). Inutile esporre un pulsante che fallisce sempre. Il bean
@@ -214,7 +214,7 @@ COMMANDS = [
     # Richiesta posizione GPS: NON attua nulla; l'auto risponde con un push MQTT serviceType 1301
     # (lat/lon) che il bridge cabla nel device_tracker. È il metodo dell'app per la posizione a riposo.
     ("localizza", {"endpoint": "vehicleLocation", "body": {},
-                   "name": "Locate car (GPS)", "icon": "mdi:crosshairs-gps", "group": "Altro"}),
+                   "name": "Diagnostic Locate Car (GPS)", "icon": "mdi:crosshairs-gps", "group": "Altro"}),
 
     # — Sicurezza — Antifurto (theftAlarm). Avvisi+sirena per movimento non autorizzato,
     # scasso porte, rottura finestrini (descr. ufficiale app). NB: vive su /act (NON

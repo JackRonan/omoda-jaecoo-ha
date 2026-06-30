@@ -25,7 +25,7 @@ class OmodaJaecooOtpCode(OmodaJaecooEntity, TextEntity):
     _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo OTP code", "otp_code",
+        super().__init__(coord, "Diagnostic OTP Code", "otp_code",
                          entity_id_format=ENTITY_ID_FORMAT)
 
     @property
