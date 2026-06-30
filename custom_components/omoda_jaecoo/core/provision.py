@@ -307,8 +307,8 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
             return {"ok": False, "reason": "vehicle_not_found"}
         car_token = veh["car_token"]
         if not car_token:
-            publish("🟨 Nessun car_token nella queryList → serve loginTSP (ipotesi A), "
-                    "impl nativa non ancora replicata. Stop prima di sparare comandi.")
+            publish("🟨 No car_token in queryList → requires loginTSP (hypothesis A), "
+                    "native implementation not yet replicated. Stop before sending commands.")
             return {"ok": False, "reason": "no_car_token", "hypothesis": "A_cartoken_from_logintsp"}
 
         # 2) bind veicolo (NON tocca il TBOX)
@@ -318,8 +318,8 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
         # 3) checkPassword(scene=2) → taskId
         sc_p, j_p, task_id = check_password(tu, pin=pin, vin=VIN, scene=2)
         if not task_id:
-            publish(f"🔐 checkPassword senza taskId (code={W._code_of(j_p)}): "
-                    "PIN non accettato o token scaduto. Stop (no retry su PIN).")
+            publish(f"🔐 checkPassword without taskId (code={W._code_of(j_p)}): "
+                    "PIN not accepted or token expired. Stop (no PIN retry).")
             return {"ok": False, "reason": "no_taskid", "code": W._code_of(j_p)}
         publish("🔐 PIN ok, taskId obtained. Sending command with car_token…")
 
@@ -332,16 +332,16 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
               "command_http": sc_c, "command_code": code_c})
 
         if str(code_c) == "A00079":
-            publish(f"✅ Comando {cmd} ACCETTATO (A00079)! Esito via push MQTT.")
+            publish(f"✅ Command {cmd} ACCEPTED (A00079)! Result via MQTT push.")
             return {"ok": True, "code": code_c, "cmd": cmd}
         if str(code_c) == "A07900":
-            publish(f"🟧 Ancora A07900 col car_token → resta in piedi l'ipotesi C "
-                    "(body cifrato SM4) o car_token errato. Vedi data/provision.jsonl.")
+            publish(f"🟧 Still A07900 with car_token → hypothesis C remains "
+                    "(SM4 encrypted body) or incorrect car_token. See data/provision.jsonl.")
         else:
-            publish(f"ℹ️ Comando {cmd}: code={code_c} ({codes.meaning(code_c)}).")
+            publish(f"ℹ️ Command {cmd}: code={code_c} ({codes.meaning(code_c)}).")
         return {"ok": True, "code": code_c, "cmd": cmd, "accepted": False}
     except Exception as e:
-        publish(f"⚠️ run_command errore: {type(e).__name__}: {e}")
+        publish(f"⚠️ run_command error: {type(e).__name__}: {e}")
         return {"ok": False, "reason": "exception", "error": str(e)}
 
 

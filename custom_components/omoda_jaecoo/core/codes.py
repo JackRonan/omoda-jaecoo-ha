@@ -16,19 +16,19 @@ qui è quello più ricorrente/utile; ogni chiamante può aggiungere contesto.
 # Codice → frase leggibile (italiano, per non tecnici).
 CODE_MEANING = {
     "000000": "ok ✅",
-    "A00079": "comando accettato ✅",
+    "A00079": "command accepted ✅",
     # A00084 (i18n: "No vehicle control command permission"): l'account/veicolo non ha il
     # permesso PER QUEL comando. Visto dal vivo su remoteStart (2026-06-21): la nostra Omoda / Jaecoo
     # non consente l'avvio remoto del motore, mentre clima/serratura/GPS funzionano.
-    "A00084": "comando non consentito su questa auto 🚫 (permesso negato per questa funzione)",
-    "A00089": "taskId non valido ❌ (serve un taskId benedetto da checkPassword)",
-    "A00546": "taskId non valido ❌ (scene errato in checkPassword)",
-    "A00567": "parametri checkPassword incompleti ❌",
-    "A00000": "token scaduto/non valido ❌ (rifai il login OTP)",
-    "A07312": "rate-limit sveglia 🚫 (l'auto rifiuta altre sveglie ora, riprova più tardi)",
+    "A00084": "command not allowed on this car 🚫 (permission denied for this function)",
+    "A00089": "invalid taskId ❌ (requires a taskId authenticated by checkPassword)",
+    "A00546": "invalid taskId ❌ (incorrect scene in checkPassword)",
+    "A00567": "incomplete checkPassword parameters ❌",
+    "A00000": "token expired/invalid ❌ (please redo OTP login)",
+    "A07312": "wake rate-limit 🚫 (car is refusing further wake requests right now, try again later)",
     # A07900 è contestuale: in poll/probe = auto a riposo; coi comandi = firma o
     # car_token non validi. Testo neutro che copre il caso più frequente.
-    "A07900": "auto a riposo / non raggiungibile (o firma/car_token non validi) ⌛",
+    "A07900": "car asleep / unreachable (or signature/car_token invalid) ⌛",
 }
 
 
