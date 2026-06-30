@@ -1,0 +1,692 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Omoda / Jaecoo",
+        "description": "Inserisci l'email del tuo account Omoda/Jaecoo e il PIN del veicolo. Riceverai un codice OTP via email; VIN e ID account vengono rilevati automaticamente.",
+        "data": {
+          "email": "Email dell'account",
+          "pin": "PIN di controllo veicolo",
+          "bff": "Endpoint BFF (regione)",
+          "tsp_host": "Host console TSP (regione)",
+          "car_mqtt_host": "Host broker MQTT del veicolo (regione)",
+          "car_mqtt_port": "Porta broker MQTT del veicolo (regione)",
+          "channel_id": "Channel ID (regione)",
+          "certs_src": "Cartella coi certificati mutual-TLS da importare (opzionale)"
+        }
+      },
+      "otp": {
+        "title": "Codice di verifica email",
+        "description": "Inserisci il codice OTP ricevuto via email.",
+        "data": {
+          "code": "Codice OTP"
+        }
+      },
+      "select_vehicle": {
+        "title": "Seleziona veicolo",
+        "description": "Il tuo account ha più di un veicolo. Scegli il VIN da aggiungere.",
+        "data": {
+          "vin": "Veicolo (VIN)"
+        }
+      }
+    },
+    "error": {
+      "otp_send_failed": "Impossibile inviare il codice OTP. Controlla email/PIN e riprova.",
+      "otp_invalid": "Codice OTP non valido o scaduto.",
+      "no_vehicle": "Login riuscito ma nessun veicolo trovato su questo account."
+    },
+    "abort": {
+      "already_configured": "Questo veicolo (VIN) è già configurato.",
+      "token_move_failed": "Impossibile salvare il token di autenticazione. Controlla i permessi della cartella di configurazione di Home Assistant e riprova."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Omoda / Jaecoo — aggiornamento automatico",
+        "description": "Ogni quanto svegliare l'auto e aggiornare telemetria + posizione GPS. 0 = disattivato. L'intervallo \"in ricarica\" si usa quando l'auto è attaccata alla colonnina (la telemetria si aggiorna più spesso per seguire la ricarica).",
+        "data": {
+          "poll_normal_min": "Intervallo di aggiornamento da parcheggiata (minuti, 0 = off)",
+          "poll_charging_min": "Intervallo di aggiornamento alla colonnina (minuti, 0 = off)",
+          "vehicle_name": "Nome del veicolo (vuoto = usa quello rilevato dall'auto)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "car_awake": {
+        "name": "Auto sveglia"
+      },
+      "connection": {
+        "name": "Connessione"
+      },
+      "session": {
+        "name": "Sessione"
+      },
+      "front_left_door": {
+        "name": "Porta anteriore SX"
+      },
+      "front_right_door": {
+        "name": "Porta anteriore DX"
+      },
+      "rear_left_door": {
+        "name": "Porta posteriore SX"
+      },
+      "rear_right_door": {
+        "name": "Porta posteriore DX"
+      },
+      "trunk_door": {
+        "name": "Baule"
+      },
+      "hood": {
+        "name": "Cofano"
+      },
+      "tailgate_moving": {
+        "name": "Portellone in movimento"
+      },
+      "front_left_window": {
+        "name": "Finestrino anteriore SX"
+      },
+      "front_right_window": {
+        "name": "Finestrino anteriore DX"
+      },
+      "rear_left_window": {
+        "name": "Finestrino posteriore SX"
+      },
+      "rear_right_window": {
+        "name": "Finestrino posteriore DX"
+      },
+      "sunroof": {
+        "name": "Tetto apribile"
+      },
+      "sunshade": {
+        "name": "Tendina tetto"
+      },
+      "climate": {
+        "name": "Clima"
+      },
+      "air_purification": {
+        "name": "Purificazione aria"
+      },
+      "windshield_defrost": {
+        "name": "Sbrinamento parabrezza"
+      },
+      "windshield_heating": {
+        "name": "Riscaldamento parabrezza"
+      },
+      "rear_window_defrost": {
+        "name": "Riscaldamento lunotto"
+      },
+      "steering_wheel_heating": {
+        "name": "Riscaldamento volante"
+      },
+      "driver_seat_heating": {
+        "name": "Riscaldamento sedile guida"
+      },
+      "passenger_seat_heating": {
+        "name": "Riscaldamento sedile passeggero"
+      },
+      "driver_seat_ventilation": {
+        "name": "Ventilazione sedile guida"
+      },
+      "passenger_seat_ventilation": {
+        "name": "Ventilazione sedile passeggero"
+      },
+      "charging_plug": {
+        "name": "Spina ricarica"
+      },
+      "engine": {
+        "name": "Motore"
+      },
+      "rt_front_left_tire_warning": {
+        "name": "Avviso gomma ant. SX"
+      },
+      "rt_front_right_tire_warning": {
+        "name": "Avviso gomma ant. DX"
+      },
+      "rt_rear_left_tire_warning": {
+        "name": "Avviso gomma post. SX"
+      },
+      "rt_rear_right_tire_warning": {
+        "name": "Avviso gomma post. DX"
+      },
+      "rt_battery_low": {
+        "name": "Batteria scarica"
+      },
+      "auto_sveglia": {
+        "name": "Auto sveglia"
+      },
+      "avviso_gomma_ant_dx": {
+        "name": "Avviso gomma ant. DX"
+      },
+      "avviso_gomma_ant_sx": {
+        "name": "Avviso gomma ant. SX"
+      },
+      "avviso_gomma_post_dx": {
+        "name": "Avviso gomma post. DX"
+      },
+      "avviso_gomma_post_sx": {
+        "name": "Avviso gomma post. SX"
+      },
+      "batteria_scarica": {
+        "name": "Batteria scarica"
+      },
+      "cofano": {
+        "name": "Cofano"
+      },
+      "connessa": {
+        "name": "Connessione"
+      },
+      "finestrino_anteriore_dx": {
+        "name": "Finestrino anteriore DX"
+      },
+      "finestrino_anteriore_sx": {
+        "name": "Finestrino anteriore SX"
+      },
+      "finestrino_posteriore_dx": {
+        "name": "Finestrino posteriore DX"
+      },
+      "finestrino_posteriore_sx": {
+        "name": "Finestrino posteriore SX"
+      },
+      "motore": {
+        "name": "Motore"
+      },
+      "porta_anteriore_dx": {
+        "name": "Porta anteriore DX"
+      },
+      "porta_anteriore_sx": {
+        "name": "Porta anteriore SX"
+      },
+      "porta_posteriore_dx": {
+        "name": "Porta posteriore DX"
+      },
+      "porta_posteriore_sx": {
+        "name": "Porta posteriore SX"
+      },
+      "portellone_in_movimento": {
+        "name": "Portellone in movimento"
+      },
+      "purificazione_aria": {
+        "name": "Purificazione aria"
+      },
+      "riscaldamento_parabrezza": {
+        "name": "Riscaldamento parabrezza"
+      },
+      "sessione": {
+        "name": "Sessione"
+      },
+      "spina_ricarica": {
+        "name": "Spina ricarica"
+      },
+      "tendina_tetto": {
+        "name": "Tendina tetto"
+      }
+    },
+    "sensor": {
+      "lock": {
+        "name": "Serratura"
+      },
+      "rear_left_seat_heating": {
+        "name": "Riscaldamento sedile post. SX"
+      },
+      "rear_right_seat_heating": {
+        "name": "Riscaldamento sedile post. DX"
+      },
+      "rear_middle_seat_heating": {
+        "name": "Riscaldamento sedile post. centrale"
+      },
+      "rear_left_seat_ventilation": {
+        "name": "Ventilazione sedile post. SX"
+      },
+      "rear_right_seat_ventilation": {
+        "name": "Ventilazione sedile post. DX"
+      },
+      "rear_middle_seat_ventilation": {
+        "name": "Ventilazione sedile post. centrale"
+      },
+      "sunroof_motion_state": {
+        "name": "Tetto · stato movimento"
+      },
+      "electric_range": {
+        "name": "Autonomia elettrica"
+      },
+      "gasoline_range": {
+        "name": "Autonomia benzina"
+      },
+      "total_range": {
+        "name": "Autonomia totale"
+      },
+      "combined_range_estimate": {
+        "name": "Autonomia combinata (stima)"
+      },
+      "odometer": {
+        "name": "Odometro"
+      },
+      "hybrid_mileage": {
+        "name": "Chilometraggio ibrido"
+      },
+      "front_left_tire_pressure": {
+        "name": "Pressione gomma ant. SX"
+      },
+      "front_right_tire_pressure": {
+        "name": "Pressione gomma ant. DX"
+      },
+      "rear_left_tire_pressure": {
+        "name": "Pressione gomma post. SX"
+      },
+      "rear_right_tire_pressure": {
+        "name": "Pressione gomma post. DX"
+      },
+      "front_left_tire_temperature": {
+        "name": "Temperatura gomma ant. SX"
+      },
+      "front_right_tire_temperature": {
+        "name": "Temperatura gomma ant. DX"
+      },
+      "rear_left_tire_temperature": {
+        "name": "Temperatura gomma post. SX"
+      },
+      "rear_right_tire_temperature": {
+        "name": "Temperatura gomma post. DX"
+      },
+      "average_fuel_consumption": {
+        "name": "Consumo medio carburante"
+      },
+      "average_electric_consumption": {
+        "name": "Consumo medio elettrico"
+      },
+      "remaining_fuel": {
+        "name": "Carburante residuo"
+      },
+      "hv_battery_voltage": {
+        "name": "Tensione batteria HV"
+      },
+      "hv_battery_current": {
+        "name": "Corrente batteria HV"
+      },
+      "remaining_charge_time": {
+        "name": "Tempo di ricarica residuo"
+      },
+      "charging_state": {
+        "name": "Stato ricarica"
+      },
+      "scheduled_charging_status": {
+        "name": "Ricarica programmata · stato"
+      },
+      "fast_charging_outlet": {
+        "name": "Presa ricarica rapida"
+      },
+      "target_temperature_left": {
+        "name": "Temperatura impostata SX"
+      },
+      "target_temperature_right": {
+        "name": "Temperatura impostata DX"
+      },
+      "battery": {
+        "name": "Batteria"
+      },
+      "speed": {
+        "name": "Velocità"
+      },
+      "session_status": {
+        "name": "Stato sessione"
+      },
+      "command_result": {
+        "name": "Esito comando"
+      },
+      "location_probe_result": {
+        "name": "Esito sonda posizione"
+      },
+      "wake_up_result": {
+        "name": "Esito sveglia"
+      },
+      "last_seen": {
+        "name": "Ultimo contatto"
+      },
+      "last_wake_up": {
+        "name": "Ultima sveglia"
+      },
+      "last_position": {
+        "name": "Ultima posizione"
+      },
+      "autonomia_benzina": {
+        "name": "Autonomia benzina"
+      },
+      "autonomia_combinata_stima": {
+        "name": "Autonomia combinata (stima)"
+      },
+      "autonomia_elettrica": {
+        "name": "Autonomia elettrica"
+      },
+      "autonomia_totale": {
+        "name": "Autonomia totale"
+      },
+      "batteria": {
+        "name": "Batteria"
+      },
+      "carburante_residuo": {
+        "name": "Carburante residuo"
+      },
+      "chilometraggio_ibrido": {
+        "name": "Chilometraggio ibrido"
+      },
+      "consumo_medio_carburante": {
+        "name": "Consumo medio carburante"
+      },
+      "consumo_medio_elettrico": {
+        "name": "Consumo medio elettrico"
+      },
+      "corrente_batteria_hv": {
+        "name": "Corrente batteria HV"
+      },
+      "esito_comando": {
+        "name": "Esito comando"
+      },
+      "esito_sonda_posizione": {
+        "name": "Esito sonda posizione"
+      },
+      "esito_sveglia": {
+        "name": "Esito sveglia"
+      },
+      "odometro": {
+        "name": "Odometro"
+      },
+      "presa_ricarica_rapida": {
+        "name": "Presa ricarica rapida"
+      },
+      "pressione_gomma_ant_dx": {
+        "name": "Pressione gomma ant. DX"
+      },
+      "pressione_gomma_ant_sx": {
+        "name": "Pressione gomma ant. SX"
+      },
+      "pressione_gomma_post_dx": {
+        "name": "Pressione gomma post. DX"
+      },
+      "pressione_gomma_post_sx": {
+        "name": "Pressione gomma post. SX"
+      },
+      "ricarica_programmata_stato": {
+        "name": "Ricarica programmata · stato"
+      },
+      "riscaldamento_sedile_post_centrale": {
+        "name": "Riscaldamento sedile post. centrale"
+      },
+      "stato_ricarica": {
+        "name": "Stato ricarica"
+      },
+      "stato_sessione": {
+        "name": "Stato sessione"
+      },
+      "temperatura_gomma_ant_dx": {
+        "name": "Temperatura gomma ant. DX"
+      },
+      "temperatura_gomma_ant_sx": {
+        "name": "Temperatura gomma ant. SX"
+      },
+      "temperatura_gomma_post_dx": {
+        "name": "Temperatura gomma post. DX"
+      },
+      "temperatura_gomma_post_sx": {
+        "name": "Temperatura gomma post. SX"
+      },
+      "temperatura_impostata_dx": {
+        "name": "Temperatura impostata DX"
+      },
+      "temperatura_impostata_sx": {
+        "name": "Temperatura impostata SX"
+      },
+      "tempo_di_ricarica_residuo": {
+        "name": "Tempo di ricarica residuo"
+      },
+      "tensione_batteria_hv": {
+        "name": "Tensione batteria HV"
+      },
+      "tetto_stato_movimento": {
+        "name": "Tetto · stato movimento"
+      },
+      "ultima_posizione": {
+        "name": "Ultima posizione"
+      },
+      "ultima_sveglia": {
+        "name": "Ultima sveglia"
+      },
+      "ultimo_contatto": {
+        "name": "Ultimo contatto"
+      },
+      "velocita": {
+        "name": "Velocità"
+      },
+      "ventilazione_sedile_post_centrale": {
+        "name": "Ventilazione sedile post. centrale"
+      }
+    },
+    "button": {
+      "trova_auto": {
+        "name": "Trova auto (lampeggio)"
+      },
+      "localizza": {
+        "name": "Localizza auto (GPS)"
+      },
+      "finestrini_ventila": {
+        "name": "Ventilazione finestrini"
+      },
+      "wake": {
+        "name": "Sveglia auto"
+      },
+      "refresh_pos": {
+        "name": "Aggiorna posizione"
+      },
+      "refresh_full": {
+        "name": "Aggiorna stato completo"
+      },
+      "otp_request": {
+        "name": "Richiedi codice OTP"
+      },
+      "otp_confirm": {
+        "name": "Conferma OTP"
+      },
+      "clima_raffredda_on": {
+        "name": "Raffredda tutto"
+      },
+      "clima_raffredda_off": {
+        "name": "Raffredda tutto OFF"
+      },
+      "clima_riscalda_on": {
+        "name": "Riscalda tutto"
+      },
+      "clima_riscalda_off": {
+        "name": "Riscalda tutto OFF"
+      },
+      "antifurto_on": {
+        "name": "Antifurto on"
+      },
+      "antifurto_off": {
+        "name": "Antifurto off"
+      },
+      "aggiorna_posizione": {
+        "name": "Aggiorna posizione"
+      },
+      "aggiorna_stato_completo": {
+        "name": "Aggiorna stato completo"
+      },
+      "conferma_otp": {
+        "name": "Conferma OTP"
+      },
+      "richiedi_codice_otp": {
+        "name": "Richiedi codice OTP"
+      },
+      "sveglia_auto": {
+        "name": "Sveglia auto"
+      }
+    },
+    "switch": {
+      "ricarica": {
+        "name": "Ricarica"
+      },
+      "ricarica_programmata": {
+        "name": "Ricarica programmata"
+      },
+      "windshield_defrost": {
+        "name": "Sbrinamento parabrezza"
+      },
+      "rear_window_defrost": {
+        "name": "Riscaldamento lunotto"
+      },
+      "steering_wheel_heating": {
+        "name": "Riscaldamento volante"
+      },
+      "driver_seat_heating": {
+        "name": "Riscaldamento sedile guida"
+      },
+      "driver_seat_ventilation": {
+        "name": "Ventilazione sedile guida"
+      },
+      "passenger_seat_heating": {
+        "name": "Riscaldamento sedile passeggero"
+      },
+      "passenger_seat_ventilation": {
+        "name": "Ventilazione sedile passeggero"
+      },
+      "rear_left_seat_heating": {
+        "name": "Riscaldamento sedile post. SX"
+      },
+      "rear_left_seat_ventilation": {
+        "name": "Ventilazione sedile post. SX"
+      },
+      "rear_right_seat_heating": {
+        "name": "Riscaldamento sedile post. DX"
+      },
+      "rear_right_seat_ventilation": {
+        "name": "Ventilazione sedile post. DX"
+      },
+      "raffredda_tutto": {
+        "name": "Raffredda tutto"
+      },
+      "riscalda_tutto": {
+        "name": "Riscalda tutto"
+      },
+      "antifurto": {
+        "name": "Antifurto"
+      },
+      "polling_auto": {
+        "name": "Aggiornamento automatico"
+      },
+      "aggiornamento_automatico": {
+        "name": "Aggiornamento automatico"
+      },
+      "riscaldamento_lunotto": {
+        "name": "Riscaldamento lunotto"
+      },
+      "riscaldamento_sedile_guida": {
+        "name": "Riscaldamento sedile guida"
+      },
+      "riscaldamento_sedile_passeggero": {
+        "name": "Riscaldamento sedile passeggero"
+      },
+      "riscaldamento_sedile_post_dx": {
+        "name": "Riscaldamento sedile post. DX"
+      },
+      "riscaldamento_sedile_post_sx": {
+        "name": "Riscaldamento sedile post. SX"
+      },
+      "riscaldamento_volante": {
+        "name": "Riscaldamento volante"
+      },
+      "sbrinamento_parabrezza": {
+        "name": "Sbrinamento parabrezza"
+      },
+      "ventilazione_sedile_guida": {
+        "name": "Ventilazione sedile guida"
+      },
+      "ventilazione_sedile_passeggero": {
+        "name": "Ventilazione sedile passeggero"
+      },
+      "ventilazione_sedile_post_dx": {
+        "name": "Ventilazione sedile post. DX"
+      },
+      "ventilazione_sedile_post_sx": {
+        "name": "Ventilazione sedile post. SX"
+      }
+    },
+    "cover": {
+      "trunk": {
+        "name": "Baule"
+      },
+      "windows": {
+        "name": "Finestrini"
+      },
+      "sunroof": {
+        "name": "Tetto"
+      },
+      "baule": {
+        "name": "Baule"
+      },
+      "finestrini": {
+        "name": "Finestrini"
+      },
+      "tetto": {
+        "name": "Tetto"
+      }
+    },
+    "lock": {
+      "lock": {
+        "name": "Serratura"
+      },
+      "serratura": {
+        "name": "Serratura"
+      }
+    },
+    "climate": {
+      "climate": {
+        "name": "Clima"
+      },
+      "clima": {
+        "name": "Clima"
+      }
+    },
+    "device_tracker": {
+      "location": {
+        "name": "Posizione"
+      },
+      "posizione": {
+        "name": "Posizione"
+      }
+    },
+    "number": {
+      "climate_duration": {
+        "name": "Durata clima"
+      },
+      "charging_duration": {
+        "name": "Durata ricarica"
+      },
+      "durata_clima": {
+        "name": "Durata clima"
+      },
+      "ricarica_durata_ore": {
+        "name": "Durata ricarica"
+      }
+    },
+    "text": {
+      "otp_code": {
+        "name": "Codice OTP"
+      },
+      "codice_otp": {
+        "name": "Codice OTP"
+      }
+    },
+    "time": {
+      "charging_start_time": {
+        "name": "Orario di inizio ricarica"
+      },
+      "ricarica_orario_di_inizio": {
+        "name": "Orario di inizio ricarica"
+      },
+      "ricarica_orario_inizio": {
+        "name": "Orario di inizio ricarica"
+      }
+    }
+  }
+}

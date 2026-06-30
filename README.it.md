@@ -1,8 +1,8 @@
-# Omoda 9 / Jaecoo → Home Assistant
+# Omoda / Jaecoo / Jaecoo → Home Assistant
 
 🌐 [English](README.md) · **Italiano**
 
-Porta la tua auto **Omoda 9 / Jaecoo** dentro **Home Assistant**: stato del
+Porta la tua auto **Omoda / Jaecoo / Jaecoo** dentro **Home Assistant**: stato del
 veicolo, posizione e comandi, come nell'app ufficiale ma integrati in HA.
 
 > ✅ **Pronto all'uso.** Per partire bastano **email + PIN** del tuo account
@@ -32,8 +32,8 @@ veicolo, posizione e comandi, come nell'app ufficiale ma integrati in HA.
 
 1. **HACS → menu ⋮ → Custom repositories** → aggiungi l'URL di questo repo,
    categoria **Integration**.
-2. Cerca **Omoda 9 / Jaecoo** → **Download** → **riavvia Home Assistant**.
-3. **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → Omoda 9**.
+2. Cerca **Omoda / Jaecoo / Jaecoo** → **Download** → **riavvia Home Assistant**.
+3. **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → Omoda / Jaecoo**.
 
 ## Primo accesso (login)
 
@@ -61,7 +61,7 @@ usa i pulsanti **«Richiedi codice OTP» / «Conferma OTP»** (con l'entità tes
 
 ## Aggiornamento
 
-Quando esce una nuova versione: **HACS → Omoda 9 → Update → riavvia Home
+Quando esce una nuova versione: **HACS → Omoda / Jaecoo → Update → riavvia Home
 Assistant**. Lo storico delle novità è nel [CHANGELOG](CHANGELOG.md).
 
 ## Notifiche quando un comando fallisce (opzionale)
@@ -70,7 +70,7 @@ L'integrazione fornisce solo le entità: **non invia notifiche da sola**. Se vuo
 un **popup quando un comando all'auto fallisce** (veicolo occupato, non
 raggiungibile, sessione scaduta…), importa il blueprint incluso:
 
-[![Importa il blueprint in Home Assistant](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FCaslinovich%2Fomoda9-ha%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fomoda9%2Fcomando_fallito.yaml)
+[![Importa il blueprint in Home Assistant](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FCaslinovich%2Fomoda_jaecoo-ha%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fomoda_jaecoo%2Fcomando_fallito.yaml)
 
 Poi **Impostazioni → Automazioni → Crea automazione → Da blueprint → _Omoda 9 /
 Jaecoo — Avviso comando non riuscito_**. Riconosce solo i veri fallimenti
@@ -78,11 +78,10 @@ Jaecoo — Avviso comando non riuscito_**. Riconosce solo i veri fallimenti
 
 ## Se qualcosa non funziona
 
-1. **Diagnostica (consigliata):** **Impostazioni → Dispositivi e servizi → Omoda
-   9 / Jaecoo → ⋮ → Scarica diagnostica**. È **già anonimizzata** (email, PIN,
+1. **Diagnostica (consigliata):** **Impostazioni → Dispositivi e servizi → Omoda / Jaecoo / Jaecoo → ⋮ → Scarica diagnostica**. È **già anonimizzata** (email, PIN,
    VIN, tUserId e GPS oscurati; di token/certificati appare solo «presente:
    sì/no») → sicura da condividere in una
-   [issue](https://github.com/Caslinovich/omoda9-ha/issues).
+   [issue](https://github.com/Caslinovich/omoda_jaecoo-ha/issues).
 2. **Log dettagliati:** stessa pagina → **⋮ → Abilita registrazione di debug** →
    riproduci il problema → **Disabilita registrazione di debug**: HA scarica il
    log. PIN, OTP e token **non vengono mai scritti nei log**; l'unico dato
@@ -106,7 +105,7 @@ un'installazione normale **non va eseguito nulla a mano**.
 ### 1. Login e token (OTP)
 
 Il primo accesso conia un **token di sessione** per-account da email + PIN + OTP.
-Catena orchestrata dal config flow (codice in `custom_components/omoda9/core/`):
+Catena orchestrata dal config flow (codice in `custom_components/omoda_jaecoo/core/`):
 
 | Passo | Modulo | Cosa fa |
 |---|---|---|
@@ -114,7 +113,7 @@ Catena orchestrata dal config flow (codice in `custom_components/omoda9/core/`):
 | conio token | `prova_token.py <email> <code>` | chiama `/auth/oauth2/token` replicando l'app (cifratura SM4) e salva il token |
 | orchestrazione | `session.py` | espone `request_otp()` / `confirm_otp(code)` / `check()` / `refresh()` |
 
-Il token finisce in **`<config>/omoda9_<VIN>_token.json`** (mai nel repo). Finché
+Il token finisce in **`<config>/omoda_jaecoo_<VIN>_token.json`** (mai nel repo). Finché
 il **refresh_token** è valido, `session.refresh()` rinnova la sessione **senza**
 nuovo OTP. Un nuovo OTP serve solo se token e refresh muoiono entrambi — tipico
 caso: **apertura dell'app ufficiale** (sessione singola lato cloud).
@@ -136,8 +135,8 @@ universali per-regione** — **identiche per tutti gli utenti**, prese dagli ass
 da username/password MQTT e dalle ACL sui topic, come fa l'app ufficiale.
 
 Al primo avvio `coordinator.async_provision_certs()` deobfusca i cert dal bundle
-(`custom_components/omoda9/certs/store.json`) e li scrive in
-**`<config>/omoda9_<VIN>_certs/`**. Override manuale: il campo **`certs_src`** del
+(`custom_components/omoda_jaecoo/certs/store.json`) e li scrive in
+**`<config>/omoda_jaecoo_<VIN>_certs/`**. Override manuale: il campo **`certs_src`** del
 config flow. Per una regione **non** presente nel bundle l'avvio fallisce con un
 messaggio che indica dove mettere i cert.
 
@@ -159,16 +158,16 @@ e `authorizeType` **senza toccare l'auto**.
 
 ### File generati (nel tuo HA, mai nel repo)
 
-- `<config>/omoda9_<VIN>_token.json` — token di sessione per-account.
-- `<config>/omoda9_<VIN>_certs/` — certificati mutual-TLS del broker MQTT.
+- `<config>/omoda_jaecoo_<VIN>_token.json` — token di sessione per-account.
+- `<config>/omoda_jaecoo_<VIN>_certs/` — certificati mutual-TLS del broker MQTT.
 
 Coperti da `.gitignore`, non lasciano mai la tua installazione.
 
 ### Provisioning / login manuale (avanzato, fuori da HA)
 
-Per debug si possono usare gli script CLI in `custom_components/omoda9/core/` con
+Per debug si possono usare gli script CLI in `custom_components/omoda_jaecoo/core/` con
 un Python che abbia i `requirements` del manifest, configurando l'ambiente via
-variabili (vedi [`omoda9.env.example`](omoda9.env.example)):
+variabili (vedi [`omoda_jaecoo.env.example`](omoda_jaecoo.env.example)):
 
 ```bash
 # 1) invia il codice OTP via email (risolve il captcha)
@@ -182,7 +181,7 @@ python3 provision.py
 ```
 
 Il token così coniato è lo **stesso** file che legge l'integrazione: puntando
-`OMODA_TOKEN_PATH` a `<config>/omoda9_<VIN>_token.json` si può sbloccare un setup
+`OMODA_TOKEN_PATH` a `<config>/omoda_jaecoo_<VIN>_token.json` si può sbloccare un setup
 anche senza rifare l'OTP dal config flow.
 
 ## Licenza

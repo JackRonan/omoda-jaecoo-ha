@@ -1,8 +1,22 @@
-# Omoda 9 / Jaecoo → Home Assistant
+# Omoda / Jaecoo → Home Assistant
 
-🌐 **English** · [Italiano](README.it.md)
+🌐 **English** · [Italiano](README.it.md) · [Changelog](CHANGELOG-en.md) · [Original Changelog (it)](CHANGELOG.md)
 
-Bring your **Omoda 9 / Jaecoo** car into **Home Assistant**: vehicle status,
+## English Fork & Localization Notes
+
+This repository is an English translation and localization fork of the original Italian integration created by [@Caslinovich](https://github.com/Caslinovich/omoda_jaecoo-ha).
+
+### Important Tips
+* **Delegated Account (Recommended):** To maintain access to the official mobile app simultaneously, it is highly recommended to create a second account (requires a spare phone number) and delegate vehicle access to it, using that second account for this integration. Logging in with the same account on both Home Assistant and the official app will cause session logs/tokens to repeatedly kick you out of the official app.
+
+### Model Compatibility
+* **Omoda E5 & Omoda / Jaecoo**: This integration is tested and verified to work with the **Omoda E5** (in the UK) as well as the **Omoda / Jaecoo** (according to the original author).
+* **Chery App Similarity**: The Omoda / Jaecoo app is code-similar to the Chery app. It is likely that other Chery-app based vehicles are supported (though untested as they use different endpoints and certificates).
+* **All Omoda/Jaecoo Models**: In general, this integration should work with all models compatible with the official Omoda / Jaecoo app, though you may need to manually disable some entities depending on your individual vehicle's features.
+
+---
+
+Bring your **Omoda / Jaecoo** car into **Home Assistant**: vehicle status,
 location and commands — just like the official app, but integrated into HA.
 
 > ✅ **Ready to use.** All you need to get started is the **email + PIN** of your
@@ -14,6 +28,8 @@ location and commands — just like the official app, but integrated into HA.
 > ⚠️ **UNOFFICIAL software**, reverse-engineered. Not affiliated with Omoda /
 > Jaecoo / Chery. Provided "as is", use at your own risk and only on your own
 > vehicle. See [`LICENSE`](LICENSE).
+
+
 
 ## What you can do
 
@@ -31,8 +47,8 @@ location and commands — just like the official app, but integrated into HA.
 
 1. **HACS → ⋮ menu → Custom repositories** → add this repo's URL, category
    **Integration**.
-2. Search for **Omoda 9 / Jaecoo** → **Download** → **restart Home Assistant**.
-3. **Settings → Devices & Services → Add Integration → Omoda 9**.
+2. Search for **Omoda / Jaecoo** → **Download** → **restart Home Assistant**.
+3. **Settings → Devices & Services → Add Integration → Omoda / Jaecoo**.
 
 ## First login
 
@@ -61,7 +77,7 @@ entity) to log back in without reconfiguring anything.
 
 ## Updating
 
-When a new version is released: **HACS → Omoda 9 → Update → restart Home
+When a new version is released: **HACS → Omoda / Jaecoo → Update → restart Home
 Assistant**. The change history is in the [CHANGELOG](CHANGELOG.md).
 
 ## Notifications when a command fails (optional)
@@ -70,19 +86,19 @@ The integration only provides the entities: it **doesn't send notifications on
 its own**. If you want a **popup when a command to the car fails** (vehicle busy,
 unreachable, expired session…), import the included blueprint:
 
-[![Import the blueprint into Home Assistant](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FCaslinovich%2Fomoda9-ha%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fomoda9%2Fcomando_fallito.yaml)
+[![Import the blueprint into Home Assistant](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FJackRonan%2Fomoda-jaecoo-ha%2Fblob%2Fmaster%2Fblueprints%2Fautomation%2Fomoda_jaecoo%2Ffailed_command.yaml)
 
-Then **Settings → Automations → Create automation → From blueprint → _Omoda 9 /
+Then **Settings → Automations → Create automation → From blueprint → _Omoda /
 Jaecoo — Failed command alert_**. It recognizes only real failures (it ignores ✅
 and ⏳), so no false alarms.
 
 ## If something doesn't work
 
-1. **Diagnostics (recommended):** **Settings → Devices & Services → Omoda 9 /
+1. **Diagnostics (recommended):** **Settings → Devices & Services → Omoda /
    Jaecoo → ⋮ → Download diagnostics**. It is **already anonymized** (email, PIN,
    VIN, tUserId and GPS redacted; tokens/certificates show only "present:
    yes/no") → safe to share in an
-   [issue](https://github.com/Caslinovich/omoda9-ha/issues).
+   [issue](https://github.com/JackRonan/omoda_jaecoo-ha/issues).
 2. **Detailed logs:** same page → **⋮ → Enable debug logging** → reproduce the
    problem → **Disable debug logging**: HA downloads the log. PIN, OTP and tokens
    are **never written to the logs**; the only possibly sensitive value is the
@@ -107,7 +123,7 @@ install **nothing needs to be run by hand**.
 
 The first login mints a per-account **session token** from email + PIN + OTP.
 Chain orchestrated by the config flow (code in
-`custom_components/omoda9/core/`):
+`custom_components/omoda_jaecoo/core/`):
 
 | Step | Module | What it does |
 |---|---|---|
@@ -115,7 +131,7 @@ Chain orchestrated by the config flow (code in
 | mint token | `prova_token.py <email> <code>` | calls `/auth/oauth2/token` replicating the app (SM4 encryption) and saves the token |
 | orchestration | `session.py` | exposes `request_otp()` / `confirm_otp(code)` / `check()` / `refresh()` |
 
-The token ends up in **`<config>/omoda9_<VIN>_token.json`** (never in the repo).
+The token ends up in **`<config>/omoda_jaecoo_<VIN>_token.json`** (never in the repo).
 As long as the **refresh_token** is valid, `session.refresh()` renews the session
 **without** a new OTP. A new OTP is needed only if both token and refresh die —
 typical case: **opening the official app** (single session on the cloud side).
@@ -137,8 +153,8 @@ assets — **not** per-account data: account isolation comes from the MQTT
 username/password and the topic ACLs, exactly like the official app.
 
 On first start `coordinator.async_provision_certs()` deobfuscates the certs from
-the bundle (`custom_components/omoda9/certs/store.json`) and writes them to
-**`<config>/omoda9_<VIN>_certs/`**. Manual override: the **`certs_src`** field in
+the bundle (`custom_components/omoda_jaecoo/certs/store.json`) and writes them to
+**`<config>/omoda_jaecoo_<VIN>_certs/`**. Manual override: the **`certs_src`** field in
 the config flow. For a region **not** present in the bundle, startup fails with a
 message indicating where to put the certs.
 
@@ -160,16 +176,16 @@ account: it must not be guessed. The VIN must be among the authorized vehicles
 
 ### Generated files (in your HA, never in the repo)
 
-- `<config>/omoda9_<VIN>_token.json` — per-account session token.
-- `<config>/omoda9_<VIN>_certs/` — mutual-TLS certificates for the MQTT broker.
+- `<config>/omoda_jaecoo_<VIN>_token.json` — per-account session token.
+- `<config>/omoda_jaecoo_<VIN>_certs/` — mutual-TLS certificates for the MQTT broker.
 
 Covered by `.gitignore`, they never leave your installation.
 
 ### Manual provisioning / login (advanced, outside HA)
 
-For debugging you can use the CLI scripts in `custom_components/omoda9/core/`
+For debugging you can use the CLI scripts in `custom_components/omoda_jaecoo/core/`
 with a Python that has the manifest `requirements`, configuring the environment
-via variables (see [`omoda9.env.example`](omoda9.env.example)):
+via variables (see [`omoda_jaecoo.env.example`](omoda_jaecoo.env.example)):
 
 ```bash
 # 1) send the OTP code by email (solves the captcha)
@@ -183,7 +199,7 @@ python3 provision.py
 ```
 
 The token minted this way is the **same** file the integration reads: by pointing
-`OMODA_TOKEN_PATH` at `<config>/omoda9_<VIN>_token.json` you can unblock a setup
+`OMODA_TOKEN_PATH` at `<config>/omoda_jaecoo_<VIN>_token.json` you can unblock a setup
 even without redoing the OTP from the config flow.
 
 ## License

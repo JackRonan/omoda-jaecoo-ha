@@ -1,0 +1,90 @@
+blueprint:
+  name: Omoda / Jaecoo — Failed command alert
+  description: >
+    Shows a popup in Home Assistant (and optionally sends a push notification) when a
+    command sent to the vehicle via the **Omoda / Jaecoo** integration fails: vehicle
+    busy, car unreachable, rate-limit, network error, session expired, or car error.
+
+
+    Only triggers on actual failures: ignores success (✅), "in progress" (⏳) and intermediate
+    messages, avoiding false alarms. The popup uses a fixed id, so multiple
+    failed attempts will update the same alert instead of stacking many.
+  domain: automation
+  author: Caslinovich (Translated by Jack Ronan)
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    esito_sensor:
+      name: "Command result" sensor
+      description: >
+        The integration sensor that reports the result of the last command.
+        Usually `sensor.omoda_jaecoo_command_result`.
+      default: sensor.omoda_jaecoo_command_result
+      selector:
+        entity:
+          integration: omoda_jaecoo
+          domain: sensor
+    popup_ha:
+      name: Home Assistant Popup
+      description: >
+        Creates a persistent notification, visible in HA (app and browser) to anyone
+        using it. This is the simplest choice and works everywhere.
+      default: true
+      selector:
+        boolean: {}
+    push_service:
+      name: Push notification (optional)
+      description: >
+        To also receive a push on your phone/tablet, enter the notification service
+        name for your device here, for example `notify.mobile_app_my_phone`
+        (you can find this in Developer Tools -> Actions/Services). Leave blank for no push.
+      default: ""
+      selector:
+        text: {}
+
+mode: single
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input esito_sensor
+
+variables:
+  esito: "{{ trigger.to_state.state }}"
+  popup_ha: !input popup_ha
+  push_service: !input push_service
+
+condition:
+  - condition: template
+    value_template: >
+      {% set s = esito | lower %}
+      {{ s not in ['unknown', 'unavailable', ''] and (
+           '❌' in s or '🚫' in s
+           or ('http ' in s and '✅' not in s)
+           or 'error' in s or 'fail' in s or 'timeout' in s) }}
+
+action:
+  - choose:
+      - conditions: "{{ popup_ha }}"
+        sequence:
+          - service: persistent_notification.create
+            data:
+              notification_id: omoda_jaecoo_comando_fallito
+              title: "❌ Omoda / Jaecoo command failed"
+              message: >
+                **{{ esito }}**
+
+
+                Try again in a few seconds. If it says *busy/unreachable*, the car
+                is already processing another command (it handles one at a time). If
+                it says *rate-limit* or *session expired*, wait a moment or request a new OTP.
+
+
+                _updated at {{ now().strftime('%H:%M:%S') }}_
+  - choose:
+      - conditions: "{{ push_service | trim != '' }}"
+        sequence:
+          - service: "{{ push_service }}"
+            data:
+              title: "❌ Omoda / Jaecoo command failed"
+              message: "{{ esito }}"

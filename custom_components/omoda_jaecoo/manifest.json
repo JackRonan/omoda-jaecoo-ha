@@ -1,0 +1,18 @@
+{
+  "domain": "omoda_jaecoo",
+  "name": "Omoda / Jaecoo",
+  "codeowners": ["@Caslinovich", "@JackRonan"],
+  "config_flow": true,
+  "documentation": "https://github.com/JackRonan/omoda-jaecoo-ha",
+  "integration_type": "device",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/JackRonan/omoda-jaecoo-ha/issues",
+  "requirements": [
+    "paho-mqtt>=2.0",
+    "requests>=2.28",
+    "pycryptodome>=3.17",
+    "numpy>=1.21",
+    "pillow>=9.0"
+  ],
+  "version": "1.5.22-EN"
+}
