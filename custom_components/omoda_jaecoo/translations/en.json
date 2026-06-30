@@ -293,6 +293,24 @@
       "finestrini_ventila": {
         "name": "Window Ventilate"
       },
+      "clima_raffredda_on": {
+        "name": "Climate Cool Down All (Button)"
+      },
+      "clima_raffredda_off": {
+        "name": "Climate Cool Down All OFF (Button)"
+      },
+      "clima_riscalda_on": {
+        "name": "Climate Heat Up All (Button)"
+      },
+      "clima_riscalda_off": {
+        "name": "Climate Heat Up All OFF (Button)"
+      },
+      "antifurto_on": {
+        "name": "Alarm Theft ON"
+      },
+      "antifurto_off": {
+        "name": "Alarm Theft OFF"
+      },
       "diagnostic_wake_car": {
         "name": "Diagnostic Wake Car"
       },

@@ -127,7 +127,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         self.car_port = int(cfg[CONF_CAR_MQTT_PORT])
         self.awake_window = DEFAULT_AWAKE_WINDOW
         # per-entry storage (token + certs) nella config dir di HA
-        self.token_path = hass.config.path(f"{DOMAIN}_{self.vin}_token.json")
+        self.token_path = hass.config.path(f"omoda9_{self.vin}_token.json")
         self.certs_dir = hass.config.path(f"{DOMAIN}_{self.vin}_certs")
         self.certs_src = cfg.get(CONF_CERTS_SRC) or ""
         self.tsp_host = cfg[CONF_TSP_HOST]

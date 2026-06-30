@@ -42,7 +42,7 @@ if _CORE not in sys.path:
 
 def _pending_token_path(hass: HomeAssistant) -> str:
     """Path temporaneo dove conia il token finché non si conosce il VIN."""
-    return hass.config.path(f"{DOMAIN}_pending_token.json")
+    return hass.config.path("omoda9_pending_token.json")
 
 
 def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None) -> None:
@@ -115,7 +115,7 @@ def _finalize_token(hass: HomeAssistant, vin: str) -> bool:
     False se lo spostamento fallisce: in tal caso il flow va fatto fallire,
     perché senza token il coordinator non potrebbe autenticarsi."""
     pend = _pending_token_path(hass)
-    dest = hass.config.path(f"{DOMAIN}_{vin}_token.json")
+    dest = hass.config.path(f"omoda9_{vin}_token.json")
     try:
         if os.path.isfile(pend):
             os.replace(pend, dest)
