@@ -284,13 +284,13 @@
       }
     },
     "button": {
-      "diagnostic_find_car_flash": {
+      "trova_auto": {
         "name": "Diagnostic Find Car (Flash)"
       },
-      "diagnostic_locate_car_gps": {
+      "localizza": {
         "name": "Diagnostic Locate Car (GPS)"
       },
-      "window_ventilate": {
+      "finestrini_ventila": {
         "name": "Window Ventilate"
       },
       "diagnostic_wake_car": {
