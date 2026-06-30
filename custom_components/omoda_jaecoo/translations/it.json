@@ -482,13 +482,13 @@
       }
     },
     "button": {
-      "trova_auto": {
+      "find_car": {
         "name": "Trova auto (lampeggio)"
       },
-      "localizza": {
+      "locate_car": {
         "name": "Localizza auto (GPS)"
       },
-      "finestrini_ventila": {
+      "ventilate_windows": {
         "name": "Ventilazione finestrini"
       },
       "wake": {
@@ -506,22 +506,22 @@
       "otp_confirm": {
         "name": "Conferma OTP"
       },
-      "clima_raffredda_on": {
+      "climate_cool_on": {
         "name": "Raffredda tutto"
       },
-      "clima_raffredda_off": {
+      "climate_cool_off": {
         "name": "Raffredda tutto OFF"
       },
-      "clima_riscalda_on": {
+      "climate_heat_on": {
         "name": "Riscalda tutto"
       },
-      "clima_riscalda_off": {
+      "climate_heat_off": {
         "name": "Riscalda tutto OFF"
       },
-      "antifurto_on": {
+      "alarm_theft_on": {
         "name": "Antifurto on"
       },
-      "antifurto_off": {
+      "alarm_theft_off": {
         "name": "Antifurto off"
       },
       "aggiorna_posizione": {

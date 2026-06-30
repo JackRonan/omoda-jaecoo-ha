@@ -284,31 +284,31 @@
       }
     },
     "button": {
-      "trova_auto": {
-        "name": "Diagnostic Find Car (Flash)"
+      "find_car": {
+        "name": "Find Car (flash lights/horn)"
       },
-      "localizza": {
-        "name": "Diagnostic Locate Car (GPS)"
+      "locate_car": {
+        "name": "Locate Car (GPS)"
       },
-      "finestrini_ventila": {
-        "name": "Window Ventilate"
+      "ventilate_windows": {
+        "name": "Ventilate Windows"
       },
-      "clima_raffredda_on": {
-        "name": "Climate Cool Down All (Button)"
+      "climate_cool_on": {
+        "name": "Climate Cool Down All ON"
       },
-      "clima_raffredda_off": {
-        "name": "Climate Cool Down All OFF (Button)"
+      "climate_cool_off": {
+        "name": "Climate Cool Down All OFF"
       },
-      "clima_riscalda_on": {
-        "name": "Climate Heat Up All (Button)"
+      "climate_heat_on": {
+        "name": "Climate Heat Up All ON"
       },
-      "clima_riscalda_off": {
-        "name": "Climate Heat Up All OFF (Button)"
+      "climate_heat_off": {
+        "name": "Climate Heat Up All OFF"
       },
-      "antifurto_on": {
+      "alarm_theft_on": {
         "name": "Alarm Theft ON"
       },
-      "antifurto_off": {
+      "alarm_theft_off": {
         "name": "Alarm Theft OFF"
       },
       "diagnostic_wake_car": {

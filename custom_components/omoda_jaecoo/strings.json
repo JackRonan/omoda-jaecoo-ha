@@ -482,14 +482,14 @@
       }
     },
     "button": {
-      "trova_auto": {
-        "name": "Find car (flash lights)"
+      "find_car": {
+        "name": "Find Car (flash lights/horn)"
       },
-      "localizza": {
-        "name": "Locate car (GPS)"
+      "locate_car": {
+        "name": "Locate Car (GPS)"
       },
-      "finestrini_ventila": {
-        "name": "Vent windows"
+      "ventilate_windows": {
+        "name": "Ventilate Windows"
       },
       "wake": {
         "name": "Wake car"
@@ -506,23 +506,23 @@
       "otp_confirm": {
         "name": "Confirm OTP"
       },
-      "clima_raffredda_on": {
-        "name": "Cool everything"
+      "climate_cool_on": {
+        "name": "Climate Cool Down All ON"
       },
-      "clima_raffredda_off": {
-        "name": "Cool everything off"
+      "climate_cool_off": {
+        "name": "Climate Cool Down All OFF"
       },
-      "clima_riscalda_on": {
-        "name": "Heat everything"
+      "climate_heat_on": {
+        "name": "Climate Heat Up All ON"
       },
-      "clima_riscalda_off": {
-        "name": "Heat everything off"
+      "climate_heat_off": {
+        "name": "Climate Heat Up All OFF"
       },
-      "antifurto_on": {
-        "name": "Alarm on"
+      "alarm_theft_on": {
+        "name": "Alarm Theft ON"
       },
-      "antifurto_off": {
-        "name": "Alarm off"
+      "alarm_theft_off": {
+        "name": "Alarm Theft OFF"
       },
       "aggiorna_posizione": {
         "name": "Refresh location"

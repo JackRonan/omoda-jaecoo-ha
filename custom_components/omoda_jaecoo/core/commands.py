@@ -134,20 +134,20 @@ COMMANDS = [
     # vengono rifiutati dall'auto con timeout se la vettura è ACCESA/occupata (blocco di
     # sicurezza). A motore spento funzionano e accendono tutti i moduli. Non è un problema
     # del comando: a auto spenta clima+sedili+volante+parabrezza+lunotto rispondono tutti ✅.
-    ("clima_raffredda_on", {"endpoint": "coolingControl",
+    ("climate_cool_on", {"endpoint": "coolingControl",
                    "body": {"airControlType": "1", "airType": "1", "temperature": "15.0", "duration": "15",
                             "mSeatAiry": "3", "pSeatAiry": "3", "blSeatAiry": "3", "brSeatAiry": "3"},
                    "name": "Cool down all", "icon": "mdi:snowflake", "group": "Clima"}),
-    ("clima_raffredda_off", {"endpoint": "coolingControl",
+    ("climate_cool_off", {"endpoint": "coolingControl",
                    "body": {"airControlType": "0", "airType": "1", "temperature": "15.0", "duration": "15",
                             "mSeatAiry": "0", "pSeatAiry": "0", "blSeatAiry": "0", "brSeatAiry": "0"},
                    "name": "Cool down all OFF", "icon": "mdi:snowflake-off", "group": "Clima"}),
-    ("clima_riscalda_on", {"endpoint": "heatingControl",
+    ("climate_heat_on", {"endpoint": "heatingControl",
                    "body": {"airControlType": "1", "airType": "1", "temperature": "31.0", "duration": "15",
                             "frontWindshieldHeat": "1", "backDefrosting": "1", "steerWheelHeatSwitch": "1",
                             "mSeatHeating": "3", "pSeatHeating": "3", "blSeatHeating": "3", "brSeatHeating": "3"},
                    "name": "Heat up all", "icon": "mdi:heat-wave", "group": "Clima"}),
-    ("clima_riscalda_off", {"endpoint": "heatingControl",
+    ("climate_heat_off", {"endpoint": "heatingControl",
                    "body": {"airControlType": "0", "airType": "1", "temperature": "31.0", "duration": "15",
                             "frontWindshieldHeat": "0", "backDefrosting": "0", "steerWheelHeatSwitch": "0",
                             "mSeatHeating": "0", "pSeatHeating": "0", "blSeatHeating": "0", "brSeatHeating": "0"},
@@ -168,7 +168,7 @@ COMMANDS = [
                    "name": "Open windows", "icon": "mdi:car-door", "group": "Finestrini e tetto"}),
     ("finestrini_chiudi", {"endpoint": "windowControl", "body": {"controlType": "0"},
                    "name": "Close windows", "icon": "mdi:car-door", "group": "Finestrini e tetto"}),
-    ("finestrini_ventila", {"endpoint": "windowControl", "body": {"controlType": "2"},
+    ("ventilate_windows", {"endpoint": "windowControl", "body": {"controlType": "2"},
                    "name": "Window Ventilate", "icon": "mdi:weather-windy", "group": "Finestrini e tetto"}),
     ("tetto_apri",   {"endpoint": "skylightControl", "body": {"controlType": "1", "skylightType": "1"},
                    "name": "Open sunroof", "icon": "mdi:car-select", "group": "Finestrini e tetto"}),
@@ -205,7 +205,7 @@ COMMANDS = [
                    "name": "Set charge limit", "icon": "mdi:battery-lock", "group": "Ricarica"}),
 
     # — Altro —
-    ("trova_auto", {"endpoint": "findCar", "body": {},
+    ("find_car", {"endpoint": "findCar", "body": {},
                    "name": "Diagnostic Find Car (Flash)", "icon": "mdi:car-search", "group": "Altro"}),
     # NB: remoteStart (avvio motore da remoto) RIMOSSO: provato dal vivo (2026-06-21) →
     # l'auto risponde A00084 "No vehicle control command permission" (permesso negato per
@@ -213,7 +213,7 @@ COMMANDS = [
     # CVRemoteStartReqBean (senza campi) resta noto se in futuro il permesso cambiasse.
     # Richiesta posizione GPS: NON attua nulla; l'auto risponde con un push MQTT serviceType 1301
     # (lat/lon) che il bridge cabla nel device_tracker. È il metodo dell'app per la posizione a riposo.
-    ("localizza", {"endpoint": "vehicleLocation", "body": {},
+    ("locate_car", {"endpoint": "vehicleLocation", "body": {},
                    "name": "Diagnostic Locate Car (GPS)", "icon": "mdi:crosshairs-gps", "group": "Altro"}),
 
     # — Sicurezza — Antifurto (theftAlarm). Avvisi+sirena per movimento non autorizzato,
@@ -221,9 +221,9 @@ COMMANDS = [
     # /asc/vehicleControl) → usa la chiave `path` invece di `endpoint`. Body = theftAlarmSwitch
     # 0/1; send() aggiunge clientType/seq/vin e il taskId coniato (il backend lo pretende:
     # A00643 senza). Stato leggibile via query_theft_switch() (/act/theftAlarm/querySwitch).
-    ("antifurto_on",  {"path": "/act/theftAlarm/setSwitch", "body": {"theftAlarmSwitch": "1"},
+    ("alarm_theft_on",  {"path": "/act/theftAlarm/setSwitch", "body": {"theftAlarmSwitch": "1"},
                    "name": "Theft alarm ON", "icon": "mdi:shield-car", "group": "Sicurezza"}),
-    ("antifurto_off", {"path": "/act/theftAlarm/setSwitch", "body": {"theftAlarmSwitch": "0"},
+    ("alarm_theft_off", {"path": "/act/theftAlarm/setSwitch", "body": {"theftAlarmSwitch": "0"},
                    "name": "Theft alarm OFF", "icon": "mdi:shield-off-outline", "group": "Sicurezza"}),
 ]
 CMD_MAP = {k: v for k, v in COMMANDS}

@@ -395,9 +395,9 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         """Un ciclo: sveglia (posizione via vehicleLocation/1301) + lettura realtime."""
         _LOGGER.debug("[poll] ciclo: sveglia + lettura realtime (plugged=%s)", self._is_plugged())
         try:
-            await self.async_send_command("localizza")
+            await self.async_send_command("locate_car")
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("[poll] sveglia (localizza) fallita: %s", err)
+            _LOGGER.debug("[poll] sveglia (locate_car) fallita: %s", err)
         await asyncio.sleep(POLL_WAKE_WAIT)
         try:
             await self.async_probe(force=True)
@@ -685,7 +685,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 return  # nel frattempo è arrivato un messaggio MQTT → già sveglia
             emit("SMS wake unsuccessful → falling back to Locate (vehicleLocation)…")
             try:
-                self._send_command("localizza")
+                self._send_command("locate_car")
             except Exception as err:  # noqa: BLE001 — il fallback non deve far fallire la sveglia
                 emit(f"Locate fallback failed: {err}")
 

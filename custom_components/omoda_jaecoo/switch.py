@@ -83,10 +83,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     # Raffredda e riscalda si escludono a vicenda.
     raffredda = OmodaJaecooClimaMacroSwitch(
         coord, "Climate Cool Down All", "raffredda_tutto",
-        "clima_raffredda_on", "clima_raffredda_off", "mdi:snowflake")
+        "climate_cool_on", "climate_cool_off", "mdi:snowflake")
     riscalda = OmodaJaecooClimaMacroSwitch(
         coord, "Climate Heat Up All", "riscalda_tutto",
-        "clima_riscalda_on", "clima_riscalda_off", "mdi:heat-wave")
+        "climate_heat_on", "climate_heat_off", "mdi:heat-wave")
     raffredda._exclusive = riscalda
     riscalda._exclusive = raffredda
     antifurto = OmodaJaecooTheftAlarmSwitch(coord)
@@ -245,7 +245,7 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
         self._set_state(target)
         # sveglia (vehicleLocation = sveglia + GPS, benigno); non bloccare la macro se fallisce
         try:
-            await self.coordinator.async_send_command("localizza")
+            await self.coordinator.async_send_command("locate_car")
         except Exception:  # noqa: BLE001
             pass
         await asyncio.sleep(MACRO_WAKE_WAIT)  # lascia accendere il bus comfort (e scade il lock)
@@ -413,7 +413,7 @@ class OmodaJaecooTheftAlarmSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
         return self._restored
 
     async def async_turn_on(self, **kwargs) -> None:
-        await self._run_command("antifurto_on", True)
+        await self._run_command("alarm_theft_on", True)
 
     async def async_turn_off(self, **kwargs) -> None:
-        await self._run_command("antifurto_off", False)
+        await self._run_command("alarm_theft_off", False)
