@@ -145,10 +145,10 @@
       "connection": {
         "name": "Diagnostic Connection"
       },
-      "car_awake": {
+      "diagnostic_car_awake": {
         "name": "Diagnostic Car Awake"
       },
-      "session": {
+      "diagnostic_session": {
         "name": "Diagnostic Session"
       }
     },
@@ -325,29 +325,29 @@
       "climate_steering_wheel_heating": {
         "name": "Climate Steering Wheel Heating"
       },
-      "climate_driver_seat_heating": {
-        "name": "Climate Driver Seat Heating"
+      "seat_driver_heating": {
+        "name": "Seat Driver Heating"
       },
-      "climate_driver_seat_ventilation": {
-        "name": "Climate Driver Seat Ventilation"
+      "seat_driver_ventilation": {
+        "name": "Seat Driver Ventilation"
       },
-      "climate_passenger_seat_heating": {
-        "name": "Climate Passenger Seat Heating"
+      "seat_passenger_heating": {
+        "name": "Seat Passenger Heating"
       },
-      "climate_passenger_seat_ventilation": {
-        "name": "Climate Passenger Seat Ventilation"
+      "seat_passenger_ventilation": {
+        "name": "Seat Passenger Ventilation"
       },
-      "climate_rear_left_seat_heating": {
-        "name": "Climate Rear Left Seat Heating"
+      "seat_rear_left_heating": {
+        "name": "Seat Rear Left Heating"
       },
-      "climate_rear_left_seat_ventilation": {
-        "name": "Climate Rear Left Seat Ventilation"
+      "seat_rear_left_ventilation": {
+        "name": "Seat Rear Left Ventilation"
       },
-      "climate_rear_right_seat_heating": {
-        "name": "Climate Rear Right Seat Heating"
+      "seat_rear_right_heating": {
+        "name": "Seat Rear Right Heating"
       },
-      "climate_rear_right_seat_ventilation": {
-        "name": "Climate Rear Right Seat Ventilation"
+      "seat_rear_right_ventilation": {
+        "name": "Seat Rear Right Ventilation"
       },
       "climate_cool_down_all": {
         "name": "Climate Cool Down All"
