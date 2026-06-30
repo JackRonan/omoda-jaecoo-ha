@@ -32,6 +32,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = OmodaJaecooCoordinator(hass, entry)
 
+    # Registra il path per la card Lovelace custom
+    if hasattr(hass, "http") and hass.http is not None:
+        lovelace_dir = os.path.join(os.path.dirname(__file__), "lovelace")
+        hass.http.register_static_path("/omoda_jaecoo_card", lovelace_dir, cache_headers=False)
+
     # FASE 3c: i cert mutual-TLS devono esserci PRIMA di connettere l'MQTT auto.
     ok, detail = await coordinator.async_provision_certs()
     if not ok:
