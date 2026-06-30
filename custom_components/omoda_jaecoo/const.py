@@ -59,7 +59,7 @@ CONF_VEHICLE_NAME = "vehicle_name"
 DATA_VEHICLE_MODEL = "vehicle_model"
 DATA_VEHICLE_BRAND = "vehicle_brand"
 # fallback quando il modello non è (ancora) noto
-DEFAULT_VEHICLE_NAME = "Omoda / Jaecoo / Jaecoo"
+DEFAULT_VEHICLE_NAME = "Omoda / Jaecoo"
 
 # Parametri di REGIONE (default = Europa). Esposti come options per supportare altre regioni.
 CONF_BFF = "bff"

@@ -111,8 +111,8 @@ class OmodaJaecooOptimisticMixin:
         di floodare l'auto (che risponderebbe "occupato")."""
         if self.coordinator.command_busy():
             raise HomeAssistantError(
-                "Un altro comando è ancora in corso — l'auto ne esegue uno alla volta. "
-                "Attendi qualche secondo (guarda «Esito comando») e riprova.")
+                "Another command is still in progress — the car handles one at a time. "
+                "Wait a few seconds (check «Command result») and try again.")
         self.coordinator.mark_command_sent()  # sincrono: chiude la finestra di doppio-tap
         self._set_optimistic(target)
         try:
@@ -121,7 +121,7 @@ class OmodaJaecooOptimisticMixin:
             self._clear_optimistic()
             self.coordinator.clear_command_busy()  # invio fallito → sblocca subito il retry
             self.async_write_ha_state()
-            raise HomeAssistantError(f"Comando «{key}» non riuscito: {err}") from err
+            raise HomeAssistantError(f"Command «{key}» failed: {err}") from err
 
     def _handle_coordinator_update(self) -> None:
         # un nuovo messaggio dall'auto (last_seen cambiato) invalida l'ottimismo

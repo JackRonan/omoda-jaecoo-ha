@@ -651,7 +651,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
             self._update({"cmd_status": str(m)[:255]})
 
         CMD.send(key, emit=emit, params=params)
-        return msgs[-1] if msgs else "inviato"
+        return msgs[-1] if msgs else "sent"
 
     async def async_query_theft(self) -> int | None:
         """Stato antifurto via REST (read-only); None se non disponibile."""
@@ -683,11 +683,11 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         if not (isinstance(result, dict) and result.get("online")):
             if self.data.get("awake"):
                 return  # nel frattempo è arrivato un messaggio MQTT → già sveglia
-            emit("Sveglia SMS non efficace → ripiego su Localizza (vehicleLocation)…")
+            emit("SMS wake unsuccessful → falling back to Locate (vehicleLocation)…")
             try:
                 self._send_command("localizza")
             except Exception as err:  # noqa: BLE001 — il fallback non deve far fallire la sveglia
-                emit(f"fallback Localizza fallito: {err}")
+                emit(f"Locate fallback failed: {err}")
 
     def _is_hv_on(self) -> bool:
         """True se l'alta tensione è accesa (marcia, ricarica o clima): è l'UNICO stato in cui
@@ -786,15 +786,15 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         # 1) lettura immediata: se l'HV è già acceso, è già tutto fresco
         await self.async_probe(force=True)
         if self._is_hv_on():
-            emit("Stato aggiornato — alta tensione già accesa ✅")
+            emit("Status updated — high voltage already on ✅")
             return
 
         # 2) accendi il clima per svegliare l'alta tensione
-        emit("Accendo il clima per ~1 min per leggere i dati reali (odometro/batteria)…")
+        emit("Turning on climate for ~1 min to read real data (odometer/battery)…")
         try:
             await self.async_send_command("clima_on")
         except Exception as err:  # noqa: BLE001
-            emit(f"Non riesco ad accendere il clima: {err}")
+            emit(f"Failed to turn on climate: {err}")
             return
 
         # 3) leggi il realtime finché l'alta tensione non è su (max ~2,5 min)
@@ -814,8 +814,8 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
             await self.async_send_command("clima_off")
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("[refresh] spegnimento clima fallito: %s", err)
-        emit("Stato aggiornato con dati reali ✅" if got
-             else "L'auto non si è accesa in tempo — riprova, o si aggiornerà al prossimo viaggio")
+        emit("Status updated with real data ✅" if got
+             else "Car did not wake in time — try again, or it will update on next drive")
 
     async def async_ensure_vehicle_identity(self) -> None:
         """Backfill best-effort dell'identità veicolo (nome/modello/marca) per il device HA.

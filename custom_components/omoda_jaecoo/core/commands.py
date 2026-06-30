@@ -300,7 +300,7 @@ def get_taskid(tuid, emit=lambda m: None):
     except OSError:
         pass
     if MINT_TASKID:
-        emit("conio taskId (checkPassword)…")
+        emit("minting taskId (checkPassword)…")
         try:
             tid = _mint_taskid(tuid)
             if tid:
@@ -324,12 +324,12 @@ def send(cmd_key, emit=lambda m: None, params=None):
 
     token, tuid = wake._bff_login()
     if not token:
-        emit("login fallito (token scaduto? rifare OTP ad app chiusa)")
+        emit("login failed (token expired? redo OTP with official app closed)")
         return "login_failed"
 
     taskid, src = get_taskid(tuid, emit)
     if not taskid:
-        emit("nessun taskId disponibile")
+        emit("no taskId available")
         return "no_taskid"
 
     ts = int(time.time() * 1000)

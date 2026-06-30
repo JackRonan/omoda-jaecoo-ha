@@ -212,12 +212,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents += [OmodaJaecooRealtimeSensor(coord, s) for s in _RT_SENSORS]
     ents.append(OmodaJaecooSessionStatus(coord))
     # — sensori diagnostici (parità col bridge) —
-    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Esito comando", "cmd_status", "cmd_status", "mdi:car-cog"))
-    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Esito sveglia", "wake_status", "wake_status", "mdi:car-connected"))
-    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Esito sonda posizione", "probe_status", "probe_status", "mdi:crosshairs-gps"))
-    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Ultimo contatto", "lastseen", "last_seen", "mdi:car-clock"))
-    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Ultima sveglia", "wake_ts", "last_wake", "mdi:car-clock"))
-    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Ultima posizione", "pos_fix", "last_pos_fix", "mdi:map-marker-clock"))
+    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Command result", "cmd_status", "cmd_status", "mdi:car-cog"))
+    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Wake-up result", "wake_status", "wake_status", "mdi:car-connected"))
+    ents.append(OmodaJaecooTextSensor(coord, "Omoda / Jaecoo Location probe result", "probe_status", "probe_status", "mdi:crosshairs-gps"))
+    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Last seen", "lastseen", "last_seen", "mdi:car-clock"))
+    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Last wake-up", "wake_ts", "last_wake", "mdi:car-clock"))
+    ents.append(OmodaJaecooTimestampSensor(coord, "Omoda / Jaecoo Last position", "pos_fix", "last_pos_fix", "mdi:map-marker-clock"))
     add(ents)
 
 

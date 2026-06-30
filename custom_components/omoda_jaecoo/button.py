@@ -56,7 +56,7 @@ class OmodaJaecooCommandButton(OmodaJaecooEntity, ButtonEntity):
         try:
             await self.coordinator.async_send_command(self._key)
         except Exception:  # noqa: BLE001
-            _LOGGER.exception("Omoda / Jaecoo: comando «%s» non riuscito", self._key)
+            _LOGGER.exception("Omoda / Jaecoo: command «%s» failed", self._key)
 
 
 class OmodaJaecooActionButton(OmodaJaecooEntity, ButtonEntity):
@@ -83,4 +83,4 @@ class OmodaJaecooActionButton(OmodaJaecooEntity, ButtonEntity):
         try:
             await self._action()
         except Exception:  # noqa: BLE001
-            _LOGGER.exception("Omoda / Jaecoo: azione «%s» non riuscita", self._raw_name)
+            _LOGGER.exception("Omoda / Jaecoo: action «%s» failed", self._raw_name)

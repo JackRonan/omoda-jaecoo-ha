@@ -239,8 +239,8 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
         """Sveglia l'auto, attende che i moduli comfort siano alimentati, poi invia il comando."""
         if self.coordinator.command_busy():
             raise HomeAssistantError(
-                "Un altro comando è ancora in corso — l'auto ne esegue uno alla volta. "
-                "Attendi qualche secondo (guarda «Esito comando») e riprova.")
+                "Another command is still in progress — the car handles one at a time. "
+                "Wait a few seconds (check «Command result») and try again.")
         self._cancel_expire()
         self._set_state(target)
         # sveglia (vehicleLocation = sveglia + GPS, benigno); non bloccare la macro se fallisce
@@ -255,7 +255,7 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
             self._set_state(False)
             self.coordinator.clear_command_busy()
             self.async_write_ha_state()
-            raise HomeAssistantError(f"Comando «{cmd}» non riuscito: {err}") from err
+            raise HomeAssistantError(f"Command «{cmd}» failed: {err}") from err
         if target:
             # l'auto chiude il preset dopo ~15 min → riporta lo switch a OFF da solo
             @callback

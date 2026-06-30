@@ -232,10 +232,10 @@ def diagnose(publish):
       - VIN assente / lista vuota → account non legato al veicolo (non aggirabile).
     Ritorna un dict riepilogativo. Mai solleva."""
     try:
-        publish("🔎 Diagnostica veicolo (sola lettura, non tocca l'auto)…")
+        publish("🔎 Vehicle diagnostics (read-only, does not interact with car)…")
         ut, tu = W._bff_login()
         if not ut:
-            publish("🔑 Sessione scaduta: rifai il login OTP (token.json).")
+            publish("🔑 Session expired: redo OTP login (token.json).")
             return {"ok": False, "reason": "no_usertoken"}
 
         # getTuserId (informativo; tUserId arriva già dal login)
@@ -291,12 +291,12 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
     Ritorna un dict riepilogativo. Mai solleva."""
     try:
         if is_awake is not None and not is_awake():
-            publish("⌛ Auto a riposo: il comando darebbe A07900. Sveglia prima (uso reale).")
+            publish("⌛ Car asleep: the command would return A07900. Wake it first (recent use).")
             return {"ok": False, "reason": "asleep"}
 
         ut, tu = W._bff_login()
         if not ut:
-            publish("🔑 Sessione scaduta: rifai il login OTP.")
+            publish("🔑 Session expired: redo OTP login.")
             return {"ok": False, "reason": "no_usertoken"}
 
         # 1) diagnostica/queryList per ottenere il car_token (ipotesi B)
@@ -321,7 +321,7 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
             publish(f"🔐 checkPassword senza taskId (code={W._code_of(j_p)}): "
                     "PIN non accettato o token scaduto. Stop (no retry su PIN).")
             return {"ok": False, "reason": "no_taskid", "code": W._code_of(j_p)}
-        publish("🔐 PIN ok, taskId ottenuto. Invio comando col car_token…")
+        publish("🔐 PIN ok, taskId obtained. Sending command with car_token…")
 
         # 4) comando con Authorization = car_token
         sc_c, j_c = send_command(cmd, car_token, vin=VIN, tuser_id=tu,

@@ -117,7 +117,7 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         except Exception as err:  # noqa: BLE001
             self._opt_on = None
             self.async_write_ha_state()
-            raise HomeAssistantError(f"Comando clima non riuscito: {err}") from err
+            raise HomeAssistantError(f"Climate command failed: {err}") from err
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:

@@ -218,7 +218,7 @@ def do_wake(publish, is_awake=None, send_sms=True):
     Ritorna un dict riepilogativo {ok, online, code, ...}. Mai solleva: ogni errore → status.
     """
     if not _BUSY.acquire(blocking=False):
-        publish("⏳ Sveglia già in corso, attendi…")
+        publish("⏳ Wake already in progress, please wait…")
         return {"ok": False, "reason": "busy"}
     try:
         return _do_wake_inner(publish, is_awake, send_sms)
@@ -243,14 +243,14 @@ def _do_wake_inner(publish, is_awake, send_sms):
 
     # se l'auto sta già pubblicando su MQTT, è già sveglia: niente SMS
     if is_awake and is_awake():
-        publish("🟢 Auto già sveglia (sta inviando dati) — sveglia non necessaria")
+        publish("🟢 Car already awake (sending data) — wake not needed")
         return {"ok": True, "online": True, "reason": "already_awake"}
 
     # 1) login BFF → userToken
-    publish("🔑 Accesso in corso…")
+    publish("🔑 Logging in…")
     ut, tu = _bff_login()
     if not ut:
-        publish("🔑 Sessione scaduta (token vecchio o app ufficiale aperta): rifai il login OTP")
+        publish("🔑 Session expired (old token or official app open): redo OTP login")
         return {"ok": False, "reason": "no_usertoken"}
 
     # 2) smsAwaken (una sola volta)
@@ -260,31 +260,31 @@ def _do_wake_inner(publish, is_awake, send_sms):
         code = _code_of(j)
         _save_last_sms(time.time())     # registra SUBITO per il cooldown, anche se in errore
         if str(code) in ("000000", "A00079"):
-            publish("✅ Sveglia inviata — attendo che l'auto si connetta…")
+            publish("✅ Wake sent — waiting for car to connect…")
         elif str(code) == "A07312":
-            publish("🚫 Rate-limit sveglia (A07312): l'auto rifiuta altre sveglie ora. Riprova più tardi")
+            publish("🚫 Wake rate-limited (A07312): the car is refusing more wakes right now. Try again later")
             return {"ok": False, "online": False, "code": code, "reason": "rate_limit"}
         else:
             publish(f"⚠️ Sveglia non accettata ({code}: {codes.meaning(code)}). Provo comunque ad ascoltare…")
     else:
-        publish("🧪 (test) smsAwaken NON inviato; passo solo al poll")
+        publish("🧪 (test) smsAwaken NOT sent; proceeding to poll only")
 
     # 3) poll realtime/location + ascolto MQTT, per ~POLL_N*POLL_EVERY secondi
     for i in range(POLL_N):
         if is_awake and is_awake():
-            publish("🟢 Auto ONLINE — sta inviando dati in tempo reale")
+            publish("🟢 Car ONLINE — sending real-time data")
             return {"ok": True, "online": True, "code": code, "via": "mqtt"}
         sc1, j1 = _signed_post(ut, "/asr/manager/realtime", {"vin": VIN})
         sc2, j2 = _signed_post(ut, "/asc/vehicleControl/queryVehicleLocation", {"vin": VIN})
         if _has_live_data(j1) or _has_live_data(j2):
-            publish("🟢 Auto ONLINE — dati realtime ricevuti")
+            publish("🟢 Car ONLINE — real-time data received")
             return {"ok": True, "online": True, "code": code, "via": "rest",
                     "data": _payload(j1) or _payload(j2)}
         secs_left = (POLL_N - i - 1) * POLL_EVERY
         publish(f"… in attesa risveglio ({_code_of(j1)}) — ancora ~{secs_left}s")
         time.sleep(POLL_EVERY)
 
-    publish("⌛ Auto ancora a riposo (A07900). Riprova quando è stata usata di recente o ha buon segnale")
+    publish("⌛ Car still asleep (A07900). Try again when it has been used recently or has good signal")
     return {"ok": True, "online": False, "code": code, "reason": "still_asleep"}
 
 

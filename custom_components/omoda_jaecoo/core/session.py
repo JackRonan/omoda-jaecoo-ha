@@ -48,8 +48,8 @@ def check():
     except Exception as e:
         return False, f"errore rete: {type(e).__name__}"
     if ut:
-        return True, "Sessione attiva ✅"
-    return False, "Sessione scaduta ❌ — premi «Richiedi codice OTP» (app ufficiale chiusa)"
+        return True, "Session active ✅"
+    return False, "Session expired ❌ — press «Request OTP code» (close the official app first)"
 
 
 def refresh():
@@ -62,20 +62,20 @@ def refresh():
 
 def request_otp(emit=lambda m: None):
     """Invia il codice OTP alla mail di Rino. True se l'invio è andato a buon fine."""
-    emit("invio codice OTP alla mail…")
+    emit("sending OTP code to email…")
     try:
         r = subprocess.run([PYEXE, "login_omoda.py", "invia", EMAIL],
                            cwd=OMODA_DIR, capture_output=True, text=True, timeout=_TIMEOUT)
     except subprocess.TimeoutExpired:
-        emit("timeout invio OTP — riprova")
+        emit("OTP sending timed out — try again")
         return False
     out = (r.stdout or "") + (r.stderr or "")
     # H7: esito su returncode + sentinella stabile, non su sottostringhe localizzate
     if r.returncode == 0 and "RESULT: OK" in out:
-        emit(f"📧 Codice inviato a {EMAIL} — inseriscilo nel campo «Codice OTP» e premi «Conferma»")
+        emit(f"📧 Code sent to {EMAIL} — enter it in the «OTP code» field and press «Confirm OTP»")
         return True
     tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"
-    emit(f"invio OTP fallito: {tail[:120]}")
+    emit(f"OTP sending failed: {tail[:120]}")
     return False
 
 
@@ -83,20 +83,20 @@ def confirm_otp(code, emit=lambda m: None):
     """Conia il token col codice OTP. Ritorna (ok, dettaglio)."""
     code = (code or "").strip()
     if not code:
-        return False, "nessun codice inserito"
-    emit("conio il token col codice…")
+        return False, "no code entered"
+    emit("minting token with code…")
     try:
         r = subprocess.run([PYEXE, "prova_token.py", EMAIL, code],
                            cwd=OMODA_DIR, capture_output=True, text=True, timeout=_TIMEOUT)
     except subprocess.TimeoutExpired:
-        return False, "timeout conio token"
+        return False, "token minting timed out"
     out = (r.stdout or "") + (r.stderr or "")
     # H7: esito su returncode + sentinella stabile, non su sottostringhe localizzate
     if r.returncode == 0 and "RESULT: OK" in out:
         ok, detail = check()
-        return ok, ("Sessione ripristinata ✅" if ok else "token coniato ma login ancora KO")
+        return ok, ("Session restored ✅" if ok else "token minted but login still failing")
     tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"
-    return False, f"codice rifiutato: {tail[:120]}"
+    return False, f"code rejected: {tail[:120]}"
 
 
 if __name__ == "__main__":

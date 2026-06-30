@@ -88,7 +88,7 @@ def _discover(hass: HomeAssistant, data: dict) -> tuple[bool, str, list[str], st
         wake.TOKEN_PATH = _pending_token_path(hass)   # token appena coniato
         _ut, tu = wake._bff_login()
         if not tu:
-            return False, "", [], "login backend non riuscito"
+            return False, "", [], "backend login failed"
         access = wake._access_token()
         headers = A.headers_post("/tsp/v1/app/vmc/queryList", extra={
             "Authorization": f"Bearer {access}",
