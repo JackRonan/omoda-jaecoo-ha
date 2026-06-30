@@ -344,7 +344,7 @@ def send(cmd_key, emit=lambda m: None, params=None):
     # path esplicito (es. antifurto su /act/theftAlarm/setSwitch) oppure il classico
     # /asc/vehicleControl/<endpoint> per i comandi veicolo standard.
     url = TSP_HOST + (c.get("path") or ("/asc/vehicleControl/" + c["endpoint"]))
-    emit(f"invio {c['name']} (taskId:{src})…")
+    emit(f"sending {c['name']} (taskId:{src})…")
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
