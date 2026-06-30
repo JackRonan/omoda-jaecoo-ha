@@ -222,6 +222,21 @@
       },
       "tendina_tetto": {
         "name": "Sunroof blind"
+      },
+      "front_left_tire_warning": {
+        "name": "Front left tire warning"
+      },
+      "front_right_tire_warning": {
+        "name": "Front right tire warning"
+      },
+      "rear_left_tire_warning": {
+        "name": "Rear left tire warning"
+      },
+      "rear_right_tire_warning": {
+        "name": "Rear right tire warning"
+      },
+      "battery_low": {
+        "name": "Battery low"
       }
     },
     "sensor": {
@@ -520,6 +535,21 @@
       },
       "sveglia_auto": {
         "name": "Wake car"
+      },
+      "wake_car": {
+        "name": "Wake car"
+      },
+      "refresh_location": {
+        "name": "Refresh location"
+      },
+      "refresh_full_status": {
+        "name": "Refresh full status"
+      },
+      "request_otp_code": {
+        "name": "Request OTP code"
+      },
+      "confirm_otp": {
+        "name": "Confirm OTP"
       }
     },
     "switch": {
@@ -609,6 +639,24 @@
       },
       "ventilazione_sedile_post_sx": {
         "name": "Rear left seat ventilation"
+      },
+      "charging": {
+        "name": "Charging"
+      },
+      "scheduled_charging": {
+        "name": "Scheduled charging"
+      },
+      "cool_down_all": {
+        "name": "Cool down all"
+      },
+      "heat_up_all": {
+        "name": "Heat up all"
+      },
+      "theft_alarm": {
+        "name": "Theft alarm"
+      },
+      "auto_update": {
+        "name": "Auto update"
       }
     },
     "cover": {

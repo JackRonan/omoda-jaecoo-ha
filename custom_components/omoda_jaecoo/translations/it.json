@@ -222,6 +222,21 @@
       },
       "tendina_tetto": {
         "name": "Tendina tetto"
+      },
+      "front_left_tire_warning": {
+        "name": "Avviso gomma ant. SX"
+      },
+      "front_right_tire_warning": {
+        "name": "Avviso gomma ant. DX"
+      },
+      "rear_left_tire_warning": {
+        "name": "Avviso gomma post. SX"
+      },
+      "rear_right_tire_warning": {
+        "name": "Avviso gomma post. DX"
+      },
+      "battery_low": {
+        "name": "Batteria scarica"
       }
     },
     "sensor": {
@@ -520,6 +535,21 @@
       },
       "sveglia_auto": {
         "name": "Sveglia auto"
+      },
+      "wake_car": {
+        "name": "Sveglia auto"
+      },
+      "refresh_location": {
+        "name": "Aggiorna posizione"
+      },
+      "refresh_full_status": {
+        "name": "Aggiorna stato completo"
+      },
+      "request_otp_code": {
+        "name": "Richiedi codice OTP"
+      },
+      "confirm_otp": {
+        "name": "Conferma OTP"
       }
     },
     "switch": {
@@ -609,6 +639,24 @@
       },
       "ventilazione_sedile_post_sx": {
         "name": "Ventilazione sedile post. SX"
+      },
+      "charging": {
+        "name": "Ricarica"
+      },
+      "scheduled_charging": {
+        "name": "Ricarica programmata"
+      },
+      "cool_down_all": {
+        "name": "Raffredda tutto"
+      },
+      "heat_up_all": {
+        "name": "Riscalda tutto"
+      },
+      "theft_alarm": {
+        "name": "Antifurto"
+      },
+      "auto_update": {
+        "name": "Aggiornamento automatico"
       }
     },
     "cover": {

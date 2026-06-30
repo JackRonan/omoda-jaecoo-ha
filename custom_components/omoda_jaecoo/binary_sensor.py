@@ -102,12 +102,8 @@ class OmodaJaecooOnline(_OmodaJaecooRestoreBinary):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, coord) -> None:
-        super().__init__(coord, "Omoda / Jaecoo Connessione", "online")
-        # entity_id PINNED allo storico `omoda_jaecoo_connessa` (dashboard/automazioni non si rompono);
-        # translation_key forzato a "connessa" per combaciare con la chiave in translations/*.json
-        # (altrimenti la base la deriverebbe da "Connessione" → "connessione", chiave inesistente).
-        self.entity_id = ENTITY_ID_FORMAT.format("omoda_jaecoo_connessa")
-        self._attr_translation_key = "connessa"
+        super().__init__(coord, "Omoda / Jaecoo Connection", "online")
+        self._attr_translation_key = "connection"
 
     def _live_is_on(self) -> bool | None:
         rt = self.coordinator.data.get("realtime") or {}
