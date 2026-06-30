@@ -476,6 +476,9 @@
       },
       "ventilazione_sedile_post_centrale": {
         "name": "Ventilazione sedile post. centrale"
+      },
+      "charge_limit": {
+        "name": "Limite di carica"
       }
     },
     "button": {
@@ -718,6 +721,9 @@
       },
       "ricarica_durata_ore": {
         "name": "Durata ricarica"
+      },
+      "charge_limit_number": {
+        "name": "Limite di carica"
       }
     },
     "text": {

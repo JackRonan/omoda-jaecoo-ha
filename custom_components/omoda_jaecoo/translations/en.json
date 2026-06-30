@@ -476,6 +476,9 @@
       },
       "ventilazione_sedile_post_centrale": {
         "name": "Rear center seat ventilation"
+      },
+      "charge_limit": {
+        "name": "Charge limit"
       }
     },
     "button": {
@@ -712,6 +715,12 @@
       },
       "charging_duration": {
         "name": "Charging duration"
+      },
+      "charge_limit": {
+        "name": "Charge limit"
+      },
+      "charge_limit_number": {
+        "name": "Charge limit"
       },
       "durata_clima": {
         "name": "Climate duration"

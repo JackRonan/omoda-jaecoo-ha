@@ -196,6 +196,13 @@ COMMANDS = [
                        {"cycleData": [1, 2, 3, 4, 5, 6, 7], "startTime": 480,
                         "switchStatus": 0, "timeConsuming": 360}]},
                    "name": "Scheduled charging OFF", "icon": "mdi:calendar-remove", "group": "Ricarica"}),
+    # Limite SOC / Charge depth (CVChargeDepthReqBean → endpoint chargeDepthControl).
+    # Il campo `chargeSoc` riceve il valore % intero (es. 80); la HA entity lo passa via `params`.
+    # Basato su: bean class name CVChargeDepthReqBean, telemetry field maxSocPercent,
+    # CarLinko equivalent /user/device/manage/targetSoc. Non ancora verificato dal vivo su
+    # questo backend: l'endpoint è la migliore inferenza dal naming Chery SDK.
+    ("charge_limit_set", {"endpoint": "chargeDepthControl", "body": {},
+                   "name": "Set charge limit", "icon": "mdi:battery-lock", "group": "Ricarica"}),
 
     # — Altro —
     ("trova_auto", {"endpoint": "findCar", "body": {},

@@ -186,6 +186,11 @@ _RT_SENSORS: list[_RtSpec] = [
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
     _RtSpec("temp_imp_dx", "Target temperature right", "frontSetTempRight",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
+    # ── P2 · limite di carica (charge depth) ──
+    # maxSocPercent: percentuale massima di carica impostata (0 = non impostata / sconosciuta).
+    # Letto dal canale realtime; il numero interattivo in number.py lo usa come valore corrente.
+    _RtSpec("charge_limit", "Charge limit", "maxSocPercent",
+            None, "%", MEAS, "mdi:battery-lock", diag=True),
 ]
 
 
