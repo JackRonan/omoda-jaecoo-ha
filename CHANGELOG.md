@@ -7,6 +7,17 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.40 — 2026-07-03
+
+- **Card: fixed "Configuration error" on the mobile app.** The card worked on desktop but
+  failed to load in the companion app. Two causes fixed: the card used a modern JS feature
+  (optional chaining) that older Android WebView builds can't parse — which silently stopped
+  the card from registering at all — and an unescaped vehicle name could throw while rendering.
+  The card now uses only broadly-supported JavaScript, escapes the name, wraps rendering so any
+  error shows inline instead of blanking the card, guards against double-registration, and adds
+  iOS/Safari CSS fallbacks. After updating, force the app to reload: **App configuration →
+  Debugging → Reset frontend cache** (or fully close and reopen the app).
+
 ## v1.5.39 — 2026-07-03
 
 - **Queued commands stay snappy.** Building on the new command queue: each command returns

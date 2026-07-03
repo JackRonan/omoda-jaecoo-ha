@@ -58,6 +58,9 @@ class OmodaCard extends HTMLElement {
     for (const k of keys) { const f = items.find((r) => r.key === k); if (f) return f; }
     return null;
   }
+  // Escape a string for safe use inside `new RegExp(...)` (vehicle names can contain
+  // regex-special chars like ( ) + . which would otherwise throw during render).
+  _esc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
   _batteryIcon(v, charging) {
     if (charging) return "mdi:battery-charging";
@@ -94,7 +97,10 @@ class OmodaCard extends HTMLElement {
       style.textContent = `
         ha-card { overflow: hidden; }
         .hero { position: relative; min-height: 132px; display: flex; align-items: flex-end;
-          background: linear-gradient(135deg, var(--primary-color) 0%, color-mix(in srgb, var(--primary-color) 55%, #000) 100%);
+          /* solid fallback first: iOS/Safari & old webviews that don't support color-mix()
+             keep a usable background instead of a blank hero. */
+          background-color: var(--primary-color);
+          background-image: linear-gradient(135deg, var(--primary-color) 0%, color-mix(in srgb, var(--primary-color) 55%, #000) 100%);
           background-size: cover; background-position: center; }
         .hero.photo { min-height: 190px; }
         .scrim { position: absolute; inset: 0;
@@ -106,7 +112,8 @@ class OmodaCard extends HTMLElement {
           display: flex; align-items: center; gap: 6px; }
         .sub ha-icon { --mdc-icon-size: 16px; }
         .batt { display: flex; align-items: center; gap: 7px; padding: 7px 12px; cursor: pointer;
-          background: rgba(0,0,0,.32); border-radius: 999px; backdrop-filter: blur(6px); }
+          background: rgba(0,0,0,.32); border-radius: 999px;
+          -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
         .batt ha-icon { --mdc-icon-size: 22px; }
         .batt b { font-size: 1.15rem; font-weight: 700; }
         .metrics { display: flex; }
@@ -143,14 +150,26 @@ class OmodaCard extends HTMLElement {
         }
       });
     }
-    this._render(hass);
+    // A render exception must never bubble up as a bare "Configuration error" card —
+    // show the message inline instead so the card still appears (and is debuggable).
+    try {
+      this._render(hass);
+    } catch (e) {
+      this.content.innerHTML =
+        `<div style="padding:16px;color:var(--error-color,#e5484d)">Omoda card error: ${e && e.message ? e.message : e}</div>`;
+    }
   }
 
   _render(hass) {
     const cfg = this.config;
     const items = this._collect(hass);
-    const nameSrc = items.find((r) => r.s.attributes.friendly_name)?.s.attributes.friendly_name;
+    // NB: no optional chaining (?.) anywhere in this file — older Android System WebView
+    // builds fail to PARSE it, which stops customElements.define() from ever running and
+    // makes the whole card show "Configuration error" on the mobile app only.
+    const nameHolder = items.find((r) => r.s.attributes.friendly_name);
+    const nameSrc = nameHolder ? nameHolder.s.attributes.friendly_name : null;
     const device = nameSrc ? nameSrc.split(" ").slice(0, 2).join(" ") : "Omoda / Jaecoo";
+    const deviceRe = this._esc(device);
     const title = cfg.title || device;
 
     const bat = this._find(items, "battery") || items.find((r) =>
@@ -209,7 +228,7 @@ class OmodaCard extends HTMLElement {
     const warns = [];
     items.filter((r) => /tire.*warning|tyre.*warning/.test(r.key) && r.s.state === "on")
       .forEach((r) => warns.push({ id: r.id, icon: "mdi:car-tire-alert",
-        text: (r.s.attributes.friendly_name || r.key).replace(new RegExp("^" + device + "\\s*", "i"), "").replace(/warning/i, "").trim() }));
+        text: (r.s.attributes.friendly_name || r.key).replace(new RegExp("^" + deviceRe + "\\s*", "i"), "").replace(/warning/i, "").trim() }));
     const low = this._find(items, "battery_low");
     if (low && low.s.state === "on") warns.push({ id: low.id, icon: "mdi:battery-alert", text: "Battery low" });
     const conn = this._find(items, "connection");
@@ -222,7 +241,7 @@ class OmodaCard extends HTMLElement {
     const used = new Set([bat, range, chargeState, charging, plug, odo, low, conn].filter(Boolean).map((r) => r.id));
     const rowFor = (id) => {
       const s = hass.states[id]; if (!s) return "";
-      const name = (s.attributes.friendly_name || id).replace(new RegExp("^" + device + "\\s*", "i"), "").trim() || id;
+      const name = (s.attributes.friendly_name || id).replace(new RegExp("^" + deviceRe + "\\s*", "i"), "").trim() || id;
       return `<div class="row" data-e="${id}"><div>${name}</div><div class="val">${this._disp(s)}</div></div>`;
     };
     if (Array.isArray(cfg.entities) && cfg.entities.length) {
@@ -238,11 +257,18 @@ class OmodaCard extends HTMLElement {
 
   static getStubConfig() { return { type: "custom:omoda-card" }; }
 }
-customElements.define("omoda-card", OmodaCard);
+// Guard against double-registration: the mobile app can evaluate this module more than
+// once (auto-injected + cached), and a duplicate customElements.define() throws, which
+// would abort the second load.
+if (!customElements.get("omoda-card")) {
+  customElements.define("omoda-card", OmodaCard);
+}
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "omoda-card",
-  name: "Omoda/Jaecoo Card",
-  preview: true,
-  description: "Sleek summary card for the Omoda/Jaecoo integration (photo, battery, range, charging, warnings).",
-});
+if (!window.customCards.some((c) => c.type === "omoda-card")) {
+  window.customCards.push({
+    type: "omoda-card",
+    name: "Omoda/Jaecoo Card",
+    preview: true,
+    description: "Sleek summary card for the Omoda/Jaecoo integration (photo, battery, range, charging, warnings).",
+  });
+}
