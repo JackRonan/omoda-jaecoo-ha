@@ -25,10 +25,26 @@ python omoda_sandbox.py   # CLI
 
 ### GUI (`gui.py`)
 
-Sidebar: enter **email + PIN**, **Send OTP**, then **Confirm OTP** (VIN auto-discovers).
-Tabs: **Status** (battery/range/odometer + door/window/lock state + raw JSON), **Controls**
-(a button per catalog command, grouped), **Windows** (all open/vent/close + a per-window
-experiment), **Advanced** (raw request, generic signed command, error-code dictionary).
+Run with `python -m streamlit run gui.py` (the `python -m` form avoids PATH issues if the
+`streamlit` command isn't found). Sidebar: enter **email + PIN**, **Send OTP**, then **Confirm
+OTP** (VIN auto-discovers). A live metrics bar (battery / range / odometer / lock / charging)
+sits above the tabs:
+
+- **📊 Status** — every door/window/roof open-closed state + raw realtime JSON.
+- **❄️ Climate** — cabin on/off with a target-temperature slider, cool-all / heat-all, and
+  clean On/Off rows for defrost, steering-wheel and every seat heat/vent.
+- **🚪 Access** — lock/unlock, trunk, theft alarm, find/locate.
+- **🔋 Charging** — start/stop + scheduled charging.
+- **🪟 Windows & Roof** — open/vent/close all windows, open/close sunroof, and the
+  **per-window experiment** (see below).
+- **🔧 Advanced** — generic signed command, raw read (TSP/BFF/GET), error-code dictionary.
+
+**Per-window experiment.** The sunroof opens with `skylightControl(controlType, skylightType)`
+— a type selector alongside open/close. Windows *might* follow the same shape,
+`windowControl(controlType, windowType)`, so the experiment fires that (plus fallbacks) per
+window. Code `000000`/`A00079` = **accepted** (per-window works — send the winning body to be
+wired into the integration); `A00567`/`A00084` = rejected. The CLI has the same probe under
+**Individual-window experiment**. Run with the car awake.
 
 You only need **email + PIN** — same as the integration. The **VIN is auto-discovered**
 from `queryList` after login; you never type it. Set credentials via the menu

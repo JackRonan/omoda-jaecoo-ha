@@ -781,6 +781,73 @@ def act_charge_depth_sweep():
          "charging and retry), not a body problem. Menu 'Error-code dictionary' shows all meanings.")
 
 
+# The sunroof opens with skylightControl {"controlType": "1", "skylightType": "1"} — a type/id
+# selector ALONGSIDE open/close. The all-windows command is windowControl {"controlType": "1|0|2"}
+# with NO selector. So per-window control, IF it exists, most likely mirrors the sunroof shape:
+# windowControl {"controlType", "windowType"}. This sweep tries that first, then field-name fallbacks,
+# one window at a time. 000000/A00079 = accepted; A00567 = wrong fields; A00084 = not allowed.
+_WINDOWS = [
+    ("Front left", "1", "frontLeft", "fl"),
+    ("Front right", "2", "frontRight", "fr"),
+    ("Rear left", "3", "backLeft", "bl"),
+    ("Rear right", "4", "backRight", "br"),
+]
+
+
+def _window_bodies(ct, wtype, camel, short):
+    return [
+        {"controlType": ct, "windowType": wtype},      # sunroof-style: controlType + type selector
+        {"controlType": ct, "skylightType": wtype},    # in case it reuses the roof's field name
+        {"controlType": ct, "position": wtype},
+        {"controlType": ct, "windowLocation": wtype},
+        {f"{camel}Window": ct},                          # per-window field name (matches telemetry)
+        {f"{short}Window": ct},
+    ]
+
+
+def act_window_experiment():
+    """Probe per-window control on windowControl, following the sunroof's controlType+type shape."""
+    if not _need_vin():
+        return
+    for i, (name, *_rest) in enumerate(_WINDOWS, 1):
+        info(f"  {i}) {name}")
+    sel = ask("which window (1-4)", "1")
+    try:
+        name, wtype, camel, short = _WINDOWS[int(sel) - 1]
+    except (ValueError, IndexError):
+        err("pick 1-4.")
+        return
+    act = ask("action: (o)pen / (c)lose", "o").lower()
+    ct = "1" if act.startswith("o") else "0"
+    bodies = _window_bodies(ct, wtype, camel, short)
+    warn(f"⚠️  {len(bodies)} real signed commands to windowControl for the {name} window "
+         f"({'OPEN' if ct == '1' else 'CLOSE'}). The app has no per-window control — this probes the "
+         "backend directly. Best run with the car AWAKE (recently driven / charging).")
+    if not confirm(f"Fire {len(bodies)} candidate bodies for the {name} window?"):
+        info("aborted.")
+        return
+    load_error_map()
+    results = []
+    for body in bodies:
+        info(f"\n── windowControl  body={body} ──")
+        code = signed_command(endpoint="windowControl", body=body)
+        results.append((body, code))
+        time.sleep(1.0)  # car handles one command at a time
+    info(f"\n=== {name} window sweep summary ===")
+    hit = False
+    for body, code in results:
+        ok = str(code) in ("000000", "A00079")
+        hit = hit or ok
+        verdict = "✅ ACCEPTED" if ok else f"{code} — {decode(code)}"
+        info(f"  {json.dumps(body)} → {verdict}")
+    if hit:
+        info("\n🎉 A candidate was ACCEPTED — per-window control works. Note the winning body and it can "
+             "be wired into the integration. Watch which physical window moved to map the windowType id.")
+    else:
+        info("\nAll rejected — this window/shape isn't accepted. Try another window, or it's genuinely "
+             "all-windows-only on this backend (matches the app, which has no per-window control).")
+
+
 def act_raw_request():
     """Fire an arbitrary request at any endpoint — max observability."""
     method = ask("method: (p)ost / (g)et", "p").lower()
@@ -865,6 +932,7 @@ MENU = [
     ("Send a GENERIC command (any endpoint + body)", act_generic_command),
     ("Charge-limit experiment (probe candidate endpoints)", act_charge_limit_experiment),
     ("Charge-depth body sweep (chargeDepthControl variants + decode)", act_charge_depth_sweep),
+    ("Individual-window experiment (sunroof-style windowControl probe)", act_window_experiment),
     ("— Advanced / config —", None),
     ("Raw request (any endpoint, GET/POST)", act_raw_request),
     ("Show config", act_show_config),

@@ -3,16 +3,18 @@
 """
 gui.py — simple Streamlit GUI for the OMODA / Jaecoo API sandbox.
 
-Same idea as omoda_sandbox.py (reuses the integration's real auth/signing from
-`custom_components/omoda_jaecoo/core/`, outside Home Assistant) but with a point-and-click
-UI: sign in, see live status, and fire any command the app supports.
+Reuses the integration's real auth/signing from `custom_components/omoda_jaecoo/core/`
+(outside Home Assistant) behind a point-and-click UI: sign in, see live status, fire any
+command the app supports, and experiment with undocumented ones (e.g. per-window control).
 
-Run:  streamlit run sandbox/gui.py
+Run:  python -m streamlit run gui.py
 Config + minted token live OUTSIDE the repo (~/.omoda_jaecoo_sandbox), shared with the CLI.
 """
 import json
 import os
+import re
 import sys
+import time
 
 import streamlit as st
 
@@ -32,6 +34,8 @@ CONFIG_KEYS = [
     ("OMODA_TENANT_CODE", "300006"), ("OMODA_COUNTRY_ID", "1"),
     ("OMODA_DEPT_ID", "39"), ("TSP_APP_ID", "eu-1"), ("OMODA_LANGUAGE", "en-GB"),
 ]
+_ADVANCED_KEYS = {"OMODA_BFF", "TSP_HOST", "OMODA_TENANT_CODE", "OMODA_COUNTRY_ID",
+                  "OMODA_DEPT_ID", "TSP_APP_ID", "OMODA_LANGUAGE"}
 
 
 def _load_env():
@@ -66,11 +70,9 @@ import commands as CMD              # noqa: E402
 import codes as CODES               # noqa: E402
 import login_omoda as LOGIN         # noqa: E402
 import prova_token as MINT          # noqa: E402
-import time                         # noqa: E402
 
 
 def _apply_env():
-    """Push edited config into the already-imported core modules (they snapshot env)."""
     W.VIN = CMD.VIN = os.environ.get("VIN", "")
     W.TSP_HOST = CMD.TSP_HOST = os.environ.get("TSP_HOST", W.TSP_HOST)
     CMD.PIN = os.environ.get("OMODA_PIN", "")
@@ -78,22 +80,29 @@ def _apply_env():
 
 
 # ── data-returning helpers (no printing) ─────────────────────────────────────
+def session_ok():
+    try:
+        ut, _ = W._bff_login()
+        return bool(ut)
+    except Exception:
+        return False
+
+
 def discover_vin():
     try:
         access = W._access_token()
     except Exception:
-        return None, "No token yet — sign in first."
+        return [], None
     extra = {"Authorization": f"Bearer {access}", "Content-Type": "application/json; charset=UTF-8",
              "Accept": "application/json, text/plain, */*"}
     try:
-        r = requests.post(A.BFF + "/tsp/v1/app/vmc/queryList", data="{}",
-                          headers=A.headers_post("/tsp/v1/app/vmc/queryList", extra=extra), timeout=25)
-        j = r.json()
-    except Exception as e:
-        return None, f"{type(e).__name__}: {e}"
+        j = requests.post(A.BFF + "/tsp/v1/app/vmc/queryList", data="{}",
+                          headers=A.headers_post("/tsp/v1/app/vmc/queryList", extra=extra), timeout=25).json()
+    except Exception:
+        return [], None
     lst = j.get("data") if isinstance(j, dict) else None
     vins = [str(v["vin"]) for v in lst if isinstance(v, dict) and v.get("vin")] if isinstance(lst, list) else []
-    return (vins, j)
+    return vins, j
 
 
 def tsp_read(path, body):
@@ -121,6 +130,20 @@ def bff_post(path, body):
         return None, {"error": f"{type(e).__name__}: {e}"}
 
 
+def bff_get(path):
+    try:
+        access = W._access_token()
+    except Exception:
+        access = None
+    extra = {"Accept": "application/json"}
+    if access:
+        extra["Authorization"] = f"Bearer {access}"
+    try:
+        return requests.get(A.BFF + path, headers=A.headers_post(path, extra=extra), timeout=25).json()
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 def signed_command(endpoint=None, path=None, body=None):
     """Arbitrary vehicle command via the real taskId + sign path. Returns (status, json)."""
     _apply_env()
@@ -128,7 +151,7 @@ def signed_command(endpoint=None, path=None, body=None):
     token, tuid = W._bff_login()
     if not token:
         return None, {"error": "no session — sign in"}
-    taskid, src = CMD.get_taskid(tuid, emit=lambda m: None)
+    taskid, _src = CMD.get_taskid(tuid, emit=lambda m: None)
     if not taskid:
         return None, {"error": "no taskId (set PIN; checkPassword must succeed)"}
     ts = int(time.time() * 1000)
@@ -149,213 +172,307 @@ def signed_command(endpoint=None, path=None, body=None):
 
 
 def send_catalog(key, params=None):
-    """Send a command from the catalog (reuses CMD.send, which mints taskId + signs)."""
     _apply_env()
     logs = []
     try:
-        result = CMD.send(key, emit=logs.append, params=params)
+        return CMD.send(key, emit=logs.append, params=params), logs
     except Exception as e:
-        result = f"error: {type(e).__name__}: {e}"
-    return result, logs
+        return f"error: {type(e).__name__}: {e}", logs
 
 
 def decode(code):
     return CODES.meaning(code, default=f"code {code}") if code is not None else "—"
 
 
-# ── UI ───────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="OMODA / Jaecoo Sandbox", page_icon="🚗", layout="wide")
-st.title("🚗 OMODA / Jaecoo — API Sandbox")
-st.caption("Point-and-click access to the vehicle API, outside Home Assistant. Raw JSON on tap.")
+def accepted(code):
+    return str(code) in ("000000", "A00079")
 
-# ---- sidebar: config + auth ----
+
+def result_banner(msg, code=None):
+    if code is not None and accepted(code):
+        st.success(f"✅ {msg}")
+    elif code is not None:
+        st.warning(f"{msg}  —  {code}: {decode(code)}")
+    else:
+        st.info(msg)
+
+
+# ── page config + header ─────────────────────────────────────────────────────
+st.set_page_config(page_title="OMODA / Jaecoo Sandbox", page_icon="🚗", layout="wide")
+_apply_env()
+signed = session_ok()
+
+# ── sidebar: sign-in + config ────────────────────────────────────────────────
 with st.sidebar:
-    st.header("Configuration")
-    for k, _d in CONFIG_KEYS:
-        val = st.text_input(k, value=os.environ.get(k, ""),
-                            type="password" if k == "OMODA_PIN" else "default")
-        os.environ[k] = val
-    if st.button("💾 Save config"):
-        _save_env(); _apply_env(); st.success("Saved.")
+    st.markdown("### 🚗 OMODA / Jaecoo Sandbox")
+    st.success("Signed in") if signed else st.error("Not signed in")
+    st.caption(f"VIN: `{os.environ.get('VIN') or '—'}`")
+
+    with st.expander("🔑 Sign in", expanded=not signed):
+        os.environ["OMODA_EMAIL"] = st.text_input("Account email", value=os.environ.get("OMODA_EMAIL", ""))
+        os.environ["OMODA_PIN"] = st.text_input("Vehicle PIN", value=os.environ.get("OMODA_PIN", ""), type="password")
+        if st.button("① Send OTP to email", use_container_width=True):
+            with st.spinner("Solving captcha + sending code…"):
+                ok = LOGIN.invia(os.environ.get("OMODA_EMAIL", ""))
+            st.success("Code sent — check your email.") if ok else st.error("Failed to send OTP.")
+        otp = st.text_input("OTP code from email")
+        if st.button("② Confirm OTP", type="primary", use_container_width=True):
+            with st.spinner("Minting token…"):
+                try:
+                    _s, j, tok = MINT.call(os.environ.get("OMODA_EMAIL", ""), otp.strip(),
+                                           secret="prod", emailfmt="module", codefmt="plain", verbose=False)
+                except Exception as e:
+                    j, tok = {"error": str(e)}, None
+            if tok:
+                json.dump(j, open(os.environ["OMODA_TOKEN_PATH"], "w", encoding="utf-8"), indent=2)
+                vins, _ = discover_vin()
+                if vins and not os.environ.get("VIN"):
+                    os.environ["VIN"] = vins[0]
+                _save_env()
+                st.success(f"Signed in ✅  VIN(s): {', '.join(vins) or '—'}")
+                st.rerun()
+            else:
+                st.error("OTP rejected (wrong/expired?).")
+
+    with st.expander("⚙️ Config", expanded=False):
+        os.environ["VIN"] = st.text_input("VIN (auto-discovered)", value=os.environ.get("VIN", ""))
+        for k in [k for k, _ in CONFIG_KEYS if k in _ADVANCED_KEYS]:
+            os.environ[k] = st.text_input(k, value=os.environ.get(k, ""))
+        if st.button("💾 Save config", use_container_width=True):
+            _save_env(); _apply_env(); st.toast("Saved.")
     _apply_env()
 
-    st.divider()
-    st.header("Sign in")
-    if st.button("① Send OTP to email"):
-        with st.spinner("Solving captcha + sending code…"):
-            ok = LOGIN.invia(os.environ.get("OMODA_EMAIL", ""))
-        st.success("Code sent — check email.") if ok else st.error("Failed to send OTP.")
-    otp = st.text_input("OTP code")
-    if st.button("② Confirm OTP → mint token"):
-        with st.spinner("Minting token…"):
-            try:
-                status, j, tok = MINT.call(os.environ.get("OMODA_EMAIL", ""), otp.strip(),
-                                           secret="prod", emailfmt="module", codefmt="plain", verbose=False)
-            except Exception as e:
-                status, j, tok = None, {"error": str(e)}, None
-        if tok:
-            path = os.environ["OMODA_TOKEN_PATH"]
-            json.dump(j, open(path, "w", encoding="utf-8"), indent=2)
-            vins, _ = discover_vin()
-            if vins and not os.environ.get("VIN"):
-                os.environ["VIN"] = vins[0]; _save_env(); _apply_env()
-            st.success(f"Signed in ✅  VIN(s): {', '.join(vins) if vins else '—'}")
+if not signed:
+    st.title("🚗 OMODA / Jaecoo — API Sandbox")
+    st.info("👈 Sign in from the sidebar to begin: enter your **email + PIN**, "
+            "**Send OTP**, then **Confirm OTP**. The VIN is discovered automatically.")
+    st.caption("Reuses the integration's real auth outside Home Assistant. Nothing here changes your HA setup.")
+    st.stop()
+
+# ── live vehicle header (metrics bar) ────────────────────────────────────────
+if "rt" not in st.session_state:
+    st.session_state["rt"] = tsp_read("/asr/manager/realtime", {"vin": os.environ.get("VIN", "")})
+rt_status, rt_json = st.session_state["rt"]
+_body = (rt_json.get("body") or rt_json.get("data") or {}) if isinstance(rt_json, dict) else {}
+
+
+def _b(key, default="—"):
+    v = _body.get(key)
+    return v if v not in (None, "", "None") else default
+
+
+hcol = st.columns([3, 1, 1, 1, 1, 1])
+hcol[0].markdown("### OMODA / Jaecoo")
+hcol[1].metric("Battery", f"{_b('dumpEnergy')}%")
+hcol[2].metric("Range km", _b("dynamicPureElectricRange", _b("pureElectricRange")))
+hcol[3].metric("Odometer", _b("odometer"))
+hcol[4].metric("Lock", "🔒" if str(_b("doorLock")) in ("0", "0.0") else "🔓")
+hcol[5].metric("Charging", {"0": "No", "1": "Yes", "2": "Done"}.get(str(_b("chargeState")), "—"))
+if st.button("🔄 Refresh live data"):
+    st.session_state["rt"] = tsp_read("/asr/manager/realtime", {"vin": os.environ.get("VIN", "")})
+    st.rerun()
+st.divider()
+
+# ── tabs ─────────────────────────────────────────────────────────────────────
+tab_status, tab_climate, tab_access, tab_charge, tab_win, tab_adv = st.tabs(
+    ["📊 Status", "❄️ Climate", "🚪 Access", "🔋 Charging", "🪟 Windows & Roof", "🔧 Advanced"])
+
+
+def fire(key, params=None, label=None):
+    with st.spinner(f"Sending {label or key}…"):
+        res, _ = send_catalog(key, params=params)
+    st.toast(res)
+    st.session_state["last_result"] = res
+
+
+def group(name):
+    return [(k, v) for k, v in CMD.COMMANDS if v.get("group") == name]
+
+
+def _pair(cmds):
+    """Split a group into On/Off pairs + singles, matched by normalised name."""
+    by = {}
+    for k, v in cmds:
+        name = v.get("name") or k
+        lbl = re.sub(r"\s+(ON|OFF)$", "", name, flags=re.I).strip()
+        d = by.setdefault(lbl, {"on": None, "off": None})
+        (d.__setitem__("off", k) if name.strip().upper().endswith("OFF") else d.__setitem__("on", k))
+    pairs, singles = [], []
+    for lbl, d in by.items():
+        if d["on"] and d["off"]:
+            pairs.append((lbl, d["on"], d["off"]))
         else:
-            st.error("OTP rejected (wrong/expired?).")
+            singles.append((lbl, d["on"] or d["off"]))
+    return pairs, singles
 
-    st.divider()
-    # session status
-    try:
-        ut, _tu = W._bff_login()
-        st.success("Session active ✅") if ut else st.warning("Session expired — sign in.")
-    except Exception:
-        st.info("Not signed in.")
-    st.caption(f"VIN: {os.environ.get('VIN') or '—'}")
 
-# ---- main tabs ----
-tab_status, tab_ctrl, tab_win, tab_adv = st.tabs(
-    ["📊 Status", "🎛️ Controls", "🪟 Windows", "🔧 Advanced"])
+def toggle_rows(cmds, skip=()):
+    """Render each On/Off pair as one labelled row with On + Off buttons."""
+    pairs, singles = _pair(cmds)
+    for lbl, on_k, off_k in pairs:
+        if on_k in skip:
+            continue
+        c = st.columns([3, 1, 1])
+        c[0].markdown(f"**{lbl}**")
+        if c[1].button("On", key=f"on_{on_k}", use_container_width=True):
+            fire(on_k, label=f"{lbl} on")
+        if c[2].button("Off", key=f"off_{off_k}", use_container_width=True):
+            fire(off_k, label=f"{lbl} off")
+    for lbl, k in singles:
+        if st.button(lbl, key=f"one_{k}", use_container_width=True):
+            fire(k, label=lbl)
+
 
 with tab_status:
-    if st.button("🔄 Refresh live data"):
-        st.session_state["rt"] = tsp_read("/asr/manager/realtime", {"vin": os.environ.get("VIN", "")})
-        st.session_state["loc"] = tsp_read("/asc/vehicleControl/queryVehicleLocation", {"vin": os.environ.get("VIN", "")})
-    rt = st.session_state.get("rt")
-    if rt:
-        _st, j = rt
-        body = (j.get("body") or j.get("data") or {}) if isinstance(j, dict) else {}
-        if body:
-            c = st.columns(4)
-            c[0].metric("Battery", f"{body.get('dumpEnergy', '—')}%")
-            c[1].metric("Range (km)", body.get("dynamicPureElectricRange", body.get("pureElectricRange", "—")))
-            c[2].metric("Odometer (km)", body.get("odometer", "—"))
-            c[3].metric("Charging", {"0": "No", "1": "Yes", "2": "Done"}.get(str(body.get("chargeState")), "—"))
-            st.subheader("Openings")
-            doors = {"Front L": "frontLeftDoor", "Front R": "frontRightDoor", "Rear L": "backLeftDoor",
-                     "Rear R": "backRightDoor", "Trunk": "trunkDoor", "Lock": "doorLock"}
-            wins = {"Front L": "frontLeftWindowState", "Front R": "frontRightWindowState",
-                    "Rear L": "backLeftWindowState", "Rear R": "backRightWindowState", "Sunroof": "sunroofState"}
-            cd, cw = st.columns(2)
-            with cd:
-                st.markdown("**Doors / lock**")
-                for name, key in doors.items():
-                    v = body.get(key)
-                    if key == "doorLock":
-                        st.write(f"{name}: {'🔒 Locked' if str(v) in ('0','0.0') else '🔓 Unlocked'}")
-                    else:
-                        st.write(f"{name}: {'🟠 Open' if str(v) not in ('0','0.0','None','') else '🟢 Closed'}")
-            with cw:
-                st.markdown("**Windows**")
-                for name, key in wins.items():
-                    v = body.get(key)
-                    st.write(f"{name}: {'🟠 Open' if str(v) not in ('0','0.0','None','') else '🟢 Closed'}")
+    if _body:
+        st.subheader("Openings")
+        doors = [("Front left door", "frontLeftDoor"), ("Front right door", "frontRightDoor"),
+                 ("Rear left door", "backLeftDoor"), ("Rear right door", "backRightDoor"),
+                 ("Trunk", "trunkDoor"), ("Hood", "hood")]
+        wins = [("Front left window", "frontLeftWindowState"), ("Front right window", "frontRightWindowState"),
+                ("Rear left window", "backLeftWindowState"), ("Rear right window", "backRightWindowState"),
+                ("Sunroof", "sunroofState")]
+        cA, cB = st.columns(2)
+        with cA:
+            st.markdown("**Doors**")
+            for name, k in doors:
+                st.write(f"{name}: {'🟠 Open' if str(_b(k, '0')) not in ('0', '0.0') else '🟢 Closed'}")
+        with cB:
+            st.markdown("**Windows / roof**")
+            for name, k in wins:
+                st.write(f"{name}: {'🟠 Open' if str(_b(k, '0')) not in ('0', '0.0') else '🟢 Closed'}")
         with st.expander("Raw realtime JSON"):
-            st.json(j)
-    if st.session_state.get("loc"):
-        with st.expander("Raw location JSON"):
-            st.json(st.session_state["loc"][1])
+            st.json(rt_json)
+    else:
+        st.warning("No live data — the car may be asleep. Press **Refresh live data** (a recently-driven "
+                   "or charging car reports more).")
 
-with tab_ctrl:
-    st.caption("⚠️ These ACTUATE the real vehicle.")
-    groups = {}
-    for key, spec in CMD.COMMANDS:
-        groups.setdefault(spec.get("group", "Other"), []).append((key, spec))
-    for gname, cmds in groups.items():
-        st.subheader(gname)
-        cols = st.columns(3)
-        for i, (key, spec) in enumerate(cmds):
-            if cols[i % 3].button(spec["name"], key=f"cmd_{key}"):
-                with st.spinner(f"Sending {spec['name']}…"):
-                    result, logs = send_catalog(key)
-                st.info(result)
+with tab_climate:
+    st.caption("⚠️ Actuates the real vehicle. Comfort commands usually work only when the car is awake.")
+    st.markdown("**Cabin climate**")
+    c = st.columns([2, 1, 1])
+    temp = c[0].slider("Target °C", 16.0, 32.0, 21.0, 0.5)
+    if c[1].button("Climate On", type="primary", use_container_width=True):
+        fire("clima_on", params={"temperature": f"{temp:.1f}"}, label=f"Climate on @ {temp:.1f}°C")
+    if c[2].button("Climate Off", use_container_width=True):
+        fire("clima_off", label="Climate off")
+    d = st.columns(2)
+    if d[0].button("❄️ Cool down all", use_container_width=True):
+        fire("climate_cool_on", label="Cool down all")
+    if d[1].button("🔥 Heat up all", use_container_width=True):
+        fire("climate_heat_on", label="Heat up all")
+    st.divider()
+    st.markdown("**Defrost / heating**")
+    toggle_rows(group("Climate"), skip=("clima_on", "climate_cool_on", "climate_heat_on"))
+
+with tab_access:
+    st.markdown("**Doors & trunk**")
+    toggle_rows(group("Access"))
+    st.divider()
+    st.markdown("**Security**")
+    toggle_rows(group("Security"))
+    st.divider()
+    st.markdown("**Find the car**")
+    toggle_rows(group("Other"))
+
+with tab_charge:
+    toggle_rows(group("Charging"))
 
 with tab_win:
     st.subheader("All windows")
     c = st.columns(3)
-    if c[0].button("Open all"):
-        st.info(send_catalog("finestrini_apri")[0])
-    if c[1].button("Ventilate"):
-        st.info(send_catalog("ventilate_windows")[0])
-    if c[2].button("Close all"):
-        st.info(send_catalog("finestrini_chiudi")[0])
+    if c[0].button("⬆️ Open all", use_container_width=True):
+        st.toast(send_catalog("finestrini_apri")[0])
+    if c[1].button("🌬️ Ventilate", use_container_width=True):
+        st.toast(send_catalog("ventilate_windows")[0])
+    if c[2].button("⬇️ Close all", use_container_width=True):
+        st.toast(send_catalog("finestrini_chiudi")[0])
+
+    st.subheader("Sunroof")
+    c = st.columns(3)
+    if c[0].button("⬆️ Open roof", use_container_width=True):
+        st.toast(send_catalog("tetto_apri")[0])
+    if c[1].button("⬇️ Close roof", use_container_width=True):
+        st.toast(send_catalog("tetto_chiudi")[0])
 
     st.divider()
-    st.subheader("Individual window — experiment")
-    st.caption("The app only exposes all-windows control; this tries candidate per-window bodies "
-               "on windowControl. Look for code 000000 / A00079 (accepted) vs A00567 (bad params).")
-    which = st.selectbox("Window", ["front left", "front right", "rear left", "rear right"])
-    action = st.radio("Action", ["open (1)", "close (0)"], horizontal=True)
-    ct = "1" if action.startswith("open") else "0"
-    # candidate field names per window position (front-left etc.)
-    pos = {"front left": ("fl", "frontLeft", "1"), "front right": ("fr", "frontRight", "2"),
-           "rear left": ("bl", "backLeft", "3"), "rear right": ("br", "backRight", "4")}[which]
-    candidates = [
-        {"controlType": ct, "windowType": pos[2]},
-        {"controlType": ct, "position": pos[2]},
-        {f"{pos[0]}Window": ct},
-        {f"{pos[1]}Window": ct},
-        {f"{pos[1]}WindowControl": ct},
-        {"controlType": ct, "windowLocation": pos[2]},
+    st.subheader("🧪 Individual window — experiment")
+    st.markdown(
+        "The **sunroof** opens with `skylightControl(controlType, **skylightType**)` — a type/id "
+        "selector alongside open/close. Windows *might* follow the same shape: "
+        "`windowControl(controlType, **windowType**)`. This tests that idea (and a few fallbacks) "
+        "per window. A response code **`000000` / `A00079`** means it was **accepted**; "
+        "`A00567` = wrong fields, `A00084` = not allowed.")
+
+    win = st.selectbox("Window", ["Front left", "Front right", "Rear left", "Rear right"])
+    act = st.radio("Action", ["Open", "Close"], horizontal=True)
+    ct = "1" if act == "Open" else "0"
+    # best-guess windowType id per window (mirrors skylightType=1 for the roof)
+    wtype = {"Front left": "1", "Front right": "2", "Rear left": "3", "Rear right": "4"}[win]
+    field = {"Front left": ("fl", "frontLeft"), "Front right": ("fr", "frontRight"),
+             "Rear left": ("bl", "backLeft"), "Rear right": ("br", "backRight")}[win]
+
+    cands = [
+        # sunroof-style: controlType + a type/id selector (the most likely shape)
+        {"controlType": ct, "windowType": wtype},
+        {"controlType": ct, "skylightType": wtype},        # in case it reuses the roof field name
+        {"controlType": ct, "position": wtype},
+        {"controlType": ct, "windowLocation": wtype},
+        # per-window field-name shapes
+        {f"{field[1]}Window": ct},
+        {f"{field[0]}Window": ct},
     ]
-    if st.button("🧪 Try candidate per-window bodies"):
+    colr = st.columns([1, 1])
+    if colr[0].button("🧪 Test this window", type="primary", use_container_width=True):
         rows = []
-        for body in candidates:
+        prog = st.progress(0.0)
+        for i, body in enumerate(cands):
             status, j = signed_command(endpoint="windowControl", body=body)
             code = j.get("code") if isinstance(j, dict) else None
-            rows.append({"body": json.dumps(body), "http": status, "code": code, "meaning": decode(code)})
-            time.sleep(1.0)
-        st.table(rows)
-        st.caption("If one shows code 000000/A00079, per-window control works with that body — tell the "
-                   "developer and it can be added to the integration.")
+            rows.append({"body": json.dumps(body), "HTTP": status, "code": code,
+                         "result": ("✅ ACCEPTED" if accepted(code) else decode(code))})
+            prog.progress((i + 1) / len(cands)); time.sleep(1.0)
+        prog.empty()
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+        if any(accepted(r["code"]) for r in rows):
+            st.success("A candidate was accepted — per-window control works! Send the winning body to the developer.")
+        else:
+            st.info("All rejected — this window/shape isn't accepted. Try a different window, or it's "
+                    "genuinely all-windows-only on this backend.")
+    st.caption("Tip: run with the car awake (recently driven / charging). Watch the physical window to "
+               "see which `windowType` id maps to which window.")
 
 with tab_adv:
-    st.subheader("Raw request")
-    method = st.radio("Method", ["POST", "GET"], horizontal=True)
-    layer = st.radio("Layer", ["TSP (signed)", "BFF (bearer)"], horizontal=True)
-    path = st.text_input("Path", "/asr/manager/realtime")
-    rawbody = st.text_area("JSON body", '{"vin": "%s"}' % os.environ.get("VIN", ""))
-    if st.button("Send raw"):
-        try:
-            body = json.loads(rawbody) if rawbody.strip() else {}
-        except json.JSONDecodeError as e:
-            st.error(f"Bad JSON: {e}"); body = None
-        if body is not None:
-            if method == "GET":
-                try:
-                    access = W._access_token()
-                    r = requests.get(A.BFF + path, headers=A.headers_post(path, extra={
-                        "Authorization": f"Bearer {access}", "Accept": "application/json"}), timeout=25)
-                    st.json(r.json())
-                except Exception as e:
-                    st.error(str(e))
-            elif layer.startswith("TSP"):
-                st.json(tsp_read(path, body)[1])
-            else:
-                st.json(bff_post(path, body)[1])
-
-    st.divider()
     st.subheader("Generic signed command")
-    ep = st.text_input("Endpoint (under /asc/vehicleControl/) or full /path", "chargeDepthControl")
-    gbody = st.text_area("Body JSON", '{"chargeSoc": 80}', key="gbody")
-    if st.button("Send generic command"):
+    ep = st.text_input("Endpoint under /asc/vehicleControl/ (or full /path)", "windowControl")
+    gbody = st.text_area("Body JSON", '{"controlType": "1", "windowType": "1"}', key="gbody")
+    if st.button("Send signed command", type="primary"):
         try:
             b = json.loads(gbody) if gbody.strip() else {}
             p = ep if ep.startswith("/") else None
             status, j = signed_command(endpoint=None if p else ep, path=p, body=b)
-            st.json(j)
             code = j.get("code") if isinstance(j, dict) else None
-            if code is not None:
-                st.caption(f"code {code} → {decode(code)}")
+            result_banner(f"HTTP {status}", code)
+            st.json(j)
         except json.JSONDecodeError as e:
             st.error(f"Bad JSON: {e}")
 
     st.divider()
-    if st.button("Fetch error-code dictionary (allErrorCodes)"):
-        try:
-            access = W._access_token()
-            r = requests.get(A.BFF + "/tsp/dictConfig/c/allErrorCodes",
-                             headers=A.headers_post("/tsp/dictConfig/c/allErrorCodes", extra={
-                                 "Authorization": f"Bearer {access}", "Accept": "application/json"}), timeout=25)
-            st.json(r.json())
-        except Exception as e:
-            st.error(str(e))
+    st.subheader("Raw read")
+    method = st.radio("Method", ["TSP signed POST", "BFF bearer POST", "BFF GET"], horizontal=True)
+    rpath = st.text_input("Path", "/asr/manager/realtime")
+    rbody = st.text_area("Body JSON (POST only)", '{"vin": "%s"}' % os.environ.get("VIN", ""))
+    if st.button("Send read"):
+        if method == "BFF GET":
+            st.json(bff_get(rpath))
+        else:
+            try:
+                body = json.loads(rbody) if rbody.strip() else {}
+            except json.JSONDecodeError as e:
+                st.error(f"Bad JSON: {e}"); body = None
+            if body is not None:
+                st.json((tsp_read if method.startswith("TSP") else bff_post)(rpath, body)[1])
+
+    st.divider()
+    if st.button("📖 Error-code dictionary (allErrorCodes)"):
+        st.json(bff_get("/tsp/dictConfig/c/allErrorCodes"))
