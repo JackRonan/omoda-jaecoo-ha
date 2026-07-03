@@ -33,7 +33,7 @@ from .const import (
     CONF_VIN, CONF_TUSERID, CONF_PIN, CONF_EMAIL, CONF_CERTS_SRC,
     CONF_BFF, CONF_TSP_HOST, CONF_CAR_MQTT_HOST, CONF_CAR_MQTT_PORT, CONF_CHANNEL_ID,
     CONF_POLL_NORMAL, CONF_POLL_CHARGING, DEFAULT_POLL_NORMAL_MIN,
-    DEFAULT_POLL_CHARGING_MIN, POLL_WAKE_WAIT, COMMAND_LOCK_S,
+    DEFAULT_POLL_CHARGING_MIN, POLL_WAKE_WAIT, COMMAND_SETTLE_S, COMMAND_QUEUE_WAIT,
     HV_ON_POLL_EVERY, HV_ON_POLL_MAX,
     CHARGING_POLL_EVERY, CHARGING_POLL_MAX, DRIVE_WATCH_EVERY,
     CONF_VEHICLE_NAME, CONF_VEHICLE_IMAGE, DATA_VEHICLE_MODEL, DATA_VEHICLE_BRAND,
@@ -190,7 +190,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         # starts if the user explicitly turns it on. The user's choice is then
         # remembered across restarts (RestoreEntity switch).
         self.poll_enabled = False
-        self._cmd_busy_until = 0.0     # anti-double-tap: monotonic up to which a command is "in flight"
+        self._cmd_gate = asyncio.Lock()   # serializes commands (car runs one at a time; queue, don't reject)
         self._fields: dict[str, str] = {}
         self._state_lock = threading.Lock()  # [H2] serializes _fields/position across paho/executor/loop threads
         self._last_msg_ts: float = 0.0
@@ -539,7 +539,8 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         patch.update({"fields": fields_copy, "awake": True})
         if is_confirmation:
             patch["cmd_status"] = self._format_cmd_result(data)
-            self.clear_command_busy()  # command resolved → immediately unblock the next one (anti-double-tap)
+            # confirmation advances last_seen (above) → _settle_after_command returns early,
+            # so the next queued command runs as soon as the car confirms this one.
         self._update(patch)
 
         # [H3] wake-up edge → one realtime probe (read-only). Scheduling the
@@ -633,26 +634,36 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
 
     # ───────────────── anti-double-tap (one command at a time) ─────────────────
     @callback
-    def command_busy(self) -> bool:
-        """True if an actuating command is still "in flight" (recently sent, confirmation
-        not yet arrived). The car executes one at a time → blocks double-taps."""
-        return time.monotonic() < self._cmd_busy_until
-
-    @callback
-    def mark_command_sent(self) -> None:
-        self._cmd_busy_until = time.monotonic() + COMMAND_LOCK_S
-
-    @callback
-    def clear_command_busy(self) -> None:
-        self._cmd_busy_until = 0.0
+    async def _settle_after_command(self) -> None:
+        """Pause after a command before the next queued one runs: wait for the car's
+        confirmation (last_seen advances via MQTT) or COMMAND_SETTLE_S, whichever is first.
+        This spaces commands so the car isn't hit again while it's still busy (A00082)."""
+        anchor = self.data.get("last_seen")
+        deadline = time.monotonic() + COMMAND_SETTLE_S
+        while time.monotonic() < deadline:
+            await asyncio.sleep(0.5)
+            if self.data.get("last_seen") != anchor:
+                return   # car confirmed → ready for the next command
 
     # ───────────────── actions (delegated to core/, in an executor) ─────────────────
     async def async_send_command(self, key: str, params: dict | None = None) -> str:
-        return await self.hass.async_add_executor_job(self._send_command, key, params)
+        """Send a command, serialized behind a queue: the car handles one at a time, so a
+        second command WAITS its turn instead of erroring. Bounded by COMMAND_QUEUE_WAIT."""
+        from homeassistant.exceptions import HomeAssistantError
+        try:
+            await asyncio.wait_for(self._cmd_gate.acquire(), timeout=COMMAND_QUEUE_WAIT)
+        except asyncio.TimeoutError:
+            raise HomeAssistantError(
+                "The car is still busy with earlier commands — please try again in a moment.")
+        try:
+            result = await self.hass.async_add_executor_job(self._send_command, key, params)
+            await self._settle_after_command()
+            return result
+        finally:
+            self._cmd_gate.release()
 
     def _send_command(self, key: str, params: dict | None = None) -> str:
         self._bind_core()
-        self.mark_command_sent()  # also covers poll/wake (locate) that don't go through the mixin
         import commands as CMD  # core/ is on the path (see __init__)
         msgs: list[str] = []
 

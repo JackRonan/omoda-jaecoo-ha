@@ -237,10 +237,6 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
 
     async def _wake_then(self, cmd: str, target: bool) -> None:
         """Wake the car, wait for the comfort modules to be powered, then send the command."""
-        if self.coordinator.command_busy():
-            raise HomeAssistantError(
-                "Another command is still in progress — the car handles one at a time. "
-                "Wait a few seconds (check «Command result») and try again.")
         self._cancel_expire()
         self._set_state(target)
         # wake (vehicleLocation = wake + GPS, benign); don't block the macro if it fails
@@ -248,12 +244,11 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
             await self.coordinator.async_send_command("locate_car")
         except Exception:  # noqa: BLE001
             pass
-        await asyncio.sleep(MACRO_WAKE_WAIT)  # let the comfort bus power up (and the lock expires)
+        await asyncio.sleep(MACRO_WAKE_WAIT)  # let the comfort bus power up
         try:
             await self.coordinator.async_send_command(cmd)
         except Exception as err:  # noqa: BLE001
             self._set_state(False)
-            self.coordinator.clear_command_busy()
             self.async_write_ha_state()
             raise HomeAssistantError(f"Command «{cmd}» failed: {err}") from err
         if target:

@@ -7,6 +7,14 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.38 — 2026-07-03
+
+- **Commands now queue instead of erroring.** The car handles one command at a time, so a
+  second command (or an accidental tap) now **waits its turn and then runs**, instead of
+  failing with "another command is still in progress". Each command is spaced until the car
+  confirms the previous one (or a short timeout), and a genuine pile-up still surfaces a clear
+  message after ~30s rather than piling up forever.
+
 ## v1.5.37 — 2026-07-03
 
 - **Fixed for good: old code running after a HACS update.** A HACS update overwrites the code

@@ -174,8 +174,10 @@ MACRO_WAKE_WAIT = 35
 # doesn't stay "on" for nothing. +60s of margin.
 MACRO_PRESET_S = 15 * 60 + 60
 
-# Anti double-tap: the car runs ONE command at a time (A00082 = "vehicle busy").
-# After a command, for these seconds a new ACTUATING command is rejected with a
-# clear message instead of queuing/flooding. The lock releases earlier if the
-# confirmation arrives from the car. Safety cap in case the confirmation never arrives.
-COMMAND_LOCK_S = 12
+# Command QUEUE: the car runs ONE command at a time (A00082 = "vehicle busy"), so commands
+# are serialized — a second command WAITS its turn instead of erroring. After each command we
+# pause briefly (until the car confirms via MQTT, or COMMAND_SETTLE_S, whichever is first) so
+# the next queued command isn't fired while the car is still busy. COMMAND_QUEUE_WAIT caps how
+# long a queued command waits before giving up with a clear error (avoids an unbounded pile-up).
+COMMAND_SETTLE_S = 5
+COMMAND_QUEUE_WAIT = 30

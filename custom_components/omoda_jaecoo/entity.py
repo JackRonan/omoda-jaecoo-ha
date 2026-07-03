@@ -121,20 +121,13 @@ class OmodaJaecooOptimisticMixin:
         the optimism — so the card returns to the real state instead of staying stuck
         on a target that was never actuated — and propagates a readable error (toast in UI).
 
-        [anti-double-tap] The car runs ONE command at a time: if one is still in flight
-        (confirmation not received) the new send is refused with a clear message instead
-        of flooding the car (which would reply "busy")."""
-        if self.coordinator.command_busy():
-            raise HomeAssistantError(
-                "Another command is still in progress — the car handles one at a time. "
-                "Wait a few seconds (check «Command result») and try again.")
-        self.coordinator.mark_command_sent()  # synchronous: closes the double-tap window
+        The car runs ONE command at a time: commands are serialized inside the coordinator
+        (a queue), so a second one WAITS its turn instead of erroring."""
         self._set_optimistic(target)
         try:
             await self.coordinator.async_send_command(key, params)
         except Exception as err:  # noqa: BLE001 — any command failure
             self._clear_optimistic()
-            self.coordinator.clear_command_busy()  # send failed → immediately unblock the retry
             self.async_write_ha_state()
             raise HomeAssistantError(f"Command «{key}» failed: {err}") from err
 
