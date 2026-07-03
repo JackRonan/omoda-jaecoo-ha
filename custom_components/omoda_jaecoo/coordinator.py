@@ -38,7 +38,7 @@ from .const import (
     CHARGING_POLL_EVERY, CHARGING_POLL_MAX, DRIVE_WATCH_EVERY,
     CONF_VEHICLE_NAME, DATA_VEHICLE_MODEL, DATA_VEHICLE_BRAND,
     DATA_POWER_TYPE, DATA_CLIMATE_MIN, DATA_CLIMATE_MAX, DATA_CLIMATE_STEP,
-    capabilities_from_item,
+    capabilities_from_item, FIELDS_AS_RICH_ENTITY,
     DEFAULTS,
 )
 
@@ -296,21 +296,23 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         when the car is plugged into the charger (`poll_charging_min`), otherwise
         `poll_normal_min`. Each cycle WAKES the car (vehicleLocation = position) and
         forces a realtime read (telemetry)."""
+        # Initial SEED: one READ-ONLY realtime read ~15s after startup. This ALWAYS runs,
+        # even with "Automatic update" OFF, because it's read-only (no wake command, no 12V
+        # drain) and it's what gives the entities their real state — range, battery, and (via
+        # the realtime→fields merge) doors/windows/lock/charge — instead of unknown/unavailable
+        # after a restart. Without it, a car at rest (which sends no MQTT) leaves everything
+        # blank until the user manually presses "Refresh location". One-shot.
+        if self._startup_probe_unsub is None:
+            self._startup_probe_unsub = async_call_later(self.hass, 15, self._startup_probe_cb)
+        # The PERIODIC poll (which WAKES the car → 12V cost) stays gated by the switch.
         if not self.poll_enabled:
-            _LOGGER.debug("[poll] disabled by the switch")
+            _LOGGER.debug("[poll] periodic poll disabled by the switch (startup seed still runs)")
             return
         if self.poll_normal_min <= 0 and self.poll_charging_min <= 0:
             _LOGGER.debug("[poll] disabled (both intervals at 0)")
             return
         if self._poll_unsub is None:
             self._schedule_next_poll()
-        # Initial SEED: a realtime read ~15s after startup (giving MQTT time to
-        # connect). If the car is charging/driving (HV on) the close 2-min follow-up
-        # starts IMMEDIATELY, without waiting for the first periodic poll (up to 30 min) — the car
-        # at rest does NOT send MQTT, so without this seed the sensors would stay
-        # frozen after a restart while charging until the poll fired. Read-only: no command to the car. One-shot.
-        if self._startup_probe_unsub is None:
-            self._startup_probe_unsub = async_call_later(self.hass, 15, self._startup_probe_cb)
 
     async def _startup_probe_cb(self, _now) -> None:
         self._startup_probe_unsub = None
@@ -765,18 +767,32 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         PROBE.probe_once(emit, force=force, on_data=self._on_probe_data)
 
     def _on_probe_data(self, data: dict) -> None:
-        """Realtime data (GPS/battery/speed/online) from the probe → position state.
+        """Realtime data (GPS/battery/speed/online + physical state) from the probe.
 
-        Runs in the executor thread: accesses to self.position are serialized with the
-        lock and a COPY is always emitted (no sharing by reference)."""
+        Runs in the executor thread: accesses to self._fields/self.position are serialized
+        with the lock and a COPY is always emitted (no sharing by reference)."""
         patch: dict = {"realtime": dict(data) if isinstance(data, dict) else data}
-        if isinstance(data, dict) and "lat" in data and "lon" in data:
-            geo = {k: data[k] for k in GEO_KEYS if k in data}
-            with self._state_lock:
-                self.position = {**(self.position or {}), **geo}
-                pos_copy = dict(self.position)
-            patch["position"] = pos_copy
-            patch["last_pos_fix"] = dt_util.utcnow()
+        if isinstance(data, dict):
+            # Merge the physical-state fields the realtime channel carries (doors, windows,
+            # lock, trunk, sunroof, climate, seats, charge state, engine) into `fields`, so the
+            # lock/cover/select/switch/binary_sensor entities show REAL states after a probe
+            # instead of "unknown". Those entities read from `fields` (historically MQTT-only),
+            # and realtime uses the same 0/1 encoding (0 = closed/locked/off). This is why a
+            # parked car — which sends no MQTT — used to show doors/lock/windows as unknown.
+            state_keys = set(META) | FIELDS_AS_RICH_ENTITY
+            rt_fields = {k: str(v) for k, v in data.items()
+                         if k in state_keys and v is not None and str(v).strip() not in ("", "None")}
+            if rt_fields:
+                with self._state_lock:
+                    self._fields.update(rt_fields)
+                    patch["fields"] = dict(self._fields)
+            if "lat" in data and "lon" in data:
+                geo = {k: data[k] for k in GEO_KEYS if k in data}
+                with self._state_lock:
+                    self.position = {**(self.position or {}), **geo}
+                    pos_copy = dict(self.position)
+                patch["position"] = pos_copy
+                patch["last_pos_fix"] = dt_util.utcnow()
         self._update(patch)
 
     async def async_refresh_full_status(self) -> None:

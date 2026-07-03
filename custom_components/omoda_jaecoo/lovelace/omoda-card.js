@@ -1,103 +1,65 @@
 /*
- * Omoda / Jaecoo vehicle card — universal, powertrain-agnostic.
+ * Omoda / Jaecoo vehicle card — curated summary.
  *
- * Works for BEV, PHEV, or any vehicle the integration supports WITHOUT a manual
- * entity list: it auto-discovers every entity whose object_id starts with the
- * integration prefix (default "omoda_jaecoo_") and lays them out in groups,
- * hiding anything that is unavailable/unknown (e.g. petrol range on a BEV).
- *
- * Minimal config:
+ * Shows the important things at a glance: vehicle name, battery %, charging state,
+ * estimated range, and (only when there's a problem) warnings — tyre pressure, low
+ * battery, lost connection. Auto-discovers this integration's entities, so minimal
+ * config just works:
  *   type: custom:omoda-card
- * Optional:
- *   title: "My Car"            # header title (default: device/friendly name)
- *   image: "/local/car.png"    # header background image
- *   prefix: "omoda_jaecoo_"    # entity object_id prefix to collect
- *   hide_unavailable: true     # hide unavailable/unknown rows (default true)
- *   show_diagnostic: false     # include diagnostic-category entities (default false)
+ * Options:
+ *   title: "My Car"        # header title (default: the device/friendly name)
+ *   image: "/local/car.png" # header background image
+ *   entities: [...]        # extra rows to append (entity ids or {entity,name,icon})
+ *   show_all: true         # append every remaining integration entity, grouped
+ *   integration: "omoda_jaecoo"  # platform to collect (default)
+ *   prefix: "omoda_jaecoo_"      # object_id fallback prefix
  */
 class OmodaCard extends HTMLElement {
-  // ---- grouping rules: label + matcher over the stripped object_id ----
-  static GROUPS = [
-    { id: "energy",  label: "Energy & Range", icon: "mdi:lightning-bolt",
-      match: (k) => /range|odometer|battery|consumption|charge|mileage|speed/.test(k) },
-    { id: "climate", label: "Climate",        icon: "mdi:thermometer",
-      match: (k) => /climate|seat|windshield|defrost|steering|temp|hvac|air/.test(k) },
-    { id: "access",  label: "Doors & Windows", icon: "mdi:car-door",
-      match: (k) => /door|window|sunroof|trunk|tailgate|lock|hood|sunshade/.test(k) },
-    { id: "tires",   label: "Tires",          icon: "mdi:car-tire-alert",
-      match: (k) => /tire|tyre/.test(k) },
-    { id: "other",   label: "Vehicle",        icon: "mdi:car-info",
-      match: () => true },
-  ];
-
   setConfig(config) {
     this.config = Object.assign(
-      { integration: "omoda_jaecoo", prefix: "omoda_jaecoo_",
-        hide_unavailable: true, show_diagnostic: false },
+      { integration: "omoda_jaecoo", prefix: "omoda_jaecoo_", show_all: false },
       config || {}
     );
   }
+  getCardSize() { return 5; }
 
-  // Entities of THIS integration. Primary: hass.entities platform match (catches every
-  // entity_id naming, incl. the unprefixed sensor.battery / sensor.speed). Fallback for
-  // older frontends: object_id prefix. Returns [{id, key, s}] with `key` = object_id minus prefix.
+  _dead(s) { return !s || ["unavailable", "unknown", ""].includes(s.state); }
+  _num(s) { const n = s ? parseFloat(s.state) : NaN; return isNaN(n) ? null : n; }
+  _fmt(s) { const u = s.attributes.unit_of_measurement; return u ? `${s.state} ${u}` : s.state; }
+
+  // Collect this integration's entities: platform match (catches unprefixed sensor.battery),
+  // object_id-prefix fallback for older frontends.
   _collect(hass) {
-    const cfg = this.config;
-    const out = [];
-    const strip = (objectId) => objectId.startsWith(cfg.prefix) ? objectId.slice(cfg.prefix.length) : objectId;
-    const reg = hass.entities; // frontend entity registry map (may be undefined on old cores)
-    if (reg) {
-      for (const id in reg) {
-        if (reg[id].platform !== cfg.integration) continue;
-        const s = hass.states[id];
-        if (!s) continue;
-        out.push({ id, key: strip(id.slice(id.indexOf(".") + 1)), s });
-      }
+    const c = this.config, out = [];
+    const strip = (o) => o.startsWith(c.prefix) ? o.slice(c.prefix.length) : o;
+    const reg = hass.entities;
+    if (reg) for (const id in reg) {
+      if (reg[id].platform !== c.integration) continue;
+      const s = hass.states[id]; if (s) out.push({ id, key: strip(id.slice(id.indexOf(".") + 1)), s });
     }
-    if (!out.length) { // fallback: prefix scan
-      for (const id in hass.states) {
-        const objectId = id.slice(id.indexOf(".") + 1);
-        if (!objectId.startsWith(cfg.prefix)) continue;
-        out.push({ id, key: strip(objectId), s: hass.states[id] });
-      }
+    if (!out.length) for (const id in hass.states) {
+      const o = id.slice(id.indexOf(".") + 1);
+      if (o.startsWith(c.prefix)) out.push({ id, key: strip(o), s: hass.states[id] });
     }
     return out;
   }
 
-  getCardSize() { return 6; }
-
-  _isDead(s) {
-    return !s || s.state === "unavailable" || s.state === "unknown" || s.state === "";
-  }
-
-  _fmt(s) {
-    const unit = s.attributes.unit_of_measurement;
-    return unit ? `${s.state} ${unit}` : s.state;
-  }
-
-  _battery(items) {
-    // dedicated SOC sensor: device_class battery + %, object_id ending "battery"
-    let found = items.find(({ key, s }) =>
-      s.entity_id.startsWith("sensor.") && s.attributes.device_class === "battery" &&
-      s.attributes.unit_of_measurement === "%" && !this._isDead(s));
-    if (!found) found = items.find(({ key, s }) =>
-      s.entity_id.startsWith("sensor.") && key.endsWith("battery") && !this._isDead(s));
-    return found ? found.s : null;
-  }
-
-  _range(items) {
-    for (const want of ["range_electric", "range_total", "range_combined_estimate", "range_gasoline"]) {
-      const found = items.find(({ key, s }) => key === want && !this._isDead(s));
-      if (found) return found.s;
-    }
+  _find(items, ...keys) {
+    for (const k of keys) { const f = items.find((r) => r.key === k); if (f) return f; }
     return null;
   }
 
-  _batteryIcon(val, charging) {
+  _batteryIcon(v, charging) {
     if (charging) return "mdi:battery-charging";
-    if (isNaN(val)) return "mdi:battery";
-    const step = Math.round(val / 10) * 10;
-    return step >= 100 ? "mdi:battery" : step <= 0 ? "mdi:battery-outline" : `mdi:battery-${step}`;
+    if (isNaN(v)) return "mdi:battery";
+    const s = Math.round(v / 10) * 10;
+    return s >= 100 ? "mdi:battery" : s <= 0 ? "mdi:battery-outline" : `mdi:battery-${s}`;
+  }
+  _batteryColor(v) {
+    if (isNaN(v)) return "var(--primary-text-color)";
+    if (v <= 15) return "var(--error-color, #db4437)";
+    if (v <= 30) return "var(--warning-color, #ffa600)";
+    return "var(--success-color, #43a047)";
   }
 
   set hass(hass) {
@@ -106,125 +68,144 @@ class OmodaCard extends HTMLElement {
       const card = document.createElement("ha-card");
       const style = document.createElement("style");
       style.textContent = `
-        .header { position: relative; width: 100%; padding-top: 46%;
-          background-size: cover; background-position: center; background-color: var(--secondary-background-color); }
-        .header-overlay { position: absolute; inset: 0;
-          background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0) 45%); }
-        .header-content { position: absolute; left: 16px; right: 16px; bottom: 14px;
-          display: flex; justify-content: space-between; align-items: flex-end; color: #fff;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
-        .title { font-size: 1.35rem; font-weight: 600; }
-        .badges { display: flex; gap: 8px; align-items: center; }
-        .badge { display: flex; align-items: center; gap: 6px; font-weight: 600;
-          background: rgba(0,0,0,0.45); padding: 6px 10px; border-radius: 16px; backdrop-filter: blur(4px); }
-        .badge ha-icon { --mdc-icon-size: 20px; }
-        .group-title { display: flex; align-items: center; gap: 8px; font-weight: 600;
-          color: var(--primary-text-color); padding: 14px 16px 4px; font-size: 0.95rem; }
-        .group-title ha-icon { --mdc-icon-size: 18px; color: var(--state-icon-color); }
-        .row { display: flex; justify-content: space-between; align-items: center;
-          padding: 8px 16px; cursor: pointer; border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.08)); }
+        .header { position: relative; padding: 16px; display: flex; justify-content: space-between;
+          align-items: center; gap: 12px; }
+        .header.img { padding-top: 40%; background-size: cover; background-position: center; }
+        .header.img .overlay { position: absolute; inset: 0;
+          background: linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0) 60%); }
+        .header.img .title, .header.img .bat-pct { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+        .head-row { position: absolute; left: 16px; right: 16px; bottom: 12px;
+          display: flex; justify-content: space-between; align-items: flex-end; }
+        .title { font-size: 1.3rem; font-weight: 600; }
+        .bat { display: flex; align-items: center; gap: 8px; }
+        .bat ha-icon { --mdc-icon-size: 30px; }
+        .bat-pct { font-size: 1.5rem; font-weight: 700; }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+          background: var(--divider-color, rgba(0,0,0,.1)); }
+        .stat { background: var(--ha-card-background, var(--card-background-color, #fff));
+          padding: 12px 16px; cursor: pointer; }
+        .stat:hover { background: var(--secondary-background-color); }
+        .stat .label { color: var(--secondary-text-color); font-size: .8rem; display: flex;
+          align-items: center; gap: 6px; }
+        .stat .label ha-icon { --mdc-icon-size: 16px; }
+        .stat .value { font-size: 1.15rem; font-weight: 600; margin-top: 2px; }
+        .warnings { padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px;
+          border-top: 1px solid var(--divider-color, rgba(0,0,0,.1)); }
+        .warn { display: flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 600;
+          color: var(--error-color, #db4437); background: color-mix(in srgb, var(--error-color, #db4437) 12%, transparent);
+          padding: 4px 10px; border-radius: 14px; cursor: pointer; }
+        .warn ha-icon { --mdc-icon-size: 16px; }
+        .group-title { padding: 12px 16px 2px; font-weight: 600; font-size: .9rem;
+          border-top: 1px solid var(--divider-color, rgba(0,0,0,.1)); }
+        .row { display: flex; justify-content: space-between; padding: 6px 16px; cursor: pointer; }
         .row:hover { background: var(--secondary-background-color); }
-        .row:last-child { border-bottom: none; }
-        .left { display: flex; align-items: center; gap: 14px; min-width: 0; }
-        .left ha-icon { color: var(--state-icon-color); flex: none; }
-        .name { color: var(--primary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .val { font-weight: 600; color: var(--primary-text-color); text-align: right; flex: none; padding-left: 12px; }
-        .empty { padding: 16px; color: var(--secondary-text-color); }
+        .row .name { color: var(--primary-text-color); }
+        .row .val { font-weight: 600; }
       `;
       this.content = document.createElement("div");
-      card.appendChild(style);
-      card.appendChild(this.content);
-      this.appendChild(card);
+      card.appendChild(style); card.appendChild(this.content); this.appendChild(card);
     }
     this._render(hass);
   }
 
   _render(hass) {
     const cfg = this.config;
+    const items = this._collect(hass);
+    const nameSrc = items.find((r) => r.s.attributes.friendly_name)?.s.attributes.friendly_name;
+    const device = nameSrc ? nameSrc.split(" ").slice(0, 2).join(" ") : "Omoda / Jaecoo";
+    const title = cfg.title || device;
 
-    // ---- collect this vehicle's entities (platform match, prefix fallback) ----
-    const collected = this._collect(hass);
+    const bat = this._find(items, "battery") || items.find((r) =>
+      r.s.attributes.device_class === "battery" && r.s.attributes.unit_of_measurement === "%");
+    const range = this._find(items, "range_electric", "range_total", "range_combined_estimate", "range_gasoline");
+    const chargeState = this._find(items, "charge_state");
+    const charging = this._find(items, "charging");
+    const plug = this._find(items, "charge_plug");
+    const speed = this._find(items, "speed");
 
-    // ---- header (title + battery + range) ----
-    const anyName = collected.find((r) => r.s.attributes.friendly_name)?.s.attributes.friendly_name;
-    const deviceName = anyName ? anyName.split(" ").slice(0, 2).join(" ") : "Omoda / Jaecoo";
-    const title = cfg.title || deviceName;
+    const isCharging = charging ? charging.s.state === "on"
+      : (chargeState && /charg/i.test(chargeState.s.state) && !/not/i.test(chargeState.s.state));
+    const batV = bat ? this._num(bat.s) : null;
 
-    const bat = this._battery(collected);
-    const rng = this._range(collected);
-    const chargeState = (collected.find((r) => r.key === "charge_state")?.s.state || "").toLowerCase();
-    const charging = chargeState.includes("charg") && !chargeState.includes("not");
-    let badges = "";
-    if (bat) {
-      const val = parseFloat(bat.state);
-      badges += `<div class="badge" data-e="${bat.entity_id}">
-        <ha-icon icon="${this._batteryIcon(val, charging)}"></ha-icon>${bat.state}%</div>`;
-    }
-    if (rng) {
-      badges += `<div class="badge" data-e="${rng.entity_id}">
-        <ha-icon icon="mdi:map-marker-distance"></ha-icon>${this._fmt(rng)}</div>`;
-    }
-
+    // ---- header ----
     const img = cfg.image;
-    const headerBg = img ? `background-image:url('${img}')` : "";
     const header = `
-      <div class="header" style="${headerBg}">
-        <div class="header-overlay"></div>
-        <div class="header-content">
-          <div class="title">${title}</div>
-          <div class="badges">${badges}</div>
-        </div>
+      <div class="header ${img ? "img" : ""}" style="${img ? `background-image:url('${img}')` : ""}">
+        ${img ? '<div class="overlay"></div>' : ""}
+        ${img ? `<div class="head-row"><div class="title">${title}</div>
+              ${bat && !this._dead(bat.s) ? `<div class="bat" data-e="${bat.id}">
+                <ha-icon icon="${this._batteryIcon(batV, isCharging)}" style="color:${this._batteryColor(batV)}"></ha-icon>
+                <span class="bat-pct">${bat.s.state}%</span></div>` : ""}</div>`
+          : `<div class="title">${title}</div>
+             ${bat && !this._dead(bat.s) ? `<div class="bat" data-e="${bat.id}">
+                <ha-icon icon="${this._batteryIcon(batV, isCharging)}" style="color:${this._batteryColor(batV)}"></ha-icon>
+                <span class="bat-pct" style="color:${this._batteryColor(batV)}">${bat.s.state}%</span></div>` : ""}`}
       </div>`;
 
-    // ---- filter + group the rest ----
-    const usedInHeader = new Set([bat && bat.entity_id, rng && rng.entity_id].filter(Boolean));
-    const rows = collected.filter(({ id, s }) => {
-      if (usedInHeader.has(id)) return false;
-      if (!cfg.show_diagnostic && s.attributes.entity_category === "diagnostic") return false;
-      if (cfg.hide_unavailable && this._isDead(s)) return false;
-      return true;
-    });
+    // ---- primary stats ----
+    const stat = (label, icon, s, fallback) => {
+      const val = s && !this._dead(s.s) ? this._fmt(s.s) : (fallback || "—");
+      const de = s ? `data-e="${s.id}"` : "";
+      return `<div class="stat" ${de}><div class="label"><ha-icon icon="${icon}"></ha-icon>${label}</div>
+        <div class="value">${val}</div></div>`;
+    };
+    const chargeText = charging && !this._dead(charging.s)
+      ? (isCharging ? "Charging" : "Not charging")
+      : (chargeState && !this._dead(chargeState.s) ? chargeState.s.state : "—");
+    const stats = `<div class="stats">
+      ${stat("Range", "mdi:map-marker-distance", range)}
+      ${stat("Charging", isCharging ? "mdi:battery-charging" : "mdi:power-plug", { id: (charging || chargeState || {}).id, s: { state: chargeText, attributes: {} } }, chargeText)}
+      ${plug && !this._dead(plug.s) ? stat("Cable", plug.s.state === "on" ? "mdi:power-plug" : "mdi:power-plug-off",
+          { id: plug.id, s: { state: plug.s.state === "on" ? "Connected" : "Unplugged", attributes: {} } }) :
+        (speed ? stat("Speed", "mdi:speedometer", speed) : "")}
+    </div>`;
 
-    let body = "";
-    for (const g of OmodaCard.GROUPS) {
-      const inGroup = rows.filter((r) => !r._used && g.match(r.key));
-      inGroup.forEach((r) => (r._used = true));
-      if (!inGroup.length) continue;
-      inGroup.sort((a, b) => (a.s.attributes.friendly_name || a.id).localeCompare(b.s.attributes.friendly_name || b.id));
-      body += `<div class="group-title"><ha-icon icon="${g.icon}"></ha-icon>${g.label}</div>`;
-      for (const { id, s } of inGroup) {
-        const name = (s.attributes.friendly_name || id).replace(new RegExp("^" + deviceName + "\\s*", "i"), "").trim() || id;
-        const icon = s.attributes.icon || "mdi:card-bullet";
-        body += `
-          <div class="row" data-e="${id}">
-            <div class="left"><ha-icon icon="${icon}"></ha-icon><div class="name">${name}</div></div>
-            <div class="val">${this._fmt(s)}</div>
-          </div>`;
-      }
+    // ---- warnings (only active) ----
+    const warns = [];
+    items.filter((r) => /tire.*warning|tyre.*warning/.test(r.key) && r.s.state === "on")
+      .forEach((r) => warns.push({ id: r.id, icon: "mdi:car-tire-alert",
+        text: (r.s.attributes.friendly_name || r.key).replace(new RegExp("^" + device + "\\s*", "i"), "").replace(/warning/i, "").trim() }));
+    const low = this._find(items, "battery_low");
+    if (low && low.s.state === "on") warns.push({ id: low.id, icon: "mdi:battery-alert", text: "Battery low" });
+    const conn = this._find(items, "connection");
+    if (conn && conn.s.state === "off") warns.push({ id: conn.id, icon: "mdi:wifi-off", text: "Offline" });
+    const warnHtml = warns.length ? `<div class="warnings">${warns.map((w) =>
+      `<div class="warn" data-e="${w.id}"><ha-icon icon="${w.icon}"></ha-icon>${w.text}</div>`).join("")}</div>` : "";
+
+    // ---- optional extra rows / full list ----
+    let extra = "";
+    const used = new Set([bat, range, chargeState, charging, plug, speed, low, conn].filter(Boolean).map((r) => r.id));
+    const rowFor = (id) => {
+      const s = hass.states[id]; if (!s) return "";
+      const name = (s.attributes.friendly_name || id).replace(new RegExp("^" + device + "\\s*", "i"), "").trim() || id;
+      return `<div class="row" data-e="${id}"><div class="name">${name}</div><div class="val">${this._fmt(s)}</div></div>`;
+    };
+    if (Array.isArray(cfg.entities) && cfg.entities.length) {
+      extra += `<div class="group-title">Details</div>` +
+        cfg.entities.map((e) => rowFor(typeof e === "string" ? e : e.entity)).join("");
+    } else if (cfg.show_all) {
+      const rest = items.filter((r) => !used.has(r.id) && !this._dead(r.s) &&
+        r.s.attributes.entity_category !== "diagnostic");
+      if (rest.length) extra += `<div class="group-title">More</div>` +
+        rest.sort((a, b) => a.key.localeCompare(b.key)).map((r) => rowFor(r.id)).join("");
     }
-    if (!body) body = `<div class="empty">Waiting for vehicle data… (wake the car or run a status refresh)</div>`;
 
-    this.content.innerHTML = header + body;
-
-    // ---- click → more-info ----
+    this.content.innerHTML = header + stats + warnHtml + extra;
     this.content.querySelectorAll("[data-e]").forEach((el) => {
-      el.addEventListener("click", () => {
-        this.dispatchEvent(new CustomEvent("hass-more-info", {
-          bubbles: true, composed: true,
-          detail: { entityId: el.getAttribute("data-e") },
-        }));
-      });
+      const id = el.getAttribute("data-e");
+      if (!id || id === "undefined") return;
+      el.addEventListener("click", () => this.dispatchEvent(new CustomEvent("hass-more-info",
+        { bubbles: true, composed: true, detail: { entityId: id } })));
     });
   }
 
   static getStubConfig() { return { type: "custom:omoda-card" }; }
 }
-
 customElements.define("omoda-card", OmodaCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "omoda-card",
   name: "Omoda/Jaecoo Card",
   preview: true,
-  description: "Universal vehicle card for the Omoda/Jaecoo integration (BEV/PHEV, auto-discovers entities).",
+  description: "Curated summary card for the Omoda/Jaecoo integration (battery, range, charging, warnings).",
 });

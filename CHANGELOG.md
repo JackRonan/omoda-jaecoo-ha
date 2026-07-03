@@ -7,6 +7,21 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.28 — 2026-07-03
+
+- **Fixed: doors, windows, lock, charge state no longer show "unknown".** These now also
+  read from the realtime channel (which carries them), so a parked car — which sends no
+  live push data — shows its real state instead of blank.
+- **Fixed: range/battery/telemetry no longer stay blank with "Automatic update" off.** A
+  one-time read-only refresh now runs shortly after startup regardless of the switch (it's
+  read-only — no wake, no 12V drain), so the sensors populate on their own.
+- **New curated dashboard card.** The card now shows the important things at a glance —
+  vehicle name, battery %, charging state, estimated range — and warnings (tyre, low
+  battery, offline) only when something's actually wrong. Set `show_all: true` to also list
+  everything, or `entities: [...]` to add your own rows.
+- Range in miles vs km follows your Home Assistant unit system (Settings → System →
+  General), or override per-sensor — no separate setting needed.
+
 ## v1.5.27-EN — 2026-07-03
 
 - **English only.** Removed the Italian translation file, so entity names are always in
