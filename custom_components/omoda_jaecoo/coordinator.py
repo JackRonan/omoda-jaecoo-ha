@@ -648,7 +648,11 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
     # ───────────────── actions (delegated to core/, in an executor) ─────────────────
     async def async_send_command(self, key: str, params: dict | None = None) -> str:
         """Send a command, serialized behind a queue: the car handles one at a time, so a
-        second command WAITS its turn instead of erroring. Bounded by COMMAND_QUEUE_WAIT."""
+        second command WAITS its turn instead of erroring. Bounded by COMMAND_QUEUE_WAIT.
+
+        The caller returns as soon as the command is sent (so the UI feels instant); the
+        queue slot is held a little longer in the background — until the car confirms or
+        COMMAND_SETTLE_S — so the NEXT queued command isn't fired while the car is still busy."""
         from homeassistant.exceptions import HomeAssistantError
         try:
             await asyncio.wait_for(self._cmd_gate.acquire(), timeout=COMMAND_QUEUE_WAIT)
@@ -657,10 +661,17 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 "The car is still busy with earlier commands — please try again in a moment.")
         try:
             result = await self.hass.async_add_executor_job(self._send_command, key, params)
-            await self._settle_after_command()
-            return result
-        finally:
-            self._cmd_gate.release()
+        except Exception:
+            self._cmd_gate.release()   # send failed → free the slot immediately
+            raise
+
+        async def _hold_then_release() -> None:
+            try:
+                await self._settle_after_command()
+            finally:
+                self._cmd_gate.release()
+        self.hass.async_create_background_task(_hold_then_release(), "omoda_jaecoo_cmd_settle")
+        return result
 
     def _send_command(self, key: str, params: dict | None = None) -> str:
         self._bind_core()

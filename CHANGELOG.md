@@ -7,6 +7,12 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.39 — 2026-07-03
+
+- **Queued commands stay snappy.** Building on the new command queue: each command returns
+  as soon as it's sent (instant feedback), while the short spacing before the next queued
+  command happens in the background — so a single command no longer waits on the settle.
+
 ## v1.5.38 — 2026-07-03
 
 - **Commands now queue instead of erroring.** The car handles one command at a time, so a
