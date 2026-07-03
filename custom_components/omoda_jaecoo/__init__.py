@@ -57,22 +57,36 @@ _CORE_MODULES = (
 )
 
 
-def _reload_core_modules() -> None:
-    """Reload ALL core/ modules from disk so a config-entry reload (or even a restart with a
-    stale compiled .pyc) picks up the current code. These modules are imported by bare name
-    and cached in sys.modules for the whole process, so without this a reload keeps serving
-    whatever was first imported — which showed up as stale ENGLISH-vs-Italian text (codes.py
-    meanings, probe.py messages) and old command keys. importlib.reload recompiles from the
-    .py source, bypassing a stale bytecode cache too. Best-effort; blocking → run in executor.
-    Safe here: setup runs after any prior unload, so nothing is actively using these."""
-    import importlib
+def _load_core_from_disk() -> None:
+    """Force-load THIS integration's core/ modules from their own files into sys.modules,
+    in dependency order. This is the permanent fix for the recurring "Italian text / missing
+    Find-Locate buttons after updating" regression, which had three separate causes that all
+    end the same way (button.py does `import commands` and gets the WRONG catalog):
+
+      1. Stale bytecode — a HACS update leaves an old __pycache__ behind (also cleared on import).
+      2. Stale sys.modules — on a config reload the modules stay cached from first import.
+      3. NAME COLLISION — the core modules use generic bare names (`commands`, `wake`, `session`,
+         `codes`…). `commands` especially is a common name; another integration's `commands.py`
+         on sys.path could win the bare `import commands`. importlib.reload() can't fix that —
+         it reloads whatever object is cached, even if it's the foreign one.
+
+    spec_from_file_location(name, core/<name>.py) loads OUR exact file, freshly compiled, and
+    we pin it into sys.modules[name] BEFORE the platforms import it — so button.py/coordinator.py
+    always see this integration's catalog regardless of sys.path order or a stale cache. Loading
+    in dependency order means each module's bare cross-imports resolve to our just-pinned copies.
+    Best-effort; blocking → run in executor. Safe here: setup runs after any prior unload."""
+    import importlib.util
     for name in _CORE_MODULES:
+        path = os.path.join(_CORE, f"{name}.py")
+        if not os.path.isfile(path):
+            continue
         try:
-            mod = sys.modules.get(name)
-            if mod is not None:
-                importlib.reload(mod)
+            spec = importlib.util.spec_from_file_location(name, path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module      # pin OURS before exec, so cross-imports resolve to us
+            spec.loader.exec_module(module)
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Omoda / Jaecoo: reload of core module %s skipped: %s", name, err)
+            _LOGGER.warning("Omoda / Jaecoo: could not load core module %s from disk: %s", name, err)
 
 
 def _cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
@@ -140,14 +154,13 @@ def _do_cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Initialize the integration from a config entry."""
-    from .coordinator import OmodaJaecooCoordinator
+    # Pin this integration's core/ modules (command catalog, protocol) into sys.modules from
+    # their own files FIRST — before coordinator/platforms import them by bare name — so a
+    # config reload, a stale bytecode cache, or a name collision can't serve the old catalog
+    # (the recurring "Italian text / missing Find-Locate buttons" regression). Best-effort.
+    await hass.async_add_executor_job(_load_core_from_disk)
 
-    # The core/ modules are imported by bare name and cached in sys.modules, so a config
-    # reload (not a full HA restart) keeps serving the OLD code — which shows up as buttons
-    # using stale entity keys (e.g. the old Italian command keys) and the current ones going
-    # missing. Force-refresh the command catalog from disk so a reload is enough. Runs after
-    # any prior unload, so nothing is actively using the module. Best-effort.
-    await hass.async_add_executor_job(_reload_core_modules)
+    from .coordinator import OmodaJaecooCoordinator
 
     coordinator = OmodaJaecooCoordinator(hass, entry)
 

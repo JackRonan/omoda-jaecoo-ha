@@ -7,6 +7,16 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.41 — 2026-07-03
+
+- **Find Car / Locate Car: fixed the recurring regression for good.** After some updates these
+  buttons vanished (shown as "no longer provided") and Italian text crept back. Root cause: the
+  bundled protocol modules load by generic names (`commands`, `wake`, …), and the command
+  catalog could be served from the wrong copy — a stale bytecode cache, a leftover cached module
+  after a reload, or even another integration's `commands.py`. The integration now loads its own
+  catalog directly from its files on every start, so the correct English command set (including
+  Find Car and Locate Car) is always what the buttons are built from.
+
 ## v1.5.40 — 2026-07-03
 
 - **Card: fixed "Configuration error" on the mobile app.** The card worked on desktop but
