@@ -7,6 +7,14 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.30 — 2026-07-03
+
+- **Auto-remove the old Italian-named leftover buttons** (Trova auto, Localizza, the
+  clima raffredda/riscalda ON/OFF, finestrini ventila, antifurto ON/OFF). These were
+  orphaned "no longer provided" entities from early fork versions whose command keys were
+  later renamed to English or turned into switches. They're now cleaned up automatically on
+  load, so only the English entities remain.
+
 ## v1.5.29 — 2026-07-03
 
 - **Fixed: entity names reverting to Italian.** This happened whenever the integration
