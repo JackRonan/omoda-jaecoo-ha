@@ -35,6 +35,22 @@ _CARD_PATH = "/omoda_jaecoo_card"
 _CARD_URL = f"{_CARD_PATH}/omoda-card.js"
 
 
+def _reload_command_catalog() -> None:
+    """Reload core/commands.py from disk so a config-entry reload picks up the current
+    command catalog. The core/ modules are imported by bare name and cached in sys.modules
+    for the whole process, so without this a reload would keep the catalog it had at the
+    first import (old entity keys). Best-effort; blocking file I/O → run in an executor."""
+    try:
+        import importlib
+        mod = sys.modules.get("commands")
+        if mod is not None:
+            importlib.reload(mod)
+        else:
+            import commands  # noqa: F401 — first import; nothing to reload
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Omoda / Jaecoo: command catalog reload skipped: %s", err)
+
+
 def _cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
     """Remove entity-registry entries this integration no longer provides, so upgrades
     don't leave orphaned "unavailable" entities behind. Targeted by unique_id (never a
@@ -101,6 +117,13 @@ def _do_cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Initialize the integration from a config entry."""
     from .coordinator import OmodaJaecooCoordinator
+
+    # The core/ modules are imported by bare name and cached in sys.modules, so a config
+    # reload (not a full HA restart) keeps serving the OLD code — which shows up as buttons
+    # using stale entity keys (e.g. the old Italian command keys) and the current ones going
+    # missing. Force-refresh the command catalog from disk so a reload is enough. Runs after
+    # any prior unload, so nothing is actively using the module. Best-effort.
+    await hass.async_add_executor_job(_reload_command_catalog)
 
     coordinator = OmodaJaecooCoordinator(hass, entry)
 

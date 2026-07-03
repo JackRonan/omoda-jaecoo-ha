@@ -7,6 +7,14 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.31 — 2026-07-03
+
+- **Fixed: buttons keeping old/stale entity keys after an update.** The car-protocol code is
+  cached in memory, so a reload (rather than a full Home Assistant restart) could keep the
+  old command list — which made buttons like Find Car / Locate Car go missing while old
+  ones lingered. The command list is now refreshed from disk on every load, so a normal
+  reload is enough. (You still need one full restart to pick up this version.)
+
 ## v1.5.30 — 2026-07-03
 
 - **Auto-remove the old Italian-named leftover buttons** (Trova auto, Localizza, the
