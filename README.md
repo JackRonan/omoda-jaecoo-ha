@@ -4,7 +4,7 @@
 
 ## English Fork & Localization Notes
 
-This repository is an English translation and localization fork of the original Italian integration created by [@Caslinovich](https://github.com/Caslinovich/omoda_jaecoo-ha).
+This repository is an English translation and localization fork of the original Italian integration created by [@Caslinovich](https://github.com/Caslinovich/omoda9-ha).
 
 ### Important Tips
 * **Delegated Account (Recommended):** To maintain access to the official mobile app simultaneously, it is highly recommended to create a second account (requires a spare phone number) and delegate vehicle access to it, using that second account for this integration. Logging in with the same account on both Home Assistant and the official app will cause session logs/tokens to repeatedly kick you out of the official app.
@@ -139,7 +139,7 @@ and ⏳), so no false alarms.
    Jaecoo → ⋮ → Download diagnostics**. It is **already anonymized** (email, PIN,
    VIN, tUserId and GPS redacted; tokens/certificates show only "present:
    yes/no") → safe to share in an
-   [issue](https://github.com/JackRonan/omoda_jaecoo-ha/issues).
+   [issue](https://github.com/JackRonan/omoda-jaecoo-ha/issues).
 2. **Detailed logs:** same page → **⋮ → Enable debug logging** → reproduce the
    problem → **Disable debug logging**: HA downloads the log. PIN, OTP and tokens
    are **never written to the logs**; the only possibly sensitive value is the
