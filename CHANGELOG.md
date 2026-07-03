@@ -7,6 +7,15 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.29 — 2026-07-03
+
+- **Fixed: entity names reverting to Italian.** This happened whenever the integration
+  failed to finish loading (a temporary car-connection / certificate / session hiccup):
+  Home Assistant then fell back to each entity's old stored name. Now the entities always
+  load first and the car connection is established in the background, so it can no longer
+  take the whole integration (and your English names) down with it. If the car is briefly
+  unreachable the entities just show as *unavailable* — with their correct English names.
+
 ## v1.5.28 — 2026-07-03
 
 - **Fixed: doors, windows, lock, charge state no longer show "unknown".** These now also

@@ -10,16 +10,18 @@ entities are being completed (see SHARING_TODO.md → component roadmap).
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS
+
+_LOGGER = logging.getLogger(__name__)
 
 # Vendoring the "protocol core": the modules in core/ import each other by
 # name (import wake / import omoda_auth as A …) → add core/ to the path once.
@@ -98,39 +100,46 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # BEV fuel sensors) so upgrades don't leave orphaned "unavailable" entities.
     _cleanup_stale_entities(hass, coordinator)
 
-    # PHASE 3c: the mutual-TLS certs must be present BEFORE connecting the car's MQTT.
-    ok, detail = await coordinator.async_provision_certs()
-    if not ok:
-        raise ConfigEntryNotReady(detail)
-
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # initial session state + start MQTT connection to the car
-    await coordinator.async_check_session()
-    # [H4] if ANY startup step fails (MQTT connect, starting timers, forwarding
-    #      the platforms) we clean up ALL resources already started — the paho client and
-    #      the keepalive/poll timers — and remove the coordinator from hass.data, so no
-    #      orphan threads/timers remain; then we re-raise → HA retries the setup.
-    try:
-        await coordinator.async_start()
-        # keep-alive: periodic session refresh so the token doesn't expire while idle
+    # Set up the ENTITIES first and UNCONDITIONALLY. Their (English) names must always
+    # show — even if the car connection (certs / MQTT / session) is temporarily down.
+    # If setup failed here, HA would fall back to each entity's stale registry name, which
+    # is exactly what made the old Italian names appear to "come back". Entities with no
+    # fresh data simply show as unavailable until the connection is up again.
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _cleanup_stale_entities(hass, coordinator)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+
+    # Everything that can fail transiently (certs, MQTT, session, timers, identity backfill)
+    # runs in the background and is BEST-EFFORT — it must NEVER stop the entry from loading.
+    async def _start_connection() -> None:
+        try:
+            ok, detail = await coordinator.async_provision_certs()
+            if ok:
+                await coordinator.async_start()   # connect the car's MQTT feed
+            else:
+                _LOGGER.warning(
+                    "Omoda / Jaecoo: mutual-TLS certs not ready — running without the live "
+                    "MQTT feed (REST polling still works). %s", detail)
+        except Exception as err:  # noqa: BLE001 — never break the loaded entry
+            _LOGGER.warning(
+                "Omoda / Jaecoo: car connection failed at startup (entities stay loaded; "
+                "REST keeps working and it will retry): %s", err)
+        try:
+            await coordinator.async_check_session()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Omoda / Jaecoo: session check failed: %s", err)
+        # timers are individually safe (no-ops when their switch/interval is off)
         coordinator.async_start_keepalive()
-        # periodic telemetry poll (wake-up + read); intervals from the options
         coordinator.async_start_telemetry_poll()
-        # drive-detection heartbeat (read-only): kicks off the automatic refresh during a
-        # trip. No-op if the "Automatic update" switch is off (the switch restarts it).
         coordinator.async_start_drive_watch()
-        # reload the entry when the user changes the options (e.g. poll intervals)
-        entry.async_on_unload(entry.add_update_listener(_async_options_updated))
-        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-        # backfill vehicle identity (dynamic device name) for entries created before the
-        # config flow saved it: in the background, so any reload happens after setup is done.
-        hass.async_create_background_task(
-            coordinator.async_ensure_vehicle_identity(), "omoda_jaecoo_vehicle_identity")
-    except Exception:
-        hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
-        await hass.async_add_executor_job(coordinator.async_stop)
-        raise
+        try:
+            await coordinator.async_ensure_vehicle_identity()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Omoda / Jaecoo: vehicle identity backfill failed: %s", err)
+
+    hass.async_create_background_task(_start_connection(), "omoda_jaecoo_start")
     return True
 
 
