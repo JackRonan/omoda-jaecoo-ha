@@ -51,9 +51,6 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         | ClimateEntityFeature.TURN_ON
         | ClimateEntityFeature.TURN_OFF
     )
-    _attr_min_temp = MIN_TEMP
-    _attr_max_temp = MAX_TEMP
-    _attr_target_temperature_step = 1.0
     _attr_icon = "mdi:air-conditioner"
     _enable_turn_on_off_backwards_compatibility = False
 
@@ -62,7 +59,13 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         # otherwise HA derives it "dirty" with the device name: climate.omoda_9_omoda_jaecoo_clima).
         # unique_id distinct from the old switch (suffix "climate") → new entity, not a rename.
         super().__init__(coord, "Climate", "climate", entity_id_format=ENTITY_ID_FORMAT)
-        self._target = DEFAULT_TEMP
+        # Temperature range/step come from the vehicle's queryList capabilities when known
+        # (e.g. a Jaecoo/PHEV differs), else the standard OMODA 16–30 °C / 1° defaults.
+        self._attr_min_temp = float(coord.climate_min_temp) if coord.climate_min_temp else MIN_TEMP
+        self._attr_max_temp = float(coord.climate_max_temp) if coord.climate_max_temp else MAX_TEMP
+        self._attr_target_temperature_step = (
+            float(coord.climate_temp_step) if coord.climate_temp_step else 1.0)
+        self._target = min(self._attr_max_temp, max(self._attr_min_temp, DEFAULT_TEMP))
         self._opt_on: bool | None = None
         self._opt_anchor = None
 
@@ -73,7 +76,7 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
             t = last.attributes.get(ATTR_TEMPERATURE)
             try:
                 if t is not None:
-                    self._target = min(MAX_TEMP, max(MIN_TEMP, float(t)))
+                    self._target = min(self._attr_max_temp, max(self._attr_min_temp, float(t)))
             except (TypeError, ValueError):
                 pass
 
@@ -135,7 +138,7 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
             return
-        self._target = min(MAX_TEMP, max(MIN_TEMP, float(temp)))
+        self._target = min(self._attr_max_temp, max(self._attr_min_temp, float(temp)))
         # if the climate is already on, immediately reapply the new setpoint; otherwise
         # just store it (it will be used at the next turn-on).
         if self.hvac_mode != HVACMode.OFF:

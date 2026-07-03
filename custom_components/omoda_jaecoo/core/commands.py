@@ -196,13 +196,9 @@ COMMANDS = [
                        {"cycleData": [1, 2, 3, 4, 5, 6, 7], "startTime": 480,
                         "switchStatus": 0, "timeConsuming": 360}]},
                    "name": "Scheduled charging OFF", "icon": "mdi:calendar-remove", "group": "Charging"}),
-    # SOC limit / Charge depth (CVChargeDepthReqBean → endpoint chargeDepthControl).
-    # The `chargeSoc` field receives the integer % value (e.g. 80); the HA entity passes it via `params`.
-    # Based on: bean class name CVChargeDepthReqBean, telemetry field maxSocPercent,
-    # CarLinko equivalent /user/device/manage/targetSoc. Not yet verified live on
-    # this backend: the endpoint is the best inference from the Chery SDK naming.
-    ("charge_limit_set", {"endpoint": "chargeDepthControl", "body": {},
-                   "name": "Set charge limit", "icon": "mdi:battery-lock", "group": "Charging"}),
+    # NB: no charge-limit / target-SoC command. The OMODA "legend" backend has no such
+    # endpoint — the app binary only calls chargeAppointControl, and chargeDepthControl
+    # returns A07334 (unsupported for the vehicle). Charge limit is car-screen-only.
 
     # — Other —
     ("find_car", {"endpoint": "findCar", "body": {},

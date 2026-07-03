@@ -335,6 +335,72 @@ def bff_get(path, params=None):
     out(f"GET {path}", r.status_code, j)
 
 
+def _bff_get_json(path, params=None):
+    """Like bff_get but returns (status, json) without printing. For internal lookups."""
+    try:
+        access = W._access_token()
+    except Exception:  # noqa: BLE001
+        access = None
+    extra = {"Accept": "application/json, text/plain, */*"}
+    if access:
+        extra["Authorization"] = f"Bearer {access}"
+    H = A.headers_post(path, extra=extra)
+    try:
+        r = requests.get(A.BFF + path, params=params or {}, headers=H, timeout=25)
+        return r.status_code, r.json()
+    except Exception:  # noqa: BLE001
+        return None, None
+
+
+_ERR_MAP: dict = {}
+
+
+def _walk_codes(obj, out):
+    """Recursively harvest {code: message} pairs from the allErrorCodes JSON (structure
+    unknown, so match common key names for the code and its human text)."""
+    if isinstance(obj, dict):
+        code = None
+        msg = None
+        for k, v in obj.items():
+            lk = str(k).lower()
+            if lk in ("code", "errorcode", "errcode", "errorno", "key") and isinstance(v, (str, int)):
+                code = str(v)
+            if lk in ("msg", "message", "desc", "description", "cnname", "enname",
+                      "value", "text", "content", "remark") and isinstance(v, str) and v:
+                msg = msg or v
+        if code and msg:
+            out[code] = msg
+        for v in obj.values():
+            _walk_codes(v, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            _walk_codes(v, out)
+
+
+def load_error_map(force=False):
+    """Fetch + cache the backend allErrorCodes dictionary as {code: text}."""
+    global _ERR_MAP
+    if _ERR_MAP and not force:
+        return _ERR_MAP
+    _st, j = _bff_get_json("/tsp/dictConfig/c/allErrorCodes")
+    m: dict = {}
+    if j is not None:
+        _walk_codes(j, m)
+    _ERR_MAP = m
+    return m
+
+
+def decode(code):
+    """Human meaning for a response code: local codes.py map first, then the fetched
+    allErrorCodes dictionary, else a placeholder."""
+    if code is None:
+        return "no code"
+    local = CODES.meaning(code, default=None)
+    if local:
+        return local
+    return load_error_map().get(str(code), f"(unknown {code})")
+
+
 def signed_command(endpoint=None, path=None, body=None, params=None):
     """Send an ARBITRARY vehicle command through the verified actuate path: BFF login →
     mint taskId (checkPassword, needs PIN) → tsp_sign → POST to the TSP host. Prints the
@@ -654,10 +720,65 @@ def act_charge_limit_experiment():
         code = signed_command(endpoint=endpoint, body=body)
         results.append((endpoint, body, code))
         time.sleep(1.0)  # be gentle: car handles one command at a time
+    load_error_map()  # decode table for unknown codes
     info("\n=== charge-limit sweep summary ===")
     for endpoint, body, code in results:
-        verdict = "✅ ACCEPTED" if str(code) in ("000000", "A00079") else f"{code} ({CODES.meaning(code)})"
+        verdict = "✅ ACCEPTED" if str(code) in ("000000", "A00079") else f"{code} — {decode(code)}"
         info(f"  {endpoint:22s} {json.dumps(body)} → {verdict}")
+
+
+# chargeDepthControl is the CONFIRMED-EXISTING endpoint (returns HTTP 200, not 404, unlike the
+# invented names). The command was rejected (A07334) — either wrong body fields or a state
+# precondition (e.g. must be plugged in / charging). This sweep tries body-field variants on
+# that one endpoint so we can find the shape the backend accepts. `maxSocPercent` is the field
+# the telemetry channel REPORTS the limit under, so it's the strongest guess for the setter.
+def _charge_depth_bodies(soc):
+    return [
+        {"maxSocPercent": soc},
+        {"maxSocPercent": str(soc)},
+        {"chargeSoc": soc},
+        {"chargeSoc": str(soc)},
+        {"chargeDepth": soc},
+        {"socLimit": soc},
+        {"targetSoc": soc},
+        {"chargeSocPercent": soc},
+        {"soc": soc},
+        {"value": soc},
+        {"chargeSoc": soc, "controlType": "1"},
+        {"chargeSoc": soc, "needDecode": 0},
+        {"maxSocPercent": soc, "controlType": "1"},
+    ]
+
+
+def act_charge_depth_sweep():
+    """Sweep body-field variants on the confirmed chargeDepthControl endpoint + auto-decode codes."""
+    if not _need_vin():
+        return
+    soc = ask("target SOC % (e.g. 80)", "80")
+    try:
+        soc_i = int(soc)
+    except ValueError:
+        err("SOC must be an integer.")
+        return
+    bodies = _charge_depth_bodies(soc_i)
+    warn(f"⚠️  {len(bodies)} real signed commands to chargeDepthControl (the endpoint that EXISTS). "
+         "Best run with the car PLUGGED IN / charging — A07334 may be a 'not charging' precondition.")
+    if not confirm(f"Fire {len(bodies)} body variants (SOC={soc_i})?"):
+        info("aborted.")
+        return
+    load_error_map()
+    results = []
+    for body in bodies:
+        info(f"\n── chargeDepthControl  body={body} ──")
+        code = signed_command(endpoint="chargeDepthControl", body=body)
+        results.append((body, code))
+        time.sleep(1.0)
+    info("\n=== chargeDepthControl body sweep summary ===")
+    for body, code in results:
+        verdict = "✅ ACCEPTED" if str(code) in ("000000", "A00079") else f"{code} — {decode(code)}"
+        info(f"  {json.dumps(body)} → {verdict}")
+    info("\nTip: if EVERY variant gives the same code, it's a STATE precondition (plug in / start "
+         "charging and retry), not a body problem. Menu 'Error-code dictionary' shows all meanings.")
 
 
 def act_raw_request():
@@ -743,6 +864,7 @@ MENU = [
     ("Send a command", act_send_command),
     ("Send a GENERIC command (any endpoint + body)", act_generic_command),
     ("Charge-limit experiment (probe candidate endpoints)", act_charge_limit_experiment),
+    ("Charge-depth body sweep (chargeDepthControl variants + decode)", act_charge_depth_sweep),
     ("— Advanced / config —", None),
     ("Raw request (any endpoint, GET/POST)", act_raw_request),
     ("Show config", act_show_config),

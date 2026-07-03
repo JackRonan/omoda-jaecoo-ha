@@ -37,6 +37,8 @@ from .const import (
     HV_ON_POLL_EVERY, HV_ON_POLL_MAX,
     CHARGING_POLL_EVERY, CHARGING_POLL_MAX, DRIVE_WATCH_EVERY,
     CONF_VEHICLE_NAME, DATA_VEHICLE_MODEL, DATA_VEHICLE_BRAND,
+    DATA_POWER_TYPE, DATA_CLIMATE_MIN, DATA_CLIMATE_MAX, DATA_CLIMATE_STEP,
+    capabilities_from_item,
     DEFAULTS,
 )
 
@@ -142,6 +144,12 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         self.vehicle_name = override or cfg.get(CONF_VEHICLE_NAME) or None
         self.vehicle_model = cfg.get(DATA_VEHICLE_MODEL) or None
         self.vehicle_brand = cfg.get(DATA_VEHICLE_BRAND) or None
+
+        # Per-vehicle capabilities from queryList (entry.data). None = unknown → safe defaults.
+        self.power_type = cfg.get(DATA_POWER_TYPE)
+        self.climate_min_temp = cfg.get(DATA_CLIMATE_MIN)
+        self.climate_max_temp = cfg.get(DATA_CLIMATE_MAX)
+        self.climate_temp_step = cfg.get(DATA_CLIMATE_STEP)
 
         # env for the core/ modules (we'll import them AFTER setting the environment).
         # [H1] DIRECT assignment (not setdefault): with multiple entries/reloads in the same
@@ -817,28 +825,50 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         emit("Status updated with real data ✅" if got
              else "Car did not wake in time — try again, or it will update on next drive")
 
-    async def async_ensure_vehicle_identity(self) -> None:
-        """Best-effort backfill of the vehicle identity (name/model/brand) for the HA device.
+    def is_pure_electric(self) -> bool:
+        """True when the vehicle is a confirmed BEV (queryList powerType == 0). False when
+        it has a combustion engine OR the powertrain is unknown — so fuel entities are only
+        suppressed when we are SURE the car has no engine (no regression for PHEV/unknown)."""
+        return self.power_type is not None and str(self.power_type) == "0"
 
-        Needed for entries created BEFORE the config flow saved it: if it's missing in entry.data
-        (and there's no manual override) it reads it ONCE from queryList and persists it, so on
-        subsequent restarts it's already cached (no new calls). Read-only, doesn't block the
-        setup: on error the fallback "Omoda / Jaecoo / Jaecoo" remains."""
-        if str((self.entry.options or {}).get(CONF_VEHICLE_NAME) or "").strip():
-            return  # manual override: don't overwrite
-        if self.entry.data.get(CONF_VEHICLE_NAME):
-            return  # already cached
+    async def async_ensure_vehicle_identity(self) -> None:
+        """Best-effort backfill of the vehicle identity + capabilities for the HA device.
+
+        Needed for entries created BEFORE the config flow saved them: if identity or the
+        capability fields are missing in entry.data it reads them ONCE from queryList and
+        persists them, so on subsequent restarts they're already cached (no new calls) and
+        entities (climate range, powertrain gating) can adapt. Read-only, doesn't block setup:
+        on error the fallbacks (default name / show-everything / 16-30°C) remain."""
+        override = str((self.entry.options or {}).get(CONF_VEHICLE_NAME) or "").strip()
+        name_cached = bool(override) or bool(self.entry.data.get(CONF_VEHICLE_NAME))
+        caps_cached = DATA_CLIMATE_MAX in self.entry.data or DATA_POWER_TYPE in self.entry.data
+        if name_cached and caps_cached:
+            return  # nothing to backfill
         info = await self.hass.async_add_executor_job(self._fetch_vehicle_identity)
-        if not info or not info.get(CONF_VEHICLE_NAME):
+        if not info:
             return
-        self.vehicle_name = info.get(CONF_VEHICLE_NAME)
-        self.vehicle_model = info.get(DATA_VEHICLE_MODEL)
-        self.vehicle_brand = info.get(DATA_VEHICLE_BRAND)
-        self.hass.config_entries.async_update_entry(
-            self.entry, data={**self.entry.data, **info})  # → one reload (then it's cached)
+        # apply to the live coordinator (used by entities after the reload below)
+        if not override and info.get(CONF_VEHICLE_NAME):
+            self.vehicle_name = info.get(CONF_VEHICLE_NAME)
+            self.vehicle_model = info.get(DATA_VEHICLE_MODEL)
+            self.vehicle_brand = info.get(DATA_VEHICLE_BRAND)
+        self.power_type = info.get(DATA_POWER_TYPE, self.power_type)
+        self.climate_min_temp = info.get(DATA_CLIMATE_MIN, self.climate_min_temp)
+        self.climate_max_temp = info.get(DATA_CLIMATE_MAX, self.climate_max_temp)
+        self.climate_temp_step = info.get(DATA_CLIMATE_STEP, self.climate_temp_step)
+        # persist only the NEW keys (never clobber a manual name override)
+        merged = dict(self.entry.data)
+        for k, v in info.items():
+            if k == CONF_VEHICLE_NAME and override:
+                continue
+            merged[k] = v
+        if merged != self.entry.data:
+            self.hass.config_entries.async_update_entry(
+                self.entry, data=merged)  # → one reload (then it's cached)
 
     def _fetch_vehicle_identity(self) -> dict | None:
-        """queryList (read-only) → {vehicle_name, vehicle_model, vehicle_brand} for the VIN."""
+        """queryList (read-only) → {vehicle_name, vehicle_model, vehicle_brand} +
+        per-vehicle capability fields (power_type, climate min/max/step) for the VIN."""
         try:
             self._bind_core()
             import wake, omoda_auth as A, requests
@@ -866,14 +896,15 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 item = cands[0]
             if not item:
                 return None
+            out: dict = dict(capabilities_from_item(item))  # power_type + climate min/max/step
             nick = str(item.get("nickname") or "").strip()
             full = str(item.get("fullName") or "").strip()
             name = nick or (full.title() if full else "")
-            if not name:
-                return None
-            return {CONF_VEHICLE_NAME: name,
-                    DATA_VEHICLE_MODEL: (full.title() if full else None),
-                    DATA_VEHICLE_BRAND: _derive_brand(full or nick)}
+            if name:
+                out[CONF_VEHICLE_NAME] = name
+                out[DATA_VEHICLE_MODEL] = full.title() if full else None
+                out[DATA_VEHICLE_BRAND] = _derive_brand(full or nick)
+            return out or None
         except Exception as err:  # noqa: BLE001 — best-effort, must not make the setup fail
             _LOGGER.debug("[vehicle] identity not retrieved: %s", err)
             return None
@@ -881,6 +912,13 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
     async def async_check_session(self) -> tuple[bool, str]:
         ok, detail = await self.hass.async_add_executor_job(self._check_session)
         self._update({"session_ok": ok, "session_detail": detail})
+        # Session hard-expired (needs a fresh OTP — refresh already tried and failed) → start
+        # HA's re-authentication flow so the user gets the standard "needs re-authentication"
+        # notification + guided re-login, instead of entities silently going stale. A transient
+        # network error is NOT an auth failure, so don't trigger reauth for it. async_start_reauth
+        # de-dupes, so calling it again while a reauth flow is already open is a no-op.
+        if not ok and "network" not in (detail or "").lower():
+            self.entry.async_start_reauth(self.hass)
         return ok, detail
 
     def _check_session(self) -> tuple[bool, str]:

@@ -48,8 +48,6 @@ COMMANDS_AS_RICH_ENTITY = {
     "climate_heat_on", "climate_heat_off",
     # theft alarm: dedicated switch (Alarm Theft) → no duplicate ON/OFF buttons.
     "alarm_theft_on", "alarm_theft_off",
-    # charge limit (number entity in number.py)
-    "charge_limit_set",
 }
 
 # config_entry keys (per-account data, entered in the config flow)
@@ -66,6 +64,32 @@ DATA_VEHICLE_MODEL = "vehicle_model"
 DATA_VEHICLE_BRAND = "vehicle_brand"
 # fallback when the model is not (yet) known
 DEFAULT_VEHICLE_NAME = "Omoda / Jaecoo"
+
+# Per-vehicle CAPABILITIES discovered from queryList (stored in entry.data, so entities
+# can adapt to the specific car). All optional — absent = "unknown", entities fall back
+# to safe defaults (show everything / standard climate range), so there is no regression.
+DATA_POWER_TYPE = "power_type"          # 0 = pure electric (BEV); other/None = has combustion / unknown
+DATA_CLIMATE_MIN = "climate_min_temp"   # queryList minTemperature (°C)
+DATA_CLIMATE_MAX = "climate_max_temp"   # queryList maxTemperature (°C)
+DATA_CLIMATE_STEP = "climate_temp_step"  # queryList temperatureStepLength (°C)
+
+
+def capabilities_from_item(item: dict) -> dict:
+    """Extract the per-vehicle capability fields from a queryList vehicle item.
+    Returns a dict of the DATA_* keys present (missing/invalid fields are skipped)."""
+    out: dict = {}
+    if not isinstance(item, dict):
+        return out
+    pt = item.get("powerType")
+    if pt is not None:
+        out[DATA_POWER_TYPE] = pt
+    for src, dst in (("minTemperature", DATA_CLIMATE_MIN),
+                     ("maxTemperature", DATA_CLIMATE_MAX),
+                     ("temperatureStepLength", DATA_CLIMATE_STEP)):
+        v = item.get(src)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            out[dst] = float(v)
+    return out
 
 # REGION parameters (default = Europe). Exposed as options to support other regions.
 CONF_BFF = "bff"

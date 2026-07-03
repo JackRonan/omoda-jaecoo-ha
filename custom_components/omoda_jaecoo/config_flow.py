@@ -30,7 +30,7 @@ from .const import (
     CONF_CAR_MQTT_HOST, CONF_CAR_MQTT_PORT, DEFAULTS,
     CONF_POLL_NORMAL, CONF_POLL_CHARGING,
     DEFAULT_POLL_NORMAL_MIN, DEFAULT_POLL_CHARGING_MIN,
-    CONF_VEHICLE_NAME,
+    CONF_VEHICLE_NAME, capabilities_from_item,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,26 +60,28 @@ def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None)
     os.environ["OMODA_SRC_DIR"] = _CORE
 
 
-def _send_otp(hass: HomeAssistant, data: dict) -> tuple[bool, str]:
+def _send_otp(hass: HomeAssistant, data: dict, token_path: str | None = None) -> tuple[bool, str]:
     """Solves the captcha and sends the OTP to the email (executor) → core.session.request_otp."""
-    _prepare_env(hass, data)
+    _prepare_env(hass, data, token_path)
     import session as SESSION
     msgs: list[str] = []
     ok = SESSION.request_otp(emit=msgs.append)
     return ok, (msgs[-1] if msgs else "")
 
 
-def _mint_token(hass: HomeAssistant, data: dict, code: str) -> tuple[bool, str]:
-    """Mints the token from the OTP code (executor) → core.session.confirm_otp (saves to pending)."""
-    _prepare_env(hass, data)
+def _mint_token(hass: HomeAssistant, data: dict, code: str,
+                token_path: str | None = None) -> tuple[bool, str]:
+    """Mints the token from the OTP code (executor) → core.session.confirm_otp.
+    token_path=None mints to the pending path (initial setup); a per-VIN path is passed
+    during re-authentication so the fresh token lands where the coordinator reads it."""
+    _prepare_env(hass, data, token_path)
     import session as SESSION
     return SESSION.confirm_otp(code)
 
 
-def _discover(hass: HomeAssistant, data: dict) -> tuple[bool, str, list[str], str]:
-    """After the OTP: discovers (tUserId, [VIN]) from the just-minted token. Read-only.
-
-    Returns (ok, tuserid, vins, detail)."""
+def _discover(hass: HomeAssistant, data: dict) -> tuple[bool, str, list[str], list[dict], str]:
+    """After the OTP: discovers (tUserId, [VIN], [vehicle items]) from the just-minted token.
+    Read-only. Returns (ok, tuserid, vins, vehicles, detail)."""
     _prepare_env(hass, data)
     try:
         import requests
@@ -88,7 +90,7 @@ def _discover(hass: HomeAssistant, data: dict) -> tuple[bool, str, list[str], st
         wake.TOKEN_PATH = _pending_token_path(hass)   # just-minted token
         _ut, tu = wake._bff_login()
         if not tu:
-            return False, "", [], "backend login failed"
+            return False, "", [], [], "backend login failed"
         access = wake._access_token()
         headers = A.headers_post("/tsp/v1/app/vmc/queryList", extra={
             "Authorization": f"Bearer {access}",
@@ -99,13 +101,15 @@ def _discover(hass: HomeAssistant, data: dict) -> tuple[bool, str, list[str], st
         j = r.json()
         lst = j.get("data")
         vins: list[str] = []
+        vehicles: list[dict] = []
         if isinstance(lst, list):
             for v in lst:
                 if isinstance(v, dict) and v.get("vin"):
                     vins.append(str(v["vin"]))
-        return True, str(tu), vins, ("ok" if vins else "no vehicle found")
+                    vehicles.append(v)
+        return True, str(tu), vins, vehicles, ("ok" if vins else "no vehicle found")
     except Exception as e:  # noqa: BLE001
-        return False, "", [], f"vehicle discovery error: {type(e).__name__}"
+        return False, "", [], [], f"vehicle discovery error: {type(e).__name__}"
 
 
 def _finalize_token(hass: HomeAssistant, vin: str) -> bool:
@@ -144,6 +148,8 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
         self._tuserid: str = ""
         self._vins: list[str] = []
+        self._vehicles: list[dict] = []
+        self._reauth_entry: config_entries.ConfigEntry | None = None
 
     @staticmethod
     @callback
@@ -183,7 +189,7 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _mint_token, self.hass, self._data, user_input["code"].strip()
             )
             if ok:
-                d_ok, tu, vins, _detail = await self.hass.async_add_executor_job(
+                d_ok, tu, vins, vehicles, _detail = await self.hass.async_add_executor_job(
                     _discover, self.hass, self._data
                 )
                 if not d_ok or not vins:
@@ -193,6 +199,7 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     self._tuserid = tu
                     self._vins = vins
+                    self._vehicles = vehicles
                     if len(vins) == 1:
                         return await self._create_entry(vins[0])
                     return await self.async_step_select_vehicle()
@@ -224,11 +231,53 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             raise
         self._data[CONF_VIN] = vin
         self._data[CONF_TUSERID] = self._tuserid
+        # Persist the per-vehicle capabilities (powertrain, climate range) discovered from
+        # queryList so entities can adapt from the very first setup (no backfill reload needed).
+        item = next((v for v in self._vehicles if str(v.get("vin")) == vin), None)
+        if item is not None:
+            self._data.update(capabilities_from_item(item))
         ok = await self.hass.async_add_executor_job(_finalize_token, self.hass, vin)
         if not ok:
             await self.hass.async_add_executor_job(_cleanup_pending, self.hass)
             return self.async_abort(reason="token_move_failed")
         return self.async_create_entry(title=f"Omoda / Jaecoo ({vin})", data=self._data)
+
+    # ───────────────────────── re-authentication (session expired → new OTP) ─────────────────
+    async def async_step_reauth(self, entry_data: dict[str, Any]):
+        """Triggered by the coordinator when the session hard-expires (needs a fresh OTP).
+        HA shows the "needs re-authentication" notification and opens this flow."""
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"])
+        self._data = dict(entry_data)
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None):
+        """Re-login: on first display send a fresh OTP to the account email; on submit mint a
+        new token into the existing per-VIN path and reload the entry."""
+        entry = self._reauth_entry
+        vin = (entry.data if entry else {}).get(CONF_VIN, "")
+        token_path = self.hass.config.path(f"omoda9_{vin}_token.json")
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            code = user_input["code"].strip()
+            ok, _detail = await self.hass.async_add_executor_job(
+                _mint_token, self.hass, self._data, code, token_path)
+            if ok:
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+            errors["base"] = "otp_invalid"
+        else:
+            # first display → send the OTP code to the account email
+            ok, _msg = await self.hass.async_add_executor_job(
+                _send_otp, self.hass, self._data, token_path)
+            if not ok:
+                errors["base"] = "otp_send_failed"
+
+        schema = vol.Schema({vol.Required("code"): str})
+        return self.async_show_form(
+            step_id="reauth_confirm", data_schema=schema, errors=errors,
+            description_placeholders={"email": self._data.get(CONF_EMAIL, "")})
 
 
 class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):

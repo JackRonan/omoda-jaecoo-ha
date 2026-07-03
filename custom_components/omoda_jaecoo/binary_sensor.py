@@ -21,7 +21,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, FIELDS_AS_RICH_ENTITY
 from .coordinator import SENSORS
-from .entity import OmodaJaecooEntity, field_on
+from .entity import OmodaJaecooEntity, field_on, get_rt_field
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
@@ -34,6 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents.append(OmodaJaecooOnline(coord))
     ents.append(OmodaJaecooAwake(coord))
     ents.append(OmodaJaecooSession(coord))
+    ents.append(OmodaJaecooCharging(coord))
     # — warnings from the realtime channel (Round B): tires + low battery —
     for suffix, name, field, dc in _RT_BINARIES:
         ents.append(OmodaJaecooRealtimeBinary(coord, name, suffix, field, dc))
@@ -127,6 +128,26 @@ class OmodaJaecooRealtimeBinary(_OmodaJaecooRestoreBinary):
     def _live_is_on(self) -> bool | None:
         rt = self.coordinator.data.get("realtime") or {}
         return field_on(rt[self._field]) if self._field in rt else None
+
+
+class OmodaJaecooCharging(_OmodaJaecooRestoreBinary):
+    """Charging state (device_class BATTERY_CHARGING) derived from the realtime
+    `chargeState` field: ON only while actively charging ("1"); "2" (completed) and
+    "0" (idle) are OFF. Standard EV entity — automations and the Energy dashboard key
+    off it. Absent from telemetry → restores the last known state."""
+
+    _attr_device_class = BinarySensorDeviceClass.BATTERY_CHARGING
+    _attr_icon = "mdi:battery-charging"
+
+    def __init__(self, coord) -> None:
+        super().__init__(coord, "Charging", "rt_charging")
+
+    def _live_is_on(self) -> bool | None:
+        rt = self.coordinator.data.get("realtime") or {}
+        v = get_rt_field(rt, "chargeState")
+        if v is None or str(v).strip() in ("", "None"):
+            return None
+        return str(v).strip() in ("1", "1.0")
 
 
 class OmodaJaecooAwake(OmodaJaecooEntity, BinarySensorEntity):

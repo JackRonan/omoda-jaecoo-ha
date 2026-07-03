@@ -28,6 +28,13 @@
         "data": {
           "vin": "Veicolo (VIN)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Ri-autentica Omoda / Jaecoo",
+        "description": "La sessione per {email} è scaduta (succede quando si apre l'app ufficiale). Ti abbiamo inviato un nuovo codice OTP via email — inseriscilo per riconnetterti.",
+        "data": {
+          "code": "Codice OTP"
+        }
       }
     },
     "error": {
@@ -37,7 +44,8 @@
     },
     "abort": {
       "already_configured": "Questo veicolo (VIN) è già configurato.",
-      "token_move_failed": "Impossibile salvare il token di autenticazione. Controlla i permessi della cartella di configurazione di Home Assistant e riprova."
+      "token_move_failed": "Impossibile salvare il token di autenticazione. Controlla i permessi della cartella di configurazione di Home Assistant e riprova.",
+      "reauth_successful": "Ri-autenticazione riuscita — il veicolo è riconnesso."
     }
   },
   "options": {
@@ -150,6 +158,9 @@
       },
       "diagnostic_session": {
         "name": "Sessione"
+      },
+      "charging": {
+        "name": "In ricarica"
       }
     },
     "sensor": {
@@ -284,9 +295,6 @@
       },
       "diagnostic_last_position": {
         "name": "Ultima posizione"
-      },
-      "charge_limit": {
-        "name": "Limite di carica"
       }
     },
     "button": {
@@ -400,9 +408,6 @@
       },
       "charge_duration": {
         "name": "Durata ricarica"
-      },
-      "charge_limit": {
-        "name": "Limite di carica"
       }
     },
     "text": {

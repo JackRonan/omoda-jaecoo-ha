@@ -219,12 +219,15 @@ _RT_SENSORS: list[_RtSpec] = [
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
     _RtSpec("temp_imp_dx", "Climate Target Temp Right", "frontSetTempRight",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
-    # ── P2 · charge limit (charge depth) ──
-    # maxSocPercent: maximum charge percentage set (0 = not set / unknown).
-    # Read from the realtime channel; the interactive number in number.py uses it as the current value.
-    _RtSpec("charge_limit", "Charge Limit", "maxSocPercent",
-            None, "%", MEAS, "mdi:battery-lock", diag=True),
+    # NB: no charge-limit sensor — the OMODA "legend" backend never sends a target-SoC
+    # field (maxSocPercent absent; charge limit is car-screen-only). See number.py.
 ]
+
+# Realtime specs that only make sense on a vehicle with a combustion engine. On a confirmed
+# BEV (queryList powerType == 0) these are never created at all — cleaner than letting them
+# sit permanently "unavailable". On PHEV/unknown they're created as usual (availability gating
+# then hides them if the car happens not to report the field).
+_FUEL_ONLY_SUFFIXES = {"range_benzina", "consumo_carburante", "carburante_residuo", "km_ibrido"}
 
 
 def _rt(coord, field) -> str | None:
@@ -250,7 +253,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents.append(OmodaJaecooSpeed(coord))
     # — "rich" sensors from the realtime channel (Round B): range, odometer, tires,
     #   consumption, charging, climate target —
-    ents += [OmodaJaecooRealtimeSensor(coord, s) for s in _RT_SENSORS]
+    bev = coord.is_pure_electric()
+    ents += [OmodaJaecooRealtimeSensor(coord, s) for s in _RT_SENSORS
+             if not (bev and s.suffix in _FUEL_ONLY_SUFFIXES)]
     ents.append(OmodaJaecooSessionStatus(coord))
     # — diagnostic sensors (parity with the bridge) —
     ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Command Result", "cmd_status", "cmd_status", "mdi:car-cog"))

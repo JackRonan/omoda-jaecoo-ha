@@ -28,6 +28,13 @@
         "data": {
           "vin": "Vehicle (VIN)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Omoda / Jaecoo",
+        "description": "Your session for {email} has expired (this happens when the official app is opened). A new OTP code has been sent to your email — enter it to reconnect.",
+        "data": {
+          "code": "OTP code"
+        }
       }
     },
     "error": {
@@ -37,7 +44,8 @@
     },
     "abort": {
       "already_configured": "This vehicle (VIN) is already configured.",
-      "token_move_failed": "Could not store the authentication token. Check Home Assistant's config folder permissions and try again."
+      "token_move_failed": "Could not store the authentication token. Check Home Assistant's config folder permissions and try again.",
+      "reauth_successful": "Re-authentication successful — the vehicle is reconnected."
     }
   },
   "options": {
@@ -237,6 +245,9 @@
       },
       "battery_low": {
         "name": "Battery low"
+      },
+      "charging": {
+        "name": "Charging"
       }
     },
     "sensor": {
@@ -476,9 +487,6 @@
       },
       "ventilazione_sedile_post_centrale": {
         "name": "Rear center seat ventilation"
-      },
-      "charge_limit": {
-        "name": "Charge limit"
       }
     },
     "button": {
@@ -721,9 +729,6 @@
       },
       "ricarica_durata_ore": {
         "name": "Charge duration"
-      },
-      "charge_limit_number": {
-        "name": "Charge limit"
       }
     },
     "text": {
