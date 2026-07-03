@@ -7,6 +7,13 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.34 — 2026-07-03
+
+- **Sleeker card.** Redesigned the vehicle card: a photo hero (uses your **Vehicle image URL**
+  from the integration options) with the name, battery and charging/range, a clean metrics
+  strip (range · charging · odometer), and warnings only when active. It shows just the
+  essentials by default — set `show_all: true` to list everything.
+
 ## v1.5.33 — 2026-07-03
 
 - **Speed can now show in mph.** The Speed sensor was missing its distance/speed type, so
