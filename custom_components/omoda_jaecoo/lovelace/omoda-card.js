@@ -24,7 +24,20 @@ class OmodaCard extends HTMLElement {
 
   _dead(s) { return !s || ["unavailable", "unknown", ""].includes(s.state); }
   _num(s) { const n = s ? parseFloat(s.state) : NaN; return isNaN(n) ? null : n; }
-  _fmt(s) { const u = s.attributes.unit_of_measurement; return u ? `${s.state} ${u}` : s.state; }
+  // Display a value the way Home Assistant would: respects the entity's display precision
+  // (so "145.4008… mi" shows as "145 mi" if you set 0 decimals) and unit conversion.
+  _disp(s) {
+    const h = this._hass;
+    if (h && typeof h.formatEntityState === "function") {
+      try { return h.formatEntityState(s); } catch (e) { /* fall through */ }
+    }
+    const n = parseFloat(s.state);
+    const u = s.attributes.unit_of_measurement;
+    if (isNaN(n)) return u ? `${s.state} ${u}` : s.state;
+    const dp = s.attributes.suggested_display_precision;
+    const v = typeof dp === "number" ? n.toFixed(dp) : (Number.isInteger(n) ? `${n}` : `${Math.round(n)}`);
+    return u ? `${v} ${u}` : v;
+  }
 
   _collect(hass) {
     const c = this.config, out = [];
@@ -64,6 +77,7 @@ class OmodaCard extends HTMLElement {
   }
 
   set hass(hass) {
+    this._hass = hass;
     if (!this.content) {
       const card = document.createElement("ha-card");
       const style = document.createElement("style");
@@ -137,12 +151,12 @@ class OmodaCard extends HTMLElement {
     // ---- hero (photo or gradient) ----
     const img = cfg.image || items.map((r) => r.s.attributes.vehicle_image).find(Boolean) || "";
     const chargeSub = isCharging
-      ? `<div class="sub"><ha-icon icon="mdi:flash"></ha-icon>Charging${range && !this._dead(range.s) ? ` · ${this._fmt(range.s)}` : ""}</div>`
-      : (range && !this._dead(range.s) ? `<div class="sub"><ha-icon icon="mdi:map-marker-distance"></ha-icon>${this._fmt(range.s)} range</div>` : "");
+      ? `<div class="sub"><ha-icon icon="mdi:flash"></ha-icon>Charging${range && !this._dead(range.s) ? ` · ${this._disp(range.s)}` : ""}</div>`
+      : (range && !this._dead(range.s) ? `<div class="sub"><ha-icon icon="mdi:map-marker-distance"></ha-icon>${this._disp(range.s)} range</div>` : "");
     const battBadge = (bat && !this._dead(bat.s))
       ? `<div class="batt" data-e="${bat.id}">
            <ha-icon icon="${this._batteryIcon(batV, isCharging)}" style="color:${this._batteryColor(batV)}"></ha-icon>
-           <b>${bat.s.state}%</b></div>`
+           <b>${isNaN(batV) ? bat.s.state : Math.round(batV)}%</b></div>`
       : "";
     const hero = `
       <div class="hero ${img ? "photo" : ""}" style="${img ? `background-image:url('${img}')` : ""}">
@@ -155,7 +169,7 @@ class OmodaCard extends HTMLElement {
 
     // ---- metrics strip (range · charging · odometer) ----
     const metric = (label, icon, s, textFallback) => {
-      const v = s && !this._dead(s.s) ? this._fmt(s.s) : (textFallback || "—");
+      const v = s && !this._dead(s.s) ? this._disp(s.s) : (textFallback || "—");
       return `<div class="metric" ${s && s.id ? `data-e="${s.id}"` : ""}>
         <div class="v">${v}</div><div class="l"><ha-icon icon="${icon}"></ha-icon>${label}</div></div>`;
     };
@@ -188,7 +202,7 @@ class OmodaCard extends HTMLElement {
     const rowFor = (id) => {
       const s = hass.states[id]; if (!s) return "";
       const name = (s.attributes.friendly_name || id).replace(new RegExp("^" + device + "\\s*", "i"), "").trim() || id;
-      return `<div class="row" data-e="${id}"><div>${name}</div><div class="val">${this._fmt(s)}</div></div>`;
+      return `<div class="row" data-e="${id}"><div>${name}</div><div class="val">${this._disp(s)}</div></div>`;
     };
     if (Array.isArray(cfg.entities) && cfg.entities.length) {
       extra = `<div class="grp">Details</div>` + cfg.entities.map((e) => rowFor(typeof e === "string" ? e : e.entity)).join("");

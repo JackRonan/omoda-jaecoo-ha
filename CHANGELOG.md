@@ -7,6 +7,12 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.35 — 2026-07-03
+
+- **Card now respects decimal places.** Values on the card (range, odometer, battery) are
+  formatted the way Home Assistant displays them, so setting a sensor's display precision to
+  0 shows "145 mi" and "65%" instead of the raw converted number with many decimals.
+
 ## v1.5.34 — 2026-07-03
 
 - **Sleeker card.** Redesigned the vehicle card: a photo hero (uses your **Vehicle image URL**
