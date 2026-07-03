@@ -422,25 +422,51 @@ with tab_win:
         {f"{field[1]}Window": ct},
         {f"{field[0]}Window": ct},
     ]
-    colr = st.columns([1, 1])
-    if colr[0].button("🧪 Test this window", type="primary", use_container_width=True):
-        rows = []
-        prog = st.progress(0.0)
-        for i, body in enumerate(cands):
-            status, j = signed_command(endpoint="windowControl", body=body)
-            code = j.get("code") if isinstance(j, dict) else None
-            rows.append({"body": json.dumps(body), "HTTP": status, "code": code,
-                         "result": ("✅ ACCEPTED" if accepted(code) else decode(code))})
-            prog.progress((i + 1) / len(cands)); time.sleep(1.0)
-        prog.empty()
-        st.dataframe(rows, use_container_width=True, hide_index=True)
-        if any(accepted(r["code"]) for r in rows):
-            st.success("A candidate was accepted — per-window control works! Send the winning body to the developer.")
+
+    exp = st.session_state.get("win_exp")
+    # (re)start clears any prior run; the selected window/action are locked into the run
+    if st.button("🧪 Start step-by-step test", type="primary", use_container_width=True):
+        st.session_state["win_exp"] = {"win": win, "act": act, "bodies": cands,
+                                       "fired": 0, "results": []}
+        st.rerun()
+
+    if exp:
+        n, total = exp["fired"], len(exp["bodies"])
+        st.caption(f"Testing **{exp['win']}** · **{exp['act']}** — {n}/{total} fired. "
+                   "Observe the car after each shot; **Close all** between shots for a clean read.")
+        # show results so far
+        if exp["results"]:
+            st.dataframe(exp["results"], use_container_width=True, hide_index=True)
+
+        if n < total:
+            body = exp["bodies"][n]
+            st.markdown(f"**Next — candidate {n + 1}/{total}:** `{json.dumps(body)}`")
+            b = st.columns([1, 1])
+            label = "🔥 Fire candidate 1" if n == 0 else f"▶️ Next — fire candidate {n + 1}"
+            if b[0].button(label, type="primary", use_container_width=True):
+                status, j = signed_command(endpoint="windowControl", body=body)
+                code = j.get("code") if isinstance(j, dict) else None
+                exp["results"].append({"#": n + 1, "body": json.dumps(body), "HTTP": status,
+                                       "code": code,
+                                       "result": ("✅ ACCEPTED" if accepted(code) else decode(code))})
+                exp["fired"] += 1
+                st.rerun()
+            if b[1].button("⏹️ Stop", use_container_width=True):
+                exp["fired"] = total
+                st.rerun()
         else:
-            st.info("All rejected — this window/shape isn't accepted. Try a different window, or it's "
-                    "genuinely all-windows-only on this backend.")
-    st.caption("Tip: run with the car awake (recently driven / charging). Watch the physical window to "
-               "see which `windowType` id maps to which window.")
+            hit = any(accepted(r["code"]) for r in exp["results"])
+            if hit:
+                st.success("A candidate was ACCEPTED. But watch the car: if **all** windows moved, "
+                           "`windowType` was ignored (not per-window). Only per-window movement = a real win — "
+                           "send that body to the developer.")
+            else:
+                st.info("All rejected — all-windows-only on this backend.")
+            if st.button("🔄 Reset experiment", use_container_width=True):
+                del st.session_state["win_exp"]
+                st.rerun()
+    st.caption("Tip: run with the car awake (recently driven / charging). Watch which physical window "
+               "moves — if all move, the selector is ignored.")
 
 with tab_adv:
     st.subheader("Generic signed command")

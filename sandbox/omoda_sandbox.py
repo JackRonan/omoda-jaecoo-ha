@@ -828,11 +828,22 @@ def act_window_experiment():
         return
     load_error_map()
     results = []
-    for body in bodies:
-        info(f"\n── windowControl  body={body} ──")
+    for i, body in enumerate(bodies, 1):
+        info(f"\n── candidate {i}/{len(bodies)}  windowControl  body={body} ──")
         code = signed_command(endpoint="windowControl", body=body)
         results.append((body, code))
-        time.sleep(1.0)  # car handles one command at a time
+        # step through one at a time: observe the car (and reset window state) before the next shot.
+        # Firing back-to-back opens then re-opens, so later 'already open' errors mask real results.
+        if i < len(bodies):
+            nxt = ask("→ observe the car, then Enter for next candidate (c=close all first, q=stop)", "").lower()
+            if nxt.startswith("q"):
+                info("stopped.")
+                break
+            if nxt.startswith("c"):
+                info("closing all windows…")
+                _refresh_core_globals()
+                CMD.send("finestrini_chiudi", emit=info)
+                time.sleep(3.0)
     info(f"\n=== {name} window sweep summary ===")
     hit = False
     for body, code in results:
