@@ -128,7 +128,9 @@ class OmodaCard extends HTMLElement {
     const batV = bat ? this._num(bat.s) : null;
 
     // ---- header ----
-    const img = cfg.image;
+    // Image priority: explicit card config → the vehicle_image set in the integration
+    // options (exposed on the device_tracker) → none.
+    const img = cfg.image || items.map((r) => r.s.attributes.vehicle_image).find(Boolean) || "";
     const header = `
       <div class="header ${img ? "img" : ""}" style="${img ? `background-image:url('${img}')` : ""}">
         ${img ? '<div class="overlay"></div>' : ""}

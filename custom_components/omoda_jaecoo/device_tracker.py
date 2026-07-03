@@ -64,3 +64,10 @@ class OmodaJaecooTracker(OmodaJaecooEntity, TrackerEntity, RestoreEntity):
         pos = self.coordinator.data.get("position") or {}
         live = _f(pos.get("lon") or pos.get("longitude"))
         return live if live is not None else self._restored_lon
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        # Expose the optional vehicle image URL (set in the integration options) so the
+        # custom card can use it as its header image without any per-card configuration.
+        img = getattr(self.coordinator, "vehicle_image", None)
+        return {"vehicle_image": img} if img else {}

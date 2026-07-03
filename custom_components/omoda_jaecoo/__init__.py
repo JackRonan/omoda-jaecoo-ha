@@ -35,20 +35,30 @@ _CARD_PATH = "/omoda_jaecoo_card"
 _CARD_URL = f"{_CARD_PATH}/omoda-card.js"
 
 
-def _reload_command_catalog() -> None:
-    """Reload core/commands.py from disk so a config-entry reload picks up the current
-    command catalog. The core/ modules are imported by bare name and cached in sys.modules
-    for the whole process, so without this a reload would keep the catalog it had at the
-    first import (old entity keys). Best-effort; blocking file I/O → run in an executor."""
-    try:
-        import importlib
-        mod = sys.modules.get("commands")
-        if mod is not None:
-            importlib.reload(mod)
-        else:
-            import commands  # noqa: F401 — first import; nothing to reload
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.debug("Omoda / Jaecoo: command catalog reload skipped: %s", err)
+# core/ modules in dependency order (deps before dependents), so reloading them in this
+# order makes each pick up freshly-reloaded dependencies.
+_CORE_MODULES = (
+    "codes", "omoda", "omoda_auth", "tsp_sign", "captcha_solver", "prova_token",
+    "login_omoda", "wake", "session", "probe", "provision", "commands",
+)
+
+
+def _reload_core_modules() -> None:
+    """Reload ALL core/ modules from disk so a config-entry reload (or even a restart with a
+    stale compiled .pyc) picks up the current code. These modules are imported by bare name
+    and cached in sys.modules for the whole process, so without this a reload keeps serving
+    whatever was first imported — which showed up as stale ENGLISH-vs-Italian text (codes.py
+    meanings, probe.py messages) and old command keys. importlib.reload recompiles from the
+    .py source, bypassing a stale bytecode cache too. Best-effort; blocking → run in executor.
+    Safe here: setup runs after any prior unload, so nothing is actively using these."""
+    import importlib
+    for name in _CORE_MODULES:
+        try:
+            mod = sys.modules.get(name)
+            if mod is not None:
+                importlib.reload(mod)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("Omoda / Jaecoo: reload of core module %s skipped: %s", name, err)
 
 
 def _cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
@@ -123,7 +133,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # using stale entity keys (e.g. the old Italian command keys) and the current ones going
     # missing. Force-refresh the command catalog from disk so a reload is enough. Runs after
     # any prior unload, so nothing is actively using the module. Best-effort.
-    await hass.async_add_executor_job(_reload_command_catalog)
+    await hass.async_add_executor_job(_reload_core_modules)
 
     coordinator = OmodaJaecooCoordinator(hass, entry)
 
@@ -137,7 +147,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ])
         try:
             from homeassistant.components.frontend import add_extra_js_url
-            add_extra_js_url(hass, _CARD_URL)
+            from homeassistant.loader import async_get_integration
+            # Version query busts the browser's cache of the card JS on every update — without
+            # it you keep seeing the OLD card (the module is cached hard by the frontend).
+            try:
+                version = (await async_get_integration(hass, DOMAIN)).version
+            except Exception:  # noqa: BLE001
+                version = ""
+            add_extra_js_url(hass, f"{_CARD_URL}?v={version}" if version else _CARD_URL)
         except Exception:  # noqa: BLE001 — frontend not loaded (headless) → card still usable manually
             pass
         hass.data[f"{DOMAIN}_card"] = True

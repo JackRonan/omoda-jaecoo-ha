@@ -30,7 +30,7 @@ from .const import (
     CONF_CAR_MQTT_HOST, CONF_CAR_MQTT_PORT, DEFAULTS,
     CONF_POLL_NORMAL, CONF_POLL_CHARGING,
     DEFAULT_POLL_NORMAL_MIN, DEFAULT_POLL_CHARGING_MIN,
-    CONF_VEHICLE_NAME, capabilities_from_item,
+    CONF_VEHICLE_NAME, CONF_VEHICLE_IMAGE, capabilities_from_item,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -308,6 +308,11 @@ class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(
                 CONF_VEHICLE_NAME,
                 description={"suggested_value": cur_name},
+            ): str,
+            # optional image URL for the custom card's header
+            vol.Optional(
+                CONF_VEHICLE_IMAGE,
+                description={"suggested_value": opt.get(CONF_VEHICLE_IMAGE, "")},
             ): str,
         })
         return self.async_show_form(step_id="init", data_schema=schema)

@@ -7,6 +7,19 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.32 — 2026-07-03
+
+- **Fixed the remaining Italian text** in command results and status messages (e.g.
+  "comando accettato", "SVOLTA: dati realtime…"). It wasn't the API — it was old cached
+  copies of the protocol code still in memory. ALL of that code is now refreshed from disk
+  on load, so the English versions apply. (One full restart still needed to load this.)
+- **Vehicle image on the card.** You can now set a **Vehicle image URL** in the
+  integration options (Settings → Devices & Services → Omoda/Jaecoo → Configure). The
+  custom card uses it as its header image automatically — no card editing needed.
+- **Card now refreshes properly on update** (cache-busting), so you get the current
+  simplified card instead of an old cached version. If it still looks busy, hard-refresh
+  the browser (Ctrl-Shift-R).
+
 ## v1.5.31 — 2026-07-03
 
 - **Fixed: buttons keeping old/stale entity keys after an update.** The car-protocol code is

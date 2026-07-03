@@ -61,6 +61,7 @@ CONF_TUSERID = "tuserid"
 # = nickname/model from the app, saved in entry.data (captured at config flow or backfilled);
 # it is also an OPTION for the manual override. model/brand stay only in entry.data.
 CONF_VEHICLE_NAME = "vehicle_name"
+CONF_VEHICLE_IMAGE = "vehicle_image"   # optional image URL, shown by the custom card
 DATA_VEHICLE_MODEL = "vehicle_model"
 DATA_VEHICLE_BRAND = "vehicle_brand"
 # fallback when the model is not (yet) known

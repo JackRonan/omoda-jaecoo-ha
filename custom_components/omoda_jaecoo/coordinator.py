@@ -36,7 +36,7 @@ from .const import (
     DEFAULT_POLL_CHARGING_MIN, POLL_WAKE_WAIT, COMMAND_LOCK_S,
     HV_ON_POLL_EVERY, HV_ON_POLL_MAX,
     CHARGING_POLL_EVERY, CHARGING_POLL_MAX, DRIVE_WATCH_EVERY,
-    CONF_VEHICLE_NAME, DATA_VEHICLE_MODEL, DATA_VEHICLE_BRAND,
+    CONF_VEHICLE_NAME, CONF_VEHICLE_IMAGE, DATA_VEHICLE_MODEL, DATA_VEHICLE_BRAND,
     DATA_POWER_TYPE, DATA_CLIMATE_MIN, DATA_CLIMATE_MAX, DATA_CLIMATE_STEP,
     capabilities_from_item, FIELDS_AS_RICH_ENTITY,
     DEFAULTS,
@@ -142,6 +142,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         opt = entry.options or {}
         override = str(opt.get(CONF_VEHICLE_NAME) or "").strip()
         self.vehicle_name = override or cfg.get(CONF_VEHICLE_NAME) or None
+        self.vehicle_image = str(opt.get(CONF_VEHICLE_IMAGE) or "").strip() or None
         self.vehicle_model = cfg.get(DATA_VEHICLE_MODEL) or None
         self.vehicle_brand = cfg.get(DATA_VEHICLE_BRAND) or None
 
