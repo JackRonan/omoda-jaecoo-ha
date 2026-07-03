@@ -496,9 +496,6 @@
       "locate_car": {
         "name": "Locate Car (GPS)"
       },
-      "ventilate_windows": {
-        "name": "Ventilate Windows"
-      },
       "wake": {
         "name": "Wake car"
       },
@@ -748,6 +745,11 @@
       },
       "ricarica_orario_inizio": {
         "name": "Charge start time"
+      }
+    },
+    "select": {
+      "windows": {
+        "name": "Windows"
       }
     }
   }

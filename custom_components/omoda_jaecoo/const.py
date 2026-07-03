@@ -2,7 +2,7 @@
 
 DOMAIN = "omoda_jaecoo"
 PLATFORMS = ["sensor", "binary_sensor", "button", "lock", "switch", "climate",
-             "number", "time", "cover", "device_tracker", "text"]
+             "number", "time", "cover", "select", "device_tracker", "text"]
 
 # Car fields (5A02) now represented by native ACTUATABLE entities (lock/switch/cover):
 # excluded from creating read-only sensor/binary_sensor so we don't duplicate them.
@@ -29,7 +29,8 @@ COMMANDS_AS_RICH_ENTITY = {
     # EV charging: dedicated switches (switch.py) → no single buttons.
     "ricarica_start", "ricarica_stop", "ricarica_prog_on", "ricarica_prog_off",
     "baule_apri", "baule_chiudi",
-    "finestrini_apri", "finestrini_chiudi",
+    # windows: now a 3-state select (Closed/Ventilate/Open) → no buttons (see select.py)
+    "finestrini_apri", "finestrini_chiudi", "ventilate_windows",
     "tetto_apri", "tetto_chiudi",
     # comfort: every function is a switch (ON+OFF) → no single buttons
     "defrost_parabrezza", "defrost_parabrezza_off",

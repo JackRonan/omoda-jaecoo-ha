@@ -51,6 +51,9 @@ def _cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
         ("button", f"{vin}_cmd_climate_heat_off"),
         ("button", f"{vin}_cmd_alarm_theft_on"),
         ("button", f"{vin}_cmd_alarm_theft_off"),
+        # windows: old cover + ventilate button → replaced by the 3-state select
+        ("cover", f"{vin}_finestrini"),
+        ("button", f"{vin}_cmd_ventilate_windows"),
     ]
     if coordinator.is_pure_electric():
         for suf in ("rt_range_benzina", "rt_consumo_carburante",

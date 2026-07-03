@@ -304,9 +304,6 @@
       "locate_car": {
         "name": "Locate Car (GPS)"
       },
-      "ventilate_windows": {
-        "name": "Ventilate Windows"
-      },
       "diagnostic_wake_car": {
         "name": "Diagnostic Wake Car"
       },
@@ -380,9 +377,6 @@
       "door_trunk": {
         "name": "Door Trunk"
       },
-      "window_control": {
-        "name": "Window Control"
-      },
       "window_sunroof": {
         "name": "Window Sunroof"
       }
@@ -418,6 +412,11 @@
     "time": {
       "charge_start_time": {
         "name": "Charge Start Time"
+      }
+    },
+    "select": {
+      "windows": {
+        "name": "Windows"
       }
     }
   }

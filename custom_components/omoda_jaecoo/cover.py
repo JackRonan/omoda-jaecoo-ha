@@ -1,11 +1,11 @@
-"""Cover: trunk, windows, sunroof (state of 5A02 fields + open/close commands).
+"""Cover: trunk + sunroof (state of 5A02 fields + open/close commands).
 
-Merges the read-only states (trunk trunkDoor, windows, sunroof sunroofState) with the
-associated open/close buttons into native "cover" entities, with state + action in
-a single card. NB: the 4 windows also remain as individual binary_sensors (detail of
-"which window"); the "Windows" cover is the aggregate command. Window ventilation
-remains a standalone button (not mappable onto open/close). Every open/close
-ACTS on the car (= explicit consent from the user).
+Merges the read-only states (trunk trunkDoor, sunroof sunroofState) with the associated
+open/close commands into native "cover" entities, with state + action in a single card.
+Every open/close ACTS on the car (= explicit consent from the user).
+
+NB: the windows are NOT a cover — they have three positions (Closed/Ventilate/Open), so
+they're a `select` (see select.py). The 4 windows still exist as individual binary_sensors.
 """
 from __future__ import annotations
 
@@ -29,10 +29,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     add([
         OmodaJaecooCover(coord, "Door Trunk", "baule", ["trunkDoor"],
                     "baule_apri", "baule_chiudi", CoverDeviceClass.DOOR, "mdi:car-back"),
-        OmodaJaecooCover(coord, "Window Control", "finestrini",
-                    ["frontLeftWindowState", "frontRightWindowState",
-                     "backLeftWindowState", "backRightWindowState"],
-                    "finestrini_apri", "finestrini_chiudi", CoverDeviceClass.WINDOW, "mdi:car-door"),
         OmodaJaecooCover(coord, "Window Sunroof", "tetto", ["sunroofState"],
                     "tetto_apri", "tetto_chiudi", CoverDeviceClass.SHADE, "mdi:car-select"),
     ])
