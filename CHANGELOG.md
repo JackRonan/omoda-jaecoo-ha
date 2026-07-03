@@ -7,6 +7,16 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.36 — 2026-07-03
+
+- **Faster commands, fewer sign-ins.** The vehicle authentication (taskId) is now cached and
+  reused for ~10 minutes, so most commands skip the PIN/login round-trip and go straight
+  through. If it expires the integration re-authenticates automatically and retries once.
+- **Card: read-only Lock status.** Replaced the duplicated range with a **Locked / Unlocked**
+  text tile (no button, so it can't be pressed by accident).
+- **Card: tap the photo to open the vehicle's device page** (settings/all entities) instead of
+  a control.
+
 ## v1.5.35 — 2026-07-03
 
 - **Card now respects decimal places.** Values on the card (range, odometer, battery) are

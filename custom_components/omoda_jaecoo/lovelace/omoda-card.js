@@ -75,6 +75,16 @@ class OmodaCard extends HTMLElement {
     this.dispatchEvent(new CustomEvent("hass-more-info",
       { bubbles: true, composed: true, detail: { entityId: id } }));
   }
+  _deviceId(hass, items) {
+    const reg = hass.entities;
+    if (!reg) return null;
+    for (const { id } of items) { const d = reg[id] && reg[id].device_id; if (d) return d; }
+    return null;
+  }
+  _navigate(path) {
+    history.pushState(null, "", path);
+    this.dispatchEvent(new Event("location-changed", { bubbles: true, composed: true }));
+  }
 
   set hass(hass) {
     this._hass = hass;
@@ -123,8 +133,14 @@ class OmodaCard extends HTMLElement {
       this.content = document.createElement("div");
       card.appendChild(style); card.appendChild(this.content); this.appendChild(card);
       this.content.addEventListener("click", (e) => {
+        // battery badge (data-e) opens more-info; the rest of the hero navigates to the
+        // device page. Check data-e first since the badge sits inside the hero.
         const el = e.target.closest("[data-e]");
-        if (el) this._moreInfo(el.getAttribute("data-e"));
+        if (el) { this._moreInfo(el.getAttribute("data-e")); return; }
+        const dev = e.target.closest("[data-device]");
+        if (dev && dev.getAttribute("data-device")) {
+          this._navigate(`/config/devices/device/${dev.getAttribute("data-device")}`);
+        }
       });
     }
     this._render(hass);
@@ -158,8 +174,11 @@ class OmodaCard extends HTMLElement {
            <ha-icon icon="${this._batteryIcon(batV, isCharging)}" style="color:${this._batteryColor(batV)}"></ha-icon>
            <b>${isNaN(batV) ? bat.s.state : Math.round(batV)}%</b></div>`
       : "";
+    // Clicking the photo/hero opens the device page (not a control), so it can't actuate.
+    const deviceId = this._deviceId(hass, items);
     const hero = `
-      <div class="hero ${img ? "photo" : ""}" style="${img ? `background-image:url('${img}')` : ""}">
+      <div class="hero ${img ? "photo" : ""}" style="${img ? `background-image:url('${img}')` : ""}"
+           ${deviceId ? `data-device="${deviceId}"` : ""}>
         <div class="scrim"></div>
         <div class="hero-content">
           <div><div class="name">${title}</div>${chargeSub}</div>
@@ -167,21 +186,22 @@ class OmodaCard extends HTMLElement {
         </div>
       </div>`;
 
-    // ---- metrics strip (range · charging · odometer) ----
-    const metric = (label, icon, s, textFallback) => {
-      const v = s && !this._dead(s.s) ? this._disp(s.s) : (textFallback || "—");
-      return `<div class="metric" ${s && s.id ? `data-e="${s.id}"` : ""}>
-        <div class="v">${v}</div><div class="l"><ha-icon icon="${icon}"></ha-icon>${label}</div></div>`;
-    };
+    // ---- metrics strip (lock · charging · odometer) ----
+    // `entityId` omitted → the tile is read-only text (no more-info, no accidental action).
+    const metric = (label, icon, value, entityId) => `
+      <div class="metric" ${entityId ? `data-e="${entityId}"` : ""}>
+        <div class="v">${value}</div><div class="l"><ha-icon icon="${icon}"></ha-icon>${label}</div></div>`;
+    const lock = this._find(items, "lock");
+    const lockText = lock && !this._dead(lock.s)
+      ? (lock.s.state === "locked" ? "Locked" : "Unlocked") : "—";
+    const lockIcon = lock && lock.s.state === "unlocked" ? "mdi:lock-open-variant" : "mdi:lock";
     const chargeText = charging && !this._dead(charging.s) ? (isCharging ? "Charging" : "Idle")
       : (chargeState && !this._dead(chargeState.s) ? chargeState.s.state : "—");
     const metrics = `<div class="metrics">
-      ${metric("Range", "mdi:map-marker-distance", range)}
-      ${metric("Charging", isCharging ? "mdi:battery-charging" : "mdi:power-plug",
-          { id: (charging || chargeState || {}).id, s: { state: chargeText, attributes: {} } })}
-      ${odo ? metric("Odometer", "mdi:counter", odo)
-        : (plug ? metric("Cable", "mdi:power-plug",
-            { id: plug.id, s: { state: plug.s.state === "on" ? "Plugged in" : "Unplugged", attributes: {} } }) : "")}
+      ${metric("Lock", lockIcon, lockText)}
+      ${metric("Charging", isCharging ? "mdi:battery-charging" : "mdi:power-plug", chargeText)}
+      ${odo && !this._dead(odo.s) ? metric("Odometer", "mdi:counter", this._disp(odo.s), odo.id)
+        : metric("Cable", "mdi:power-plug", plug && plug.s.state === "on" ? "Plugged in" : "Unplugged")}
     </div>`;
 
     // ---- warnings (only active) ----

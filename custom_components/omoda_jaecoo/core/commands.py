@@ -289,8 +289,22 @@ def _mint_taskid(tuid):
     return None
 
 
-def get_taskid(tuid, emit=lambda m: None):
-    """taskId source, in order: env TASKID → piggyback file → auto-minted checkPassword."""
+# In-memory taskId cache. Minting a taskId runs the full checkPassword (PIN) round-trip,
+# which is the slow part of every command. The taskId stays valid for a while, so we reuse
+# it and only re-mint when the car rejects it as invalid/expired (A00089/A00546) or the TTL
+# lapses — turning most commands into a single signed POST instead of PIN + POST.
+_TASKID_TTL = int(os.environ.get("OMODA_TASKID_TTL", "600"))   # reuse a minted taskId up to ~10 min
+_TASKID_CACHE = {"tid": None, "ts": 0.0}
+
+
+def invalidate_taskid():
+    """Drop the cached taskId (call when the car rejects it as invalid/expired)."""
+    _TASKID_CACHE["tid"] = None
+    _TASKID_CACHE["ts"] = 0.0
+
+
+def get_taskid(tuid, emit=lambda m: None, allow_cache=True):
+    """taskId source, in order: env TASKID → piggyback file → cached → auto-minted checkPassword."""
     t = os.environ.get("TASKID")
     if t:
         return t.strip(), "env"
@@ -302,11 +316,15 @@ def get_taskid(tuid, emit=lambda m: None):
                 return v, "file"
     except OSError:
         pass
+    if allow_cache and _TASKID_CACHE["tid"] and (time.time() - _TASKID_CACHE["ts"]) < _TASKID_TTL:
+        return _TASKID_CACHE["tid"], "cache"
     if MINT_TASKID:
-        emit("minting taskId (checkPassword)…")
+        emit("authenticating (checkPassword)…")
         try:
             tid = _mint_taskid(tuid)
             if tid:
+                _TASKID_CACHE["tid"] = tid
+                _TASKID_CACHE["ts"] = time.time()
                 return tid, "checkPassword"
         except Exception as e:
             emit(f"checkPassword failed: {e}")
@@ -330,45 +348,50 @@ def send(cmd_key, emit=lambda m: None, params=None):
         emit("login failed (token expired? redo OTP with official app closed)")
         return "login_failed"
 
-    taskid, src = get_taskid(tuid, emit)
-    if not taskid:
-        emit("no taskId available")
-        return "no_taskid"
-
-    ts = int(time.time() * 1000)
-    body = dict(c["body"])
-    if params:
-        body.update(params)        # parametric override (temperature/duration/controlType/plan)
-    body.update({"clientType": "1", "seq": f"{VIN}-{ts}", "taskId": taskid, "vin": VIN})
-    m = tsp_sign.sign_body(body, ts)
-    payload = json.dumps(m, separators=(",", ":"), ensure_ascii=False).encode()
-    headers = {"Authorization": token, "timestamp": str(ts),
-               "Content-Type": "application/json; charset=utf-8", "User-Agent": "okhttp/4.9.2"}
-    # explicit path (e.g. theft alarm on /act/theftAlarm/setSwitch) or the classic
-    # /asc/vehicleControl/<endpoint> for the standard vehicle commands.
     url = TSP_HOST + (c.get("path") or ("/asc/vehicleControl/" + c["endpoint"]))
-    emit(f"sending {c['name']} (taskId:{src})…")
-    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            raw = resp.read().decode("utf-8", "replace")
-            status = resp.status
-    except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", "replace")
-        status = e.code
-    except Exception as e:
-        emit(f"network error: {e}")
-        return f"net_error: {e}"
+    # Try with the cached taskId; if the car rejects it as invalid/expired, re-mint once.
+    for attempt in (1, 2):
+        taskid, src = get_taskid(tuid, emit, allow_cache=(attempt == 1))
+        if not taskid:
+            emit("no taskId available")
+            return "no_taskid"
 
-    code = None
-    try:
-        code = json.loads(raw).get("code")
-    except Exception:
-        pass
-    meaning = CODE_MEANING.get(code, raw[:120])
-    out = f"{c['name']}: HTTP {status} {code or ''} — {meaning}"
-    emit(out)
-    return out
+        ts = int(time.time() * 1000)
+        body = dict(c["body"])
+        if params:
+            body.update(params)    # parametric override (temperature/duration/controlType/plan)
+        body.update({"clientType": "1", "seq": f"{VIN}-{ts}", "taskId": taskid, "vin": VIN})
+        m = tsp_sign.sign_body(body, ts)
+        payload = json.dumps(m, separators=(",", ":"), ensure_ascii=False).encode()
+        headers = {"Authorization": token, "timestamp": str(ts),
+                   "Content-Type": "application/json; charset=utf-8", "User-Agent": "okhttp/4.9.2"}
+        emit(f"sending {c['name']}…")
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+                status = resp.status
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", "replace")
+            status = e.code
+        except Exception as e:
+            emit(f"network error: {e}")
+            return f"net_error: {e}"
+
+        code = None
+        try:
+            code = json.loads(raw).get("code")
+        except Exception:
+            pass
+        # cached taskId no longer valid → drop it and re-mint a fresh one (one retry).
+        if str(code) in ("A00089", "A00546") and attempt == 1 and src != "env":
+            invalidate_taskid()
+            continue
+
+        meaning = CODE_MEANING.get(code, raw[:120])
+        out = f"{c['name']}: HTTP {status} {code or ''} — {meaning}"
+        emit(out)
+        return out
 
 
 def query_theft_switch():
