@@ -29,6 +29,20 @@ _CORE = os.path.join(os.path.dirname(__file__), "core")
 if _CORE not in sys.path:
     sys.path.insert(0, _CORE)
 
+# Delete the core/ compiled-bytecode cache on import. A HACS update overwrites the .py
+# files but leaves the old __pycache__ behind; because the core/ modules are imported by
+# bare name, Python could keep loading that stale bytecode after an update — the recurring
+# "Italian text / missing Find-Locate buttons after updating" problem. Removing it here (this
+# runs before the core modules are imported) forces a fresh compile from the current source.
+# Best-effort; ignore any error (read-only FS, permissions, race).
+try:
+    import shutil as _shutil
+    _pyc = os.path.join(_CORE, "__pycache__")
+    if os.path.isdir(_pyc):
+        _shutil.rmtree(_pyc, ignore_errors=True)
+except Exception:  # noqa: BLE001
+    pass
+
 # Custom Lovelace card: static-served here and auto-loaded on the frontend so it shows
 # up in the card picker without the user manually adding a dashboard resource.
 _CARD_PATH = "/omoda_jaecoo_card"

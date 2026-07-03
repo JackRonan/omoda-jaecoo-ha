@@ -164,11 +164,16 @@ class OmodaCard extends HTMLElement {
       : (chargeState && /charg/i.test(chargeState.s.state) && !/not/i.test(chargeState.s.state));
     const batV = bat ? this._num(bat.s) : NaN;
 
-    // ---- hero (photo or gradient) ----
+    const lock = this._find(items, "lock");
+    const lockText = lock && !this._dead(lock.s)
+      ? (lock.s.state === "locked" ? "Locked" : "Unlocked") : "—";
+    const lockIcon = lock && lock.s.state === "unlocked" ? "mdi:lock-open-variant" : "mdi:lock";
+
+    // ---- hero (photo or gradient) — subline shows the lock status ----
     const img = cfg.image || items.map((r) => r.s.attributes.vehicle_image).find(Boolean) || "";
-    const chargeSub = isCharging
-      ? `<div class="sub"><ha-icon icon="mdi:flash"></ha-icon>Charging${range && !this._dead(range.s) ? ` · ${this._disp(range.s)}` : ""}</div>`
-      : (range && !this._dead(range.s) ? `<div class="sub"><ha-icon icon="mdi:map-marker-distance"></ha-icon>${this._disp(range.s)} range</div>` : "");
+    const sub = isCharging
+      ? `<div class="sub"><ha-icon icon="mdi:flash"></ha-icon>Charging · <ha-icon icon="${lockIcon}"></ha-icon>${lockText}</div>`
+      : `<div class="sub"><ha-icon icon="${lockIcon}"></ha-icon>${lockText}</div>`;
     const battBadge = (bat && !this._dead(bat.s))
       ? `<div class="batt" data-e="${bat.id}">
            <ha-icon icon="${this._batteryIcon(batV, isCharging)}" style="color:${this._batteryColor(batV)}"></ha-icon>
@@ -181,24 +186,20 @@ class OmodaCard extends HTMLElement {
            ${deviceId ? `data-device="${deviceId}"` : ""}>
         <div class="scrim"></div>
         <div class="hero-content">
-          <div><div class="name">${title}</div>${chargeSub}</div>
+          <div><div class="name">${title}</div>${sub}</div>
           ${battBadge}
         </div>
       </div>`;
 
-    // ---- metrics strip (lock · charging · odometer) ----
+    // ---- metrics strip (range · charging · odometer) ----
     // `entityId` omitted → the tile is read-only text (no more-info, no accidental action).
     const metric = (label, icon, value, entityId) => `
       <div class="metric" ${entityId ? `data-e="${entityId}"` : ""}>
         <div class="v">${value}</div><div class="l"><ha-icon icon="${icon}"></ha-icon>${label}</div></div>`;
-    const lock = this._find(items, "lock");
-    const lockText = lock && !this._dead(lock.s)
-      ? (lock.s.state === "locked" ? "Locked" : "Unlocked") : "—";
-    const lockIcon = lock && lock.s.state === "unlocked" ? "mdi:lock-open-variant" : "mdi:lock";
     const chargeText = charging && !this._dead(charging.s) ? (isCharging ? "Charging" : "Idle")
       : (chargeState && !this._dead(chargeState.s) ? chargeState.s.state : "—");
     const metrics = `<div class="metrics">
-      ${metric("Lock", lockIcon, lockText)}
+      ${metric("Range", "mdi:map-marker-distance", range && !this._dead(range.s) ? this._disp(range.s) : "—", range && range.id)}
       ${metric("Charging", isCharging ? "mdi:battery-charging" : "mdi:power-plug", chargeText)}
       ${odo && !this._dead(odo.s) ? metric("Odometer", "mdi:counter", this._disp(odo.s), odo.id)
         : metric("Cable", "mdi:power-plug", plug && plug.s.state === "on" ? "Plugged in" : "Unplugged")}

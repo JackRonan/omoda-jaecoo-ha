@@ -7,6 +7,15 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.37 — 2026-07-03
+
+- **Fixed for good: old code running after a HACS update.** A HACS update overwrites the code
+  but leaves the old compiled bytecode cache behind, and the protocol modules kept loading the
+  stale copy — which is why Italian text and the missing Find/Locate buttons kept coming back.
+  The stale cache is now cleared automatically on load, so a normal update + restart is enough.
+- **Card: swapped range and lock.** The lock status (Locked/Unlocked) now shows under the
+  vehicle name, and the estimated range moved to the metrics row.
+
 ## v1.5.36 — 2026-07-03
 
 - **Faster commands, fewer sign-ins.** The vehicle authentication (taskId) is now cached and
