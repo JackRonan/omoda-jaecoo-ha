@@ -11,7 +11,11 @@ per-window fields (which also stay as individual binary_sensors).
 """
 from __future__ import annotations
 
-from homeassistant.components.select import ENTITY_ID_FORMAT, SelectEntity
+try:
+    from homeassistant.components.select import ENTITY_ID_FORMAT, SelectEntity
+except ImportError:  # ENTITY_ID_FORMAT not exported on some HA versions
+    from homeassistant.components.select import SelectEntity
+    ENTITY_ID_FORMAT = "select.{}"
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback

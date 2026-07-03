@@ -40,6 +40,14 @@ def _cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
       - the charge-limit sensor + number (backend has no charge-limit endpoint),
       - the on/off command buttons that are now switches (climate macros, theft alarm),
       - on a confirmed BEV, the fuel-only sensors that don't apply."""
+    try:
+        _do_cleanup_stale_entities(hass, coordinator)
+    except Exception as err:  # noqa: BLE001 — cleanup is best-effort, must never break setup
+        import logging
+        logging.getLogger(__name__).debug("stale-entity cleanup skipped: %s", err)
+
+
+def _do_cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
     reg = er.async_get(hass)
     vin = coordinator.vin
     stale: list[tuple[str, str]] = [

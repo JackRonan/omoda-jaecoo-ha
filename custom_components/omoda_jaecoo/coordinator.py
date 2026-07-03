@@ -918,7 +918,10 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         # network error is NOT an auth failure, so don't trigger reauth for it. async_start_reauth
         # de-dupes, so calling it again while a reauth flow is already open is a no-op.
         if not ok and "network" not in (detail or "").lower():
-            self.entry.async_start_reauth(self.hass)
+            try:
+                self.entry.async_start_reauth(self.hass)
+            except Exception as err:  # noqa: BLE001 — reauth is a convenience; never break setup
+                _LOGGER.debug("could not start reauth flow: %s", err)
         return ok, detail
 
     def _check_session(self) -> tuple[bool, str]:
