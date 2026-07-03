@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, PLATFORMS
 
@@ -26,6 +27,40 @@ _CORE = os.path.join(os.path.dirname(__file__), "core")
 if _CORE not in sys.path:
     sys.path.insert(0, _CORE)
 
+# Custom Lovelace card: static-served here and auto-loaded on the frontend so it shows
+# up in the card picker without the user manually adding a dashboard resource.
+_CARD_PATH = "/omoda_jaecoo_card"
+_CARD_URL = f"{_CARD_PATH}/omoda-card.js"
+
+
+def _cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
+    """Remove entity-registry entries this integration no longer provides, so upgrades
+    don't leave orphaned "unavailable" entities behind. Targeted by unique_id (never a
+    blanket wipe), so it can only remove the specific retired entities:
+      - the charge-limit sensor + number (backend has no charge-limit endpoint),
+      - the on/off command buttons that are now switches (climate macros, theft alarm),
+      - on a confirmed BEV, the fuel-only sensors that don't apply."""
+    reg = er.async_get(hass)
+    vin = coordinator.vin
+    stale: list[tuple[str, str]] = [
+        ("sensor", f"{vin}_rt_charge_limit"),
+        ("number", f"{vin}_charge_limit_number"),
+        ("button", f"{vin}_cmd_climate_cool_on"),
+        ("button", f"{vin}_cmd_climate_cool_off"),
+        ("button", f"{vin}_cmd_climate_heat_on"),
+        ("button", f"{vin}_cmd_climate_heat_off"),
+        ("button", f"{vin}_cmd_alarm_theft_on"),
+        ("button", f"{vin}_cmd_alarm_theft_off"),
+    ]
+    if coordinator.is_pure_electric():
+        for suf in ("rt_range_benzina", "rt_consumo_carburante",
+                    "rt_carburante_residuo", "rt_km_ibrido"):
+            stale.append(("sensor", f"{vin}_{suf}"))
+    for domain, unique_id in stale:
+        entity_id = reg.async_get_entity_id(domain, DOMAIN, unique_id)
+        if entity_id:
+            reg.async_remove(entity_id)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Initialize the integration from a config entry."""
@@ -33,12 +68,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = OmodaJaecooCoordinator(hass, entry)
 
-    # Register the path for the custom Lovelace card
-    if hasattr(hass, "http") and hass.http is not None:
+    # Serve the custom Lovelace card and auto-load it on the frontend so it appears in
+    # the dashboard card picker (no manual "add resource" step). Guarded so multiple
+    # entries/reloads don't register the static path or JS URL twice.
+    if hasattr(hass, "http") and hass.http is not None and not hass.data.get(f"{DOMAIN}_card"):
         lovelace_dir = os.path.join(os.path.dirname(__file__), "lovelace")
         await hass.http.async_register_static_paths([
-            StaticPathConfig("/omoda_jaecoo_card", lovelace_dir, False)
+            StaticPathConfig(_CARD_PATH, lovelace_dir, False)
         ])
+        try:
+            from homeassistant.components.frontend import add_extra_js_url
+            add_extra_js_url(hass, _CARD_URL)
+        except Exception:  # noqa: BLE001 — frontend not loaded (headless) → card still usable manually
+            pass
+        hass.data[f"{DOMAIN}_card"] = True
+
+    # One-time removal of retired entities (charge-limit, on/off buttons now switches,
+    # BEV fuel sensors) so upgrades don't leave orphaned "unavailable" entities.
+    _cleanup_stale_entities(hass, coordinator)
 
     # PHASE 3c: the mutual-TLS certs must be present BEFORE connecting the car's MQTT.
     ok, detail = await coordinator.async_provision_certs()
