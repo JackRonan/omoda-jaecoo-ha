@@ -1,13 +1,15 @@
 # OMODA / Jaecoo API sandbox
 
-Standalone CLI to hit the OMODA/Jaecoo API directly, **outside Home Assistant**, for
-debugging. It imports the integration's real auth/signing code from
-`../custom_components/omoda_jaecoo/core/` — no duplication, no HA runtime. Every call
-prints the **exact raw JSON** the API returned.
+Hit the OMODA/Jaecoo API directly, **outside Home Assistant**, for debugging. It imports
+the integration's real auth/signing code from `../custom_components/omoda_jaecoo/core/` —
+no duplication, no HA runtime. Two front-ends over the same core:
+
+- **`gui.py`** — a simple **Streamlit GUI** (sign in, live status, point-and-click commands).
+- **`omoda_sandbox.py`** — an interactive **CLI menu** (every call prints the raw JSON).
 
 Nothing here modifies the integration, and **nothing is written under the repo**: the
 minted token and your config live in `~/.omoda_jaecoo_sandbox/` (override with the
-`OMODA_SANDBOX_HOME` env var). The repo only holds code + this README.
+`OMODA_SANDBOX_HOME` env var), shared by both front-ends.
 
 ## Setup
 
@@ -15,8 +17,18 @@ minted token and your config live in `~/.omoda_jaecoo_sandbox/` (override with t
 cd sandbox
 python -m venv .venv && . .venv/Scripts/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python omoda_sandbox.py
+
+streamlit run gui.py      # GUI (recommended)
+#   or
+python omoda_sandbox.py   # CLI
 ```
+
+### GUI (`gui.py`)
+
+Sidebar: enter **email + PIN**, **Send OTP**, then **Confirm OTP** (VIN auto-discovers).
+Tabs: **Status** (battery/range/odometer + door/window/lock state + raw JSON), **Controls**
+(a button per catalog command, grouped), **Windows** (all open/vent/close + a per-window
+experiment), **Advanced** (raw request, generic signed command, error-code dictionary).
 
 You only need **email + PIN** — same as the integration. The **VIN is auto-discovered**
 from `queryList` after login; you never type it. Set credentials via the menu
