@@ -84,10 +84,10 @@ def probe_once(publish, force=False, on_data=None):
                     "wait_s": int(COOLDOWN_S - (now - _last_run["ts"]))}
         _last_run["ts"] = now
 
-        publish("🛰️ Location probe: the car is awake, trying to read GPS/realtime…")
+        publish("Reading live data from the vehicle…")
         ut, tu = W._bff_login()
         if not ut:
-            publish("🔑 Probe: session expired (redo OTP login). Retrying at the next wake")
+            publish("Session expired — please re-authenticate. Will retry when the vehicle next connects.")
             _log({"event": "probe", "ok": False, "reason": "no_usertoken"})
             return {"ok": False, "reason": "no_usertoken"}
 
@@ -117,23 +117,22 @@ def probe_once(publish, force=False, on_data=None):
             try:
                 on_data(data)
             except Exception as e:
-                publish(f"⚠️ Probe: data publishing error ({type(e).__name__})")
+                publish(f"Error processing vehicle data ({type(e).__name__}).")
 
         if got1 or got2:
             if rich:
                 bits = ", ".join(f"{k}={v}" for k, v in rich.items())
-                publish(f"🟢🛰️ BREAKTHROUGH: realtime data received with the car awake! {bits}")
+                publish(f"Live data received from the vehicle — {bits}.")
             else:
-                publish("🟢🛰️ Probe: data received with the car awake (see data/probe.jsonl)")
+                publish("Live data received from the vehicle.")
             return {"ok": True, "online": True, "got_data": True,
                     "codes": [c1, c2, c3], "rich": rich}
 
-        publish(f"🟡 Probe: still no location with the car awake "
-                f"(realtime={c1} [{codes.meaning(c1)}], location={c2}, travel={c3}). "
-                "Confirmed: another step is needed")
+        publish("No live data available yet — the vehicle is not reporting. "
+                f"(status {c1}: {codes.meaning(c1)}). It will update once driven or charging.")
         return {"ok": True, "online": False, "got_data": False, "codes": [c1, c2, c3]}
     except Exception as e:
-        publish(f"⚠️ Probe error: {type(e).__name__}: {e}")
+        publish(f"Vehicle read failed: {type(e).__name__}: {e}")
         return {"ok": False, "reason": "exception", "error": str(e)}
     finally:
         _BUSY.release()

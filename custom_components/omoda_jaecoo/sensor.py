@@ -185,6 +185,10 @@ _RT_SENSORS: list[_RtSpec] = [
     _RtSpec("consumo_elettrico", "Electric Average Consumption",
             ("avgHkPowerKwh50km", "avgHkPower"),
             None, "kWh/100 km", MEAS, "mdi:lightning-bolt", invalid=(-100.0,)),
+    # Home Assistant cannot convert energy-per-distance units, so for miles users we also
+    # expose the car's own miles-per-kWh efficiency figure (avgHkPowerMikwh, e.g. 3.5).
+    _RtSpec("efficienza_elettrica", "Electric Efficiency", "avgHkPowerMikwh",
+            None, "mi/kWh", MEAS, "mdi:lightning-bolt", diag=True, invalid=(-100.0,)),
     # oilSurplus=23 from the live car → LITERS (confirmed by the gasoline range calculation).
     _RtSpec("carburante_residuo", "Fuel Remaining", "oilSurplus",
             None, "L", MEAS, "mdi:fuel"),
@@ -356,6 +360,9 @@ class OmodaJaecooBattery(_OmodaJaecooRestoreSensor):
 
 
 class OmodaJaecooSpeed(_OmodaJaecooRestoreSensor):
+    # device_class SPEED lets HA convert to the user's unit system (mph) and enables the
+    # per-entity "unit of measurement" override — without it the unit is fixed at km/h.
+    _attr_device_class = SensorDeviceClass.SPEED
     _attr_native_unit_of_measurement = UnitOfSpeed.KILOMETERS_PER_HOUR
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:speedometer"

@@ -7,6 +7,17 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.5.33 — 2026-07-03
+
+- **Speed can now show in mph.** The Speed sensor was missing its distance/speed type, so
+  Home Assistant couldn't convert it. It now follows your unit system (mph in imperial) and
+  you can override the unit per-entity.
+- **Miles-per-kWh efficiency sensor added.** Home Assistant can't convert energy-per-distance
+  units (kWh/100 km), so there's now a separate **Electric Efficiency** sensor in **mi/kWh**
+  for miles users, alongside the existing kWh/100 km one.
+- **Clearer status messages.** Removed jargon from the wake/refresh messages (e.g.
+  "BREAKTHROUGH" → "Live data received from the vehicle") for plain, professional wording.
+
 ## v1.5.32 — 2026-07-03
 
 - **Fixed the remaining Italian text** in command results and status messages (e.g.

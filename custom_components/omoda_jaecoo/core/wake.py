@@ -218,12 +218,12 @@ def do_wake(publish, is_awake=None, send_sms=True):
     Returns a summary dict {ok, online, code, ...}. Never raises: every error → status.
     """
     if not _BUSY.acquire(blocking=False):
-        publish("⏳ Wake already in progress, please wait…")
+        publish("A wake request is already in progress. Please wait…")
         return {"ok": False, "reason": "busy"}
     try:
         return _do_wake_inner(publish, is_awake, send_sms)
     except Exception as e:
-        publish(f"⚠️ Wake error: {type(e).__name__}: {e}")
+        publish(f"Wake request failed: {type(e).__name__}: {e}")
         return {"ok": False, "reason": "exception", "error": str(e)}
     finally:
         _BUSY.release()
@@ -238,19 +238,19 @@ def _do_wake_inner(publish, is_awake, send_sms):
         wait = COOLDOWN_S - (now - last)
         if last and wait > 0:
             mm, ss = divmod(int(wait), 60)
-            publish(f"⏳ Anti rate-limit: wait another {mm}m{ss:02d}s before waking again")
+            publish(f"Please wait {mm}m {ss:02d}s before waking the vehicle again (rate limit).")
             return {"ok": False, "reason": "cooldown", "wait_s": int(wait)}
 
     # if the car is already publishing on MQTT, it is already awake: no SMS
     if is_awake and is_awake():
-        publish("🟢 Car already awake (sending data) — wake not needed")
+        publish("The vehicle is already awake — no wake needed.")
         return {"ok": True, "online": True, "reason": "already_awake"}
 
     # 1) BFF login → userToken
-    publish("🔑 Logging in…")
+    publish("Signing in…")
     ut, tu = _bff_login()
     if not ut:
-        publish("🔑 Session expired (old token or official app open): redo OTP login")
+        publish("Session expired — please re-authenticate (this happens if the official app is open).")
         return {"ok": False, "reason": "no_usertoken"}
 
     # 2) smsAwaken (only once)
@@ -260,31 +260,31 @@ def _do_wake_inner(publish, is_awake, send_sms):
         code = _code_of(j)
         _save_last_sms(time.time())     # record IMMEDIATELY for the cooldown, even on error
         if str(code) in ("000000", "A00079"):
-            publish("✅ Wake sent — waiting for car to connect…")
+            publish("Wake request sent — waiting for the vehicle to connect…")
         elif str(code) == "A07312":
-            publish("🚫 Wake rate-limited (A07312): the car is refusing more wakes right now. Try again later")
+            publish("Wake rate-limited — the vehicle is refusing wake requests right now. Please try again later.")
             return {"ok": False, "online": False, "code": code, "reason": "rate_limit"}
         else:
-            publish(f"⚠️ Wake not accepted ({code}: {codes.meaning(code)}). Listening anyway…")
+            publish(f"Wake not accepted ({code}: {codes.meaning(code)}). Continuing to listen…")
     else:
-        publish("🧪 (test) smsAwaken NOT sent; proceeding to poll only")
+        publish("(test) wake request not sent; polling only.")
 
     # 3) poll realtime/location + MQTT listening, for ~POLL_N*POLL_EVERY seconds
     for i in range(POLL_N):
         if is_awake and is_awake():
-            publish("🟢 Car ONLINE — sending real-time data")
+            publish("Vehicle online — receiving live data.")
             return {"ok": True, "online": True, "code": code, "via": "mqtt"}
         sc1, j1 = _signed_post(ut, "/asr/manager/realtime", {"vin": VIN})
         sc2, j2 = _signed_post(ut, "/asc/vehicleControl/queryVehicleLocation", {"vin": VIN})
         if _has_live_data(j1) or _has_live_data(j2):
-            publish("🟢 Car ONLINE — real-time data received")
+            publish("Vehicle online — live data received.")
             return {"ok": True, "online": True, "code": code, "via": "rest",
                     "data": _payload(j1) or _payload(j2)}
         secs_left = (POLL_N - i - 1) * POLL_EVERY
-        publish(f"… waiting for wake ({_code_of(j1)}) — ~{secs_left}s left")
+        publish(f"Waiting for the vehicle to wake — ~{secs_left}s remaining…")
         time.sleep(POLL_EVERY)
 
-    publish("⌛ Car still asleep (A07900). Try again when it has been used recently or has good signal")
+    publish("The vehicle is still asleep. Try again after it has been driven recently or has a good signal.")
     return {"ok": True, "online": False, "code": code, "reason": "still_asleep"}
 
 

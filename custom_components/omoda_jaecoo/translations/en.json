@@ -296,6 +296,9 @@
       },
       "diagnostic_last_position": {
         "name": "Diagnostic Last Position"
+      },
+      "electric_efficiency": {
+        "name": "Electric Efficiency"
       }
     },
     "button": {

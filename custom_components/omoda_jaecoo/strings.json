@@ -488,6 +488,9 @@
       },
       "ventilazione_sedile_post_centrale": {
         "name": "Rear center seat ventilation"
+      },
+      "electric_efficiency": {
+        "name": "Electric Efficiency"
       }
     },
     "button": {
