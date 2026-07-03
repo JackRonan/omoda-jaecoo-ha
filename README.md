@@ -1,6 +1,6 @@
 # Omoda / Jaecoo → Home Assistant
 
-🌐 **English** · [Italiano](README.it.md) · [Changelog](CHANGELOG.md)
+🌐 **English** · [Changelog](CHANGELOG.md)
 
 ## English Fork & Localization Notes
 
@@ -33,15 +33,30 @@ location and commands — just like the official app, but integrated into HA.
 
 ## What you can do
 
-- **Car status** — doors, locks, trunk, hood, windows, roof, climate, seat
-  heating/ventilation and more, as HA entities.
-- **Location / GPS** — a button locates the car (`device_tracker` + location
-  sensors), even while parked.
-- **Battery, speed, range, mileage** — update automatically when the car is
-  **driving or charging**; during charging the monitor follows the progress.
-- **Commands** — buttons for climate, locate, wake-up and more, that actually act
-  on the car.
+- **Car status** — doors, hood, tailgate, tyre pressures/temperatures/warnings,
+  engine, climate and seat heating/ventilation, all as native HA entities.
+- **Actionable controls, done the HA-idiomatic way:**
+  - **Lock** (lock entity), **Trunk** and **Sunroof** (cover open/close),
+    **Windows** (a 3-state select: Closed / Ventilate / Open).
+  - **Switches** for everything on/off — charge, scheduled charge, defrosters,
+    steering-wheel heat, each seat heat/vent, and the "cool/heat everything" macros.
+  - **Climate** entity with a settable target temperature (range read from your car).
+- **Battery, range, charging** — battery %, estimated range (electric + WLTP),
+  a **Charging** sensor, charging power, charge state, odometer, speed. Range and
+  battery update while **driving or charging**; a read-only refresh runs at startup
+  so they're populated at rest too.
+- **Location / GPS** — full-precision `device_tracker`, plus a Locate button.
+- **Adapts to your car** — pure-electric (BEV) vs plug-in hybrid (PHEV) is detected
+  from your account, so it only shows the sensors that apply (no empty fuel gauges on
+  a BEV) and uses your car's real climate temperature range.
+- **Dashboard card** — a bundled, curated card (see [Dashboard card](#dashboard-card)).
+- **Re-authentication** — if the session expires (e.g. you open the official app),
+  HA shows a standard "needs re-authentication" prompt to log back in with a fresh code.
 - **Notifications** — optional blueprint for an alert when a command fails.
+
+> **English only.** This fork is fully English (code, entity names and messages). Charge-
+> limit / target-SoC is intentionally **not** included: the OMODA/Jaecoo backend has no API
+> for it (it's set on the car's own screen). See the [CHANGELOG](CHANGELOG.md) for details.
 
 ## Installation
 
@@ -75,10 +90,36 @@ entity) to log back in without reconfiguring anything.
   button, which turns on the climate for ~1 minute to wake the car, then turns it
   off again.
 
+## Dashboard card
+
+The integration bundles a custom card and **loads it automatically** — after a restart it
+appears in **Add card → Custom → "Omoda/Jaecoo Card"** (no manual resource to add). It's a
+curated summary: vehicle name, battery %, charging state, estimated range, and warnings
+(tyre, low battery, offline) shown **only when something's wrong**.
+
+Minimal config just works:
+
+```yaml
+type: custom:omoda-card
+```
+
+Options (all optional):
+
+| Option | What it does |
+|---|---|
+| `title` | Header title (default: the vehicle's name) |
+| `image` | Header image URL (overrides the one set in the integration options) |
+| `show_all: true` | Also list every remaining entity, grouped |
+| `entities: [...]` | Append your own rows (entity ids) |
+
+**Car photo:** set a **Vehicle image URL** in **Settings → Devices & Services → Omoda /
+Jaecoo → Configure** and the card uses it as its header automatically — no card editing.
+
 ## Updating
 
 When a new version is released: **HACS → Omoda / Jaecoo → Update → restart Home
-Assistant**. The change history is in the [CHANGELOG](CHANGELOG.md).
+Assistant** (a **full** restart, not a reload). Retired/renamed entities are cleaned up
+automatically on load. The change history is in the [CHANGELOG](CHANGELOG.md).
 
 ## Notifications when a command fails (optional)
 
@@ -201,6 +242,14 @@ python3 provision.py
 The token minted this way is the **same** file the integration reads: by pointing
 `OMODA_TOKEN_PATH` at `<config>/omoda_jaecoo_<VIN>_token.json` you can unblock a setup
 even without redoing the OTP from the config flow.
+
+### API sandbox (developers)
+
+The [`sandbox/`](sandbox/) folder contains a standalone, interactive CLI that reuses the
+integration's real auth/signing to hit the API **outside Home Assistant** and print the
+**raw JSON** — handy for exploring what the car reports or testing new endpoints. It
+auto-discovers the VIN like the config flow and keeps its token/config **outside** the
+repo. See [`sandbox/README.md`](sandbox/README.md).
 
 ## License
 
