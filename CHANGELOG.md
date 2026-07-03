@@ -25,8 +25,9 @@ original project's changelog (Italian + English), preserved for history.
   the card from registering at all — and an unescaped vehicle name could throw while rendering.
   The card now uses only broadly-supported JavaScript, escapes the name, wraps rendering so any
   error shows inline instead of blanking the card, guards against double-registration, and adds
-  iOS/Safari CSS fallbacks. After updating, force the app to reload: **App configuration →
-  Debugging → Reset frontend cache** (or fully close and reopen the app).
+  iOS/Safari CSS fallbacks. If the card still won't load on the mobile app, add it as a resource
+  once: **Settings → Dashboards → ⋮ → Resources → + Add**, URL `/omoda_jaecoo_card/omoda-card.js`,
+  type **JavaScript module**, then reopen the app.
 
 ## v1.5.39 — 2026-07-03
 

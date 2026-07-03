@@ -115,12 +115,12 @@ Options (all optional):
 **Car photo:** set a **Vehicle image URL** in **Settings → Devices & Services → Omoda /
 Jaecoo → Configure** and the card uses it as its header automatically — no card editing.
 
-**Card shows "Configuration error" on the mobile app (but works on desktop)?** The companion
-app caches the frontend hard, so after updating it can still be running the old card. Force it
-to reload: in the app, **App configuration → Debugging → Reset frontend cache**, then fully
-close and reopen the app. (If it still won't load, add the resource manually once: **Settings →
-Dashboards → ⋮ → Resources → Add** `/omoda_jaecoo_card/omoda-card.js` as a **JavaScript
-module**.)
+**Card shows "Configuration error" on the mobile app (but works on desktop)?** The integration
+auto-loads the card, but the companion app doesn't always pick that up. **Add the resource
+manually once** and it works: **Settings → Dashboards → ⋮ (top-right) → Resources → + Add
+resource**, URL `/omoda_jaecoo_card/omoda-card.js`, type **JavaScript module**. Then fully close
+and reopen the app (if it still shows the old state, **App configuration → Debugging → Reset
+frontend cache** first). You only need to add the resource once; it applies to every dashboard.
 
 ## Updating
 
