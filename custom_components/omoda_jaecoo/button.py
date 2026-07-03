@@ -1,4 +1,4 @@
-"""Button: i comandi auto (catalogo core/commands) + sveglia + aggiorna posizione."""
+"""Button: the car commands (core/commands catalog) + wake + refresh location."""
 from __future__ import annotations
 
 import logging
@@ -17,33 +17,35 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
     coord = hass.data[DOMAIN][entry.entry_id]
-    import commands as CMD  # core/ sul path
+    import commands as CMD  # core/ on the path
 
     ents: list[ButtonEntity] = []
     for key, spec in CMD.COMMANDS:
-        # i comandi che ora hanno un lock/switch/cover dedicato NON diventano pulsanti
+        # commands that now have a dedicated lock/switch/cover do NOT become buttons
         if key in COMMANDS_AS_RICH_ENTITY:
             continue
         ents.append(OmodaJaecooCommandButton(coord, key, spec))
-    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Wake Car", "wake", coord.async_wake))
-    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Refresh Location", "refresh_pos", coord.async_probe))
-    # Aggiorna stato completo: forza odometro/batteria/tensione REALI accendendo brevemente il
-    # clima (unico modo per accendere l'alta tensione, da cui dipendono i dati freschi).
+    # service/diagnostic actions → all in the DIAGNOSTIC category so they group neatly
+    # in the device's Diagnostic section, away from the primary vehicle controls.
+    DIAG = EntityCategory.DIAGNOSTIC
+    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Wake Car", "wake", coord.async_wake, category=DIAG))
+    ents.append(OmodaJaecooActionButton(coord, "Diagnostic Refresh Location", "refresh_pos", coord.async_probe, category=DIAG))
+    # Refresh full status: forces REAL odometer/battery/voltage by briefly turning on the
+    # climate (the only way to power the high-voltage bus that the fresh data depends on).
     ents.append(OmodaJaecooActionButton(coord, "Diagnostic Refresh Full Status", "refresh_full",
-                                    coord.async_refresh_full_status))
-    # recupero sessione: azioni "di servizio" → categoria diagnostica (fuori dai controlli)
+                                    coord.async_refresh_full_status, category=DIAG))
     ents.append(OmodaJaecooActionButton(coord, "Diagnostic Request OTP Code", "otp_request",
-                                    coord.async_request_otp, category=EntityCategory.DIAGNOSTIC))
+                                    coord.async_request_otp, category=DIAG))
     ents.append(OmodaJaecooActionButton(coord, "Diagnostic Confirm OTP", "otp_confirm",
-                                    coord.async_confirm_otp, category=EntityCategory.DIAGNOSTIC))
+                                    coord.async_confirm_otp, category=DIAG))
     add(ents)
 
 
 class OmodaJaecooCommandButton(OmodaJaecooEntity, ButtonEntity):
-    """Un pulsante per comando del catalogo. Il tap = consenso esplicito all'attuazione."""
+    """One button per catalog command. The tap = explicit consent to actuate."""
 
     def __init__(self, coord, key: str, spec: dict) -> None:
-        # entity_id = button.omoda_jaecoo_<key> (come il bridge), NON derivato dal nome lungo.
+        # entity_id = button.omoda_jaecoo_<key> (like the bridge), NOT derived from the long name.
         super().__init__(coord, spec['name'], f"cmd_{key}",
                          object_id=f"omoda_jaecoo_{key}", entity_id_format=ENTITY_ID_FORMAT)
         self._key = key
@@ -51,8 +53,8 @@ class OmodaJaecooCommandButton(OmodaJaecooEntity, ButtonEntity):
             self._attr_icon = spec["icon"]
 
     async def async_press(self) -> None:
-        # [LOW] l'esito (anche di errore) è già pubblicato nei sensori diagnostici
-        # (cmd_status) dal coordinator: qui logghiamo senza propagare un'eccezione grezza.
+        # [LOW] the outcome (including errors) is already published in the diagnostic sensors
+        # (cmd_status) by the coordinator: here we log without propagating a raw exception.
         try:
             await self.coordinator.async_send_command(self._key)
         except Exception:  # noqa: BLE001
@@ -60,7 +62,7 @@ class OmodaJaecooCommandButton(OmodaJaecooEntity, ButtonEntity):
 
 
 class OmodaJaecooActionButton(OmodaJaecooEntity, ButtonEntity):
-    """Pulsante per un'azione del coordinator (sveglia/sonda)."""
+    """Button for a coordinator action (wake/probe)."""
 
     _ICONS = {
         "wake": "mdi:car-connected",
@@ -78,8 +80,8 @@ class OmodaJaecooActionButton(OmodaJaecooEntity, ButtonEntity):
             self._attr_entity_category = category
 
     async def async_press(self) -> None:
-        # [LOW] sveglia/sonda/OTP: l'esito va nei sensori diagnostici; logga e non
-        # propagare un'eccezione grezza nella UI.
+        # [LOW] wake/probe/OTP: the outcome goes into the diagnostic sensors; log and do not
+        # propagate a raw exception into the UI.
         try:
             await self._action()
         except Exception:  # noqa: BLE001

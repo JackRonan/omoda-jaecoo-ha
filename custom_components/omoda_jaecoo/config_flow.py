@@ -1,14 +1,14 @@
-"""Config flow Omoda / Jaecoo / Jaecoo — login per-utente con SOLO email + PIN.
+"""Config flow Omoda / Jaecoo / Jaecoo — per-user login with ONLY email + PIN.
 
-Niente più VIN/tUserId da inserire a mano: si scoprono dal backend dopo l'OTP
-(`tsp/v1/app/auth/login` → tUserId, `tsp/v1/app/vmc/queryList` → VIN). Le credenziali
-restano nel config_entry del SUO Home Assistant (nessun server centrale).
+No more VIN/tUserId to enter by hand: they are discovered from the backend after the OTP
+(`tsp/v1/app/auth/login` → tUserId, `tsp/v1/app/vmc/queryList` → VIN). The credentials
+stay in the config_entry of YOUR Home Assistant (no central server).
 
-Flusso:
-  1) user            → email, PIN (+ regione opz.) → risolve il captcha e invia l'OTP
-  2) otp             → codice ricevuto via email → conia il token → scopre tUserId + VIN
-  3) select_vehicle  → (solo se l'account ha più veicoli) scelta del VIN
-  → crea l'entry
+Flow:
+  1) user            → email, PIN (+ optional region) → solves the captcha and sends the OTP
+  2) otp             → code received via email → mints the token → discovers tUserId + VIN
+  3) select_vehicle  → (only if the account has multiple vehicles) VIN selection
+  → creates the entry
 """
 from __future__ import annotations
 
@@ -41,12 +41,12 @@ if _CORE not in sys.path:
 
 
 def _pending_token_path(hass: HomeAssistant) -> str:
-    """Path temporaneo dove conia il token finché non si conosce il VIN."""
+    """Temporary path where the token is minted until the VIN is known."""
     return hass.config.path("omoda9_pending_token.json")
 
 
 def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None) -> None:
-    """Imposta l'ambiente per i moduli core/ (letti a import-time) dai dati del flow."""
+    """Set up the environment for the core/ modules (read at import-time) from the flow data."""
     os.environ["OMODA_EMAIL"] = data.get(CONF_EMAIL, "")
     os.environ["OMODA_PIN"] = data.get(CONF_PIN, "")
     os.environ["VIN"] = data.get(CONF_VIN, "")
@@ -61,7 +61,7 @@ def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None)
 
 
 def _send_otp(hass: HomeAssistant, data: dict) -> tuple[bool, str]:
-    """Risolve il captcha e invia l'OTP all'email (executor) → core.session.request_otp."""
+    """Solves the captcha and sends the OTP to the email (executor) → core.session.request_otp."""
     _prepare_env(hass, data)
     import session as SESSION
     msgs: list[str] = []
@@ -70,22 +70,22 @@ def _send_otp(hass: HomeAssistant, data: dict) -> tuple[bool, str]:
 
 
 def _mint_token(hass: HomeAssistant, data: dict, code: str) -> tuple[bool, str]:
-    """Conia il token dal codice OTP (executor) → core.session.confirm_otp (salva nel pending)."""
+    """Mints the token from the OTP code (executor) → core.session.confirm_otp (saves to pending)."""
     _prepare_env(hass, data)
     import session as SESSION
     return SESSION.confirm_otp(code)
 
 
 def _discover(hass: HomeAssistant, data: dict) -> tuple[bool, str, list[str], str]:
-    """Dopo l'OTP: scopre (tUserId, [VIN]) dal token appena coniato. Sola lettura.
+    """After the OTP: discovers (tUserId, [VIN]) from the just-minted token. Read-only.
 
-    Ritorna (ok, tuserid, vins, dettaglio)."""
+    Returns (ok, tuserid, vins, detail)."""
     _prepare_env(hass, data)
     try:
         import requests
         import omoda_auth as A
         import wake
-        wake.TOKEN_PATH = _pending_token_path(hass)   # token appena coniato
+        wake.TOKEN_PATH = _pending_token_path(hass)   # just-minted token
         _ut, tu = wake._bff_login()
         if not tu:
             return False, "", [], "backend login failed"
@@ -103,17 +103,17 @@ def _discover(hass: HomeAssistant, data: dict) -> tuple[bool, str, list[str], st
             for v in lst:
                 if isinstance(v, dict) and v.get("vin"):
                     vins.append(str(v["vin"]))
-        return True, str(tu), vins, ("ok" if vins else "nessun veicolo trovato")
+        return True, str(tu), vins, ("ok" if vins else "no vehicle found")
     except Exception as e:  # noqa: BLE001
-        return False, "", [], f"errore scoperta veicoli: {type(e).__name__}"
+        return False, "", [], f"vehicle discovery error: {type(e).__name__}"
 
 
 def _finalize_token(hass: HomeAssistant, vin: str) -> bool:
-    """Sposta il token 'pending' nella token-path per-VIN definitiva.
+    """Moves the 'pending' token to the definitive per-VIN token-path.
 
-    Ritorna True se il token è in posizione (spostato ora o già presente),
-    False se lo spostamento fallisce: in tal caso il flow va fatto fallire,
-    perché senza token il coordinator non potrebbe autenticarsi."""
+    Returns True if the token is in place (moved now or already present),
+    False if the move fails: in that case the flow must be failed,
+    because without a token the coordinator could not authenticate."""
     pend = _pending_token_path(hass)
     dest = hass.config.path(f"omoda9_{vin}_token.json")
     try:
@@ -121,22 +121,22 @@ def _finalize_token(hass: HomeAssistant, vin: str) -> bool:
             os.replace(pend, dest)
         return os.path.isfile(dest)
     except OSError as e:
-        _LOGGER.error("Omoda / Jaecoo: impossibile spostare il token in %s: %s", dest, e)
+        _LOGGER.error("Omoda / Jaecoo: unable to move the token to %s: %s", dest, e)
         return False
 
 
 def _cleanup_pending(hass: HomeAssistant) -> None:
-    """Rimuove un eventuale *_pending_token.json orfano (OTP non andato a buon fine/abort)."""
+    """Removes any orphaned *_pending_token.json (OTP that failed / was aborted)."""
     pend = _pending_token_path(hass)
     try:
         if os.path.isfile(pend):
             os.remove(pend)
     except OSError as e:  # noqa: BLE001
-        _LOGGER.debug("Omoda / Jaecoo: cleanup pending token fallito: %s", e)
+        _LOGGER.debug("Omoda / Jaecoo: pending token cleanup failed: %s", e)
 
 
 class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Gestisce il config flow dell'integrazione (email + PIN, il resto è scoperto)."""
+    """Handles the integration's config flow (email + PIN, the rest is discovered)."""
 
     VERSION = 1
 
@@ -164,11 +164,11 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({
             vol.Required(CONF_EMAIL): str,
             vol.Required(CONF_PIN): str,
-            # Solo per regioni diverse dall'Europa / setup avanzato (default EU).
+            # Only for regions outside Europe / advanced setup (default EU).
             vol.Optional(CONF_BFF, default=DEFAULTS[CONF_BFF]): str,
             vol.Optional(CONF_TSP_HOST, default=DEFAULTS[CONF_TSP_HOST]): str,
-            # Broker MQTT dell'auto + channel id: regione-specifici (default EU). Senza
-            # questi campi un setup non-EU resterebbe agganciato al broker europeo.
+            # Car's MQTT broker + channel id: region-specific (default EU). Without
+            # these fields a non-EU setup would stay hooked to the European broker.
             vol.Optional(CONF_CAR_MQTT_HOST, default=DEFAULTS[CONF_CAR_MQTT_HOST]): str,
             vol.Optional(CONF_CAR_MQTT_PORT, default=DEFAULTS[CONF_CAR_MQTT_PORT]): vol.Coerce(int),
             vol.Optional(CONF_CHANNEL_ID, default=DEFAULTS[CONF_CHANNEL_ID]): str,
@@ -187,7 +187,7 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _discover, self.hass, self._data
                 )
                 if not d_ok or not vins:
-                    # Token coniato ma nessun veicolo: il pending è inutilizzabile.
+                    # Token minted but no vehicle: the pending token is unusable.
                     await self.hass.async_add_executor_job(_cleanup_pending, self.hass)
                     errors["base"] = "no_vehicle"
                 else:
@@ -197,7 +197,7 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         return await self._create_entry(vins[0])
                     return await self.async_step_select_vehicle()
             else:
-                # OTP errato/scaduto: butta il pending eventualmente già scritto.
+                # Wrong/expired OTP: discard any pending token already written.
                 await self.hass.async_add_executor_job(_cleanup_pending, self.hass)
                 errors["base"] = "otp_invalid"
 
@@ -211,15 +211,15 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="select_vehicle", data_schema=schema)
 
     async def _create_entry(self, vin: str):
-        # Unicità VIN il prima possibile: appena conosciamo il VIN, prima di creare
-        # l'entry. NB: per un account a VIN singolo l'OTP è già stato speso quando
-        # arriviamo qui — il backend non espone il VIN prima dell'autenticazione,
-        # quindi non è possibile abortire come "già configurato" prima dell'OTP.
+        # VIN uniqueness as early as possible: as soon as we know the VIN, before creating
+        # the entry. NB: for a single-VIN account the OTP has already been spent by the time
+        # we get here — the backend does not expose the VIN before authentication,
+        # so it is not possible to abort as "already configured" before the OTP.
         await self.async_set_unique_id(vin)
         try:
             self._abort_if_unique_id_configured()
         except AbortFlow:
-            # VIN già configurato: il token appena coniato non serve, rimuovilo.
+            # VIN already configured: the just-minted token is not needed, remove it.
             await self.hass.async_add_executor_job(_cleanup_pending, self.hass)
             raise
         self._data[CONF_VIN] = vin
@@ -232,10 +232,10 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):
-    """Opzioni: i due intervalli (minuti) del poll telemetria. 0 = disattiva.
+    """Options: the two telemetry poll intervals (minutes). 0 = disabled.
 
-    `poll_normal_min` = a riposo/parcheggiata; `poll_charging_min` = quando l'auto è
-    attaccata alla colonnina (di norma più breve, per seguire la ricarica)."""
+    `poll_normal_min` = at rest/parked; `poll_charging_min` = when the car is
+    plugged into the charger (usually shorter, to follow the charging)."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._entry = config_entry
@@ -244,7 +244,7 @@ class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
         opt = self._entry.options or {}
-        # nome veicolo corrente (override o quello rilevato), per pre-riempire il campo
+        # current vehicle name (override or the detected one), to pre-fill the field
         cur_name = opt.get(CONF_VEHICLE_NAME) or self._entry.data.get(CONF_VEHICLE_NAME) or ""
         schema = vol.Schema({
             vol.Optional(
@@ -255,7 +255,7 @@ class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):
                 CONF_POLL_CHARGING,
                 default=opt.get(CONF_POLL_CHARGING, DEFAULT_POLL_CHARGING_MIN),
             ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
-            # override manuale del nome del veicolo (vuoto = usa quello rilevato dall'auto)
+            # manual override of the vehicle name (empty = use the one detected from the car)
             vol.Optional(
                 CONF_VEHICLE_NAME,
                 description={"suggested_value": cur_name},

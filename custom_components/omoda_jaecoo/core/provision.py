@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-provision.py — Catena di PROVISIONING del comando veicolo Omoda / Jaecoo (SESSIONE 16).
+provision.py — Omoda / Jaecoo vehicle command PROVISIONING chain (SESSIONE 16).
 
-SCOPERTA (workflow 5-agenti, S16 — prove file:riga in SESSIONE16_REPORT.md):
-  I comandi `/asc/vehicleControl/*` NON vogliono lo `userToken` del BFF (è quello
-  che usiamo noi → A07900 universale), ma un **car_token per-veicolo**.
-  La catena reale dell'app (rus_car_control_provider.dart:6511-6567) è:
+DISCOVERY (5-agent workflow, S16 — file:line evidence in SESSIONE16_REPORT.md):
+  The `/asc/vehicleControl/*` commands do NOT want the BFF `userToken` (that's the one
+  we use → universal A07900), but a **per-vehicle car_token**.
+  The app's real chain (rus_car_control_provider.dart:6511-6567) is:
 
       getTuserId → loginTSP (= car_token) → queryList → setVecDefault(vin)
-      → checkPassword(scene=2 → taskId) → comando  (Authorization = car_token)
+      → checkPassword(scene=2 → taskId) → command  (Authorization = car_token)
 
-  - `loginCheck` NON è in questa catena (è il QR-login sull'infotainment, scartato).
-  - L'autorizzazione veicolo non è un boolean: è l'int `authorizeType` del bean
-    RusCarAuthorize (==2 proprietà → controlCarList; ==0 delegato →
-    authorizedControlCarList). Il VIN deve comparire in una delle due liste.
-  - Il car_token lato Dart = CurrentVehicle.token, popolato da getTspToken()/
-    loginTSP (impl NATIVA, nop nel DEX). DA-VERIFICARE se è anche un campo della
-    risposta `queryList` del BFF: è ESATTAMENTE ciò che la FASE A qui sotto misura.
+  - `loginCheck` is NOT in this chain (it's the QR login on the infotainment, discarded).
+  - Vehicle authorization is not a boolean: it's the int `authorizeType` of the
+    RusCarAuthorize bean (==2 owner → controlCarList; ==0 delegated →
+    authorizedControlCarList). The VIN must appear in one of the two lists.
+  - The car_token on the Dart side = CurrentVehicle.token, populated by getTspToken()/
+    loginTSP (NATIVE impl, nop in the DEX). TO-BE-VERIFIED whether it is also a field of the
+    BFF `queryList` response: that is EXACTLY what PHASE A below measures.
 
 ──────────────────────────────────────────────────────────────────────────────
-DUE FASI NETTAMENTE SEPARATE:
+TWO CLEARLY SEPARATE PHASES:
 
-  FASE A — `diagnose()` : DIAGNOSTICA, SOLA LETTURA, **NON tocca l'auto**.
-      Chiama solo il BFF (legend-oj): login → getTuserId → queryList.
-      Per il nostro VIN stampa: lista di appartenenza, authorizeType, e CERCA un
-      eventuale campo token per-veicolo (car_token) nella risposta.
-      NIENTE `/asc/vehicleControl/*`, NIENTE smsAwaken, NIENTE checkPassword.
-      È il test che discrimina le ipotesi A/B/C senza alcun effetto sulla macchina.
+  PHASE A — `diagnose()` : DIAGNOSTIC, READ-ONLY, **does NOT touch the car**.
+      Calls only the BFF (legend-oj): login → getTuserId → queryList.
+      For our VIN it prints: membership list, authorizeType, and SEARCHES for a
+      possible per-vehicle token field (car_token) in the response.
+      NO `/asc/vehicleControl/*`, NO smsAwaken, NO checkPassword.
+      It's the test that discriminates hypotheses A/B/C with no effect on the car.
 
-  FASE B — `run_command()` : ATTIVA. Esegue setVecDefault(vin) → checkPassword(PIN)
-      → comando, usando come Authorization il **car_token** (non lo userToken).
-      Da lanciare SOLO con OK esplicito e ad auto sveglia. checkPassword col PIN
-      GIUSTO è rieseguibile; un PIN SBAGLIATO rischia il lockout → mai indovinare.
+  PHASE B — `run_command()` : ACTIVE. Runs setVecDefault(vin) → checkPassword(PIN)
+      → command, using the **car_token** as Authorization (not the userToken).
+      To be run ONLY with explicit OK and with the car awake. checkPassword with the
+      RIGHT PIN is re-runnable; a WRONG PIN risks the lockout → never guess.
 
-REGOLE: questo modulo NON viene eseguito all'import. `__main__` di default fa la
-sola FASE A (read-only). La FASE B parte solo con argomento esplicito `command`.
+RULES: this module is NOT executed at import. `__main__` by default runs only
+PHASE A (read-only). PHASE B starts only with the explicit `command` argument.
 
-Uso strettamente personale (auto/account di Rino). NON pubblicare token/PIN/cert.
+Strictly personal use (the user's car/account). Do NOT publish the token/PIN/cert.
 """
 import os, sys, json, time, hashlib
 
@@ -48,20 +48,20 @@ if HERE not in sys.path:
 import requests
 import omoda_auth as A
 import tsp_sign as S
-import wake as W          # riusa _access_token / _bff_login / _signed_post / _code_of (già verificati)
+import wake as W          # reuses _access_token / _bff_login / _signed_post / _code_of (already verified)
 import codes
 
-VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: vedi omoda_jaecoo.env.example
-PIN        = os.environ.get("PIN", os.environ.get("OMODA_PIN", ""))   # PIN di controllo (PER-ACCOUNT)
+VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
+PIN        = os.environ.get("PIN", os.environ.get("OMODA_PIN", ""))   # control PIN (PER-ACCOUNT)
 PROV_LOG   = os.environ.get("OMODA_PROV_LOG", os.path.join(HERE, "data", "provision.jsonl"))
 
-# Endpoint BFF (legend-oj) della catena di provisioning — tutti POST, Bearer access_token + sign app.
+# BFF endpoints (legend-oj) of the provisioning chain — all POST, Bearer access_token + app sign.
 BFF_GETTUSERID    = "/tsp/v1/app/auth/getTuserId"
 BFF_QUERYLIST     = "/tsp/v1/app/vmc/queryList"
 BFF_SETVECDEFAULT = "/tsp/v1/app/vmc/setVecDefault"
 BFF_CHECKPASSWORD = "/tsp/v1/app/cpm/checkPassword"
 
-# nomi-chiave candidati per il token per-veicolo dentro la risposta queryList (DA-VERIFICARE)
+# candidate key names for the per-vehicle token inside the queryList response (TO-BE-VERIFIED)
 CAR_TOKEN_KEYS = ("token", "tspToken", "carToken", "accessToken", "vehicleToken", "controlToken")
 
 
@@ -78,7 +78,7 @@ def _log(rec: dict):
 
 
 def _redact(body: dict) -> dict:
-    """Per i log/stampe: non mostrare il PIN cifrato né i token in chiaro."""
+    """For logs/prints: do not show the encrypted PIN or the tokens in clear text."""
     out = {}
     for k, v in (body or {}).items():
         if k in ("password",) or k.lower().endswith("token"):
@@ -88,12 +88,12 @@ def _redact(body: dict) -> dict:
     return out
 
 
-# ───────────────────────── chiamate BFF autenticate (patchabili nei test) ───────
+# ───────────────────────── authenticated BFF calls (patchable in tests) ───────
 def _bff_call(path: str, params: dict = None, method: str = "POST"):
-    """POST/GET autenticato al BFF legend-oj: Bearer access_token + headerSignature app.
+    """Authenticated POST/GET to the legend-oj BFF: Bearer access_token + app headerSignature.
 
-    È lo schema PROVATO (stage2_tsp.py / checkpw_oneshot.py): le route vmc/cpm/auth
-    del BFF accettano l'access_token come Bearer. Ritorna (status_code, json)."""
+    It's the PROVEN scheme (stage2_tsp.py / checkpw_oneshot.py): the BFF's vmc/cpm/auth
+    routes accept the access_token as Bearer. Returns (status_code, json)."""
     access = W._access_token()
     extra = {"Authorization": f"Bearer {access}",
              "Content-Type": "application/json; charset=UTF-8",
@@ -111,7 +111,7 @@ def _bff_call(path: str, params: dict = None, method: str = "POST"):
 
 
 def get_tuser_id(user_id: str = None):
-    """getTuserId — ritorna (status, json). Query {channelId, userId} (user_id opzionale)."""
+    """getTuserId — returns (status, json). Query {channelId, userId} (user_id optional)."""
     q = {"channelId": A.CHANNEL_ID}
     if user_id:
         q["userId"] = str(user_id)
@@ -119,20 +119,20 @@ def get_tuser_id(user_id: str = None):
 
 
 def query_list():
-    """queryList — POST {} → lista veicoli (controlCarList / authorizedControlCarList)."""
+    """queryList — POST {} → vehicle list (controlCarList / authorizedControlCarList)."""
     return _bff_call(BFF_QUERYLIST, {}, method="POST")
 
 
 def set_vec_default(vin: str = None):
-    """setVecDefault — POST {vin}. Bind del veicolo attivo. NON raggiunge il TBOX."""
+    """setVecDefault — POST {vin}. Binds the active vehicle. Does NOT reach the TBOX."""
     return _bff_call(BFF_SETVECDEFAULT, {"vin": vin or VIN}, method="POST")
 
 
 def check_password(tuser_id: str, pin: str = None, vin: str = None, scene: int = 2):
     """checkPassword(scene=2) → (status, json, taskId). password = sm4(md5(pin)).
 
-    Ricetta chiusa in S10/confermata S16: md5(pin) poi sm4RandomString (padRight32),
-    needDecode=0, type=0, scene=2. PIN GIUSTO è rieseguibile (non incrementa errori)."""
+    Recipe settled in S10/confirmed S16: md5(pin) then sm4RandomString (padRight32),
+    needDecode=0, type=0, scene=2. The RIGHT PIN is re-runnable (does not increment errors)."""
     pin = pin or PIN
     plain = hashlib.md5(pin.encode("utf-8")).hexdigest()      # generateMd5(pin)
     password = A.sm4_code(plain, "padRight32")                # sm4RandomString(md5(pin))
@@ -146,12 +146,12 @@ def check_password(tuser_id: str, pin: str = None, vin: str = None, scene: int =
 
 def send_command(cmd: str, car_token: str, vin: str = None, tuser_id: str = None,
                  task_id: str = None, extra_body: dict = None):
-    """Invia il comando a tspconsole-eu con Authorization = **car_token** (non userToken).
+    """Sends the command to tspconsole-eu with Authorization = **car_token** (not userToken).
 
-    Body base = {channelId, tUserId, vin} (+ taskId se presente) come da
-    i18n_car_quest_model.dart:3190; `extra_body` per campi specifici del comando
-    (es. switchStatus). Riusa wake._signed_post passando il car_token come token.
-    Ritorna (status, json)."""
+    Base body = {channelId, tUserId, vin} (+ taskId if present) as per
+    i18n_car_quest_model.dart:3190; `extra_body` for command-specific fields
+    (e.g. switchStatus). Reuses wake._signed_post passing the car_token as the token.
+    Returns (status, json)."""
     body = {"vin": vin or VIN, "channelId": A.CHANNEL_ID}
     if tuser_id:
         body["tUserId"] = str(tuser_id)
@@ -163,12 +163,12 @@ def send_command(cmd: str, car_token: str, vin: str = None, tuser_id: str = None
     return W._signed_post(car_token, path, body)
 
 
-# ───────────────────────── estrazione veicolo dalla risposta queryList ──────────
+# ───────────────────────── vehicle extraction from the queryList response ──────────
 def _iter_vehicles(qlist_json):
-    """Restituisce [(list_name, item_dict)] per ogni veicolo nelle liste della risposta.
+    """Returns [(list_name, item_dict)] for each vehicle in the response's lists.
 
-    Robusto a forme diverse: data.controlCarList / data.authorizedControlCarList, ma
-    anche data come lista, o liste annidate. list_name = etichetta diagnostica."""
+    Robust to different shapes: data.controlCarList / data.authorizedControlCarList, but
+    also data as a list, or nested lists. list_name = diagnostic label."""
     out = []
     data = qlist_json.get("data") if isinstance(qlist_json, dict) else None
     named = {}
@@ -178,7 +178,7 @@ def _iter_vehicles(qlist_json):
             if isinstance(v, list):
                 named[key] = v
         if not named:
-            # data potrebbe essere già un singolo veicolo
+            # data might already be a single vehicle
             if any(k in data for k in ("vin", "VIN")):
                 out.append(("data", data))
     elif isinstance(data, list):
@@ -198,11 +198,11 @@ def _vin_of(item: dict) -> str:
 
 
 def _car_token_in(item: dict):
-    """Cerca un campo token per-veicolo nel bean (chiave + valore), altrimenti (None, None)."""
+    """Searches for a per-vehicle token field in the bean (key + value), otherwise (None, None)."""
     for k in CAR_TOKEN_KEYS:
         if item.get(k):
             return k, item[k]
-    # ricerca case-insensitive su chiavi che contengono 'token'
+    # case-insensitive search over keys that contain 'token'
     for k, v in item.items():
         if "token" in k.lower() and v:
             return k, v
@@ -210,7 +210,7 @@ def _car_token_in(item: dict):
 
 
 def find_our_vehicle(qlist_json, vin: str = None):
-    """→ dict {found, list_name, authorize_type, car_token_key, car_token, item} per il nostro VIN."""
+    """→ dict {found, list_name, authorize_type, car_token_key, car_token, item} for our VIN."""
     vin = vin or VIN
     for list_name, item in _iter_vehicles(qlist_json):
         if _vin_of(item) == vin:
@@ -222,15 +222,15 @@ def find_our_vehicle(qlist_json, vin: str = None):
             "car_token_key": None, "car_token": None, "item": None}
 
 
-# ───────────────────────── FASE A: diagnostica SOLA LETTURA ─────────────────────
+# ───────────────────────── PHASE A: READ-ONLY diagnostics ─────────────────────
 def diagnose(publish):
-    """FASE A — login → getTuserId → queryList. **Nessun comando, non tocca l'auto.**
+    """PHASE A — login → getTuserId → queryList. **No command, does not touch the car.**
 
-    Discrimina le ipotesi del report S16:
-      - VIN presente + car_token nella risposta → ipotesi B risolvibile (basta il bind).
-      - VIN presente ma nessun car_token → ipotesi A (token da loginTSP nativo).
-      - VIN assente / lista vuota → account non legato al veicolo (non aggirabile).
-    Ritorna un dict riepilogativo. Mai solleva."""
+    Discriminates the hypotheses of the S16 report:
+      - VIN present + car_token in the response → hypothesis B solvable (just the bind).
+      - VIN present but no car_token → hypothesis A (token from native loginTSP).
+      - VIN absent / empty list → account not bound to the vehicle (not bypassable).
+    Returns a summary dict. Never raises."""
     try:
         publish("🔎 Vehicle diagnostics (read-only, does not interact with car)…")
         ut, tu = W._bff_login()
@@ -238,11 +238,11 @@ def diagnose(publish):
             publish("🔑 Session expired: redo OTP login (token.json).")
             return {"ok": False, "reason": "no_usertoken"}
 
-        # getTuserId (informativo; tUserId arriva già dal login)
+        # getTuserId (informational; tUserId already comes from the login)
         sc_t, j_t = get_tuser_id()
         tuser = tu or (j_t.get("data") if isinstance(j_t, dict) else None)
 
-        # queryList → liste veicoli
+        # queryList → vehicle lists
         sc_q, j_q = query_list()
         code_q = W._code_of(j_q)
         veh = find_our_vehicle(j_q, VIN)
@@ -255,40 +255,40 @@ def diagnose(publish):
               "queryList_data": j_q.get("data") if isinstance(j_q, dict) else None})
 
         if not veh["found"]:
-            publish(f"🟥 VIN {VIN} NON presente nelle liste (code={code_q}). "
-                    "→ account non autorizzato al controllo: nessun software lo aggira.")
+            publish(f"🟥 VIN {VIN} NOT present in the lists (code={code_q}). "
+                    "→ account not authorized for control: no software bypasses it.")
             return {"ok": True, "found": False, "queryList_code": code_q,
                     "hypothesis": "account_not_bound"}
 
         at = veh["authorize_type"]
         which = veh["list_name"]
         if veh["car_token"]:
-            publish(f"🟩 VIN trovato in {which} (authorizeType={at}) e la risposta CONTIENE "
-                    f"un token per-veicolo (campo '{veh['car_token_key']}') → ipotesi B: "
-                    "basta il bind + usare quel car_token nel comando.")
+            publish(f"🟩 VIN found in {which} (authorizeType={at}) and the response CONTAINS "
+                    f"a per-vehicle token (field '{veh['car_token_key']}') → hypothesis B: "
+                    "just the bind + using that car_token in the command.")
             hyp = "B_cartoken_in_querylist"
         else:
-            publish(f"🟨 VIN trovato in {which} (authorizeType={at}) ma NESSUN car_token "
-                    "nella risposta → ipotesi A: il car_token nasce da loginTSP (nativo), "
-                    "da replicare. Bind possibile, token da trovare.")
+            publish(f"🟨 VIN found in {which} (authorizeType={at}) but NO car_token "
+                    "in the response → hypothesis A: the car_token comes from loginTSP (native), "
+                    "to be replicated. Bind possible, token to be found.")
             hyp = "A_cartoken_from_logintsp"
         return {"ok": True, "found": True, "list_name": which, "authorize_type": at,
                 "car_token_key": veh["car_token_key"], "has_car_token": bool(veh["car_token"]),
                 "queryList_code": code_q, "tUserId": tu, "hypothesis": hyp}
     except Exception as e:
-        publish(f"⚠️ Diagnostica errore: {type(e).__name__}: {e}")
+        publish(f"⚠️ Diagnostics error: {type(e).__name__}: {e}")
         return {"ok": False, "reason": "exception", "error": str(e)}
 
 
-# ───────────────────────── FASE B: catena attiva (gated) ────────────────────────
+# ───────────────────────── PHASE B: active chain (gated) ────────────────────────
 def run_command(publish, cmd: str = "remoteStart", pin: str = None,
                 extra_body: dict = None, is_awake=None):
-    """FASE B — setVecDefault(vin) → checkPassword(PIN, scene=2) → comando con car_token.
+    """PHASE B — setVecDefault(vin) → checkPassword(PIN, scene=2) → command with car_token.
 
-    ⚠️ ATTIVA: invia un comando reale all'auto. Da chiamare SOLO con OK esplicito e
-    auto sveglia. Usa il car_token trovato in diagnose() (ipotesi B); se assente,
-    NON inventa: si ferma e segnala che serve la pista loginTSP (ipotesi A).
-    Ritorna un dict riepilogativo. Mai solleva."""
+    ⚠️ ACTIVE: sends a real command to the car. To be called ONLY with explicit OK and
+    the car awake. Uses the car_token found in diagnose() (hypothesis B); if absent,
+    it does NOT invent one: it stops and signals that the loginTSP path is needed (hypothesis A).
+    Returns a summary dict. Never raises."""
     try:
         if is_awake is not None and not is_awake():
             publish("⌛ Car asleep: the command would return A07900. Wake it first (recent use).")
@@ -299,11 +299,11 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
             publish("🔑 Session expired: redo OTP login.")
             return {"ok": False, "reason": "no_usertoken"}
 
-        # 1) diagnostica/queryList per ottenere il car_token (ipotesi B)
+        # 1) diagnostics/queryList to obtain the car_token (hypothesis B)
         sc_q, j_q = query_list()
         veh = find_our_vehicle(j_q, VIN)
         if not veh["found"]:
-            publish(f"🟥 VIN non in lista (code={W._code_of(j_q)}): non autorizzato. Stop.")
+            publish(f"🟥 VIN not in list (code={W._code_of(j_q)}): not authorized. Stop.")
             return {"ok": False, "reason": "vehicle_not_found"}
         car_token = veh["car_token"]
         if not car_token:
@@ -311,7 +311,7 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
                     "native implementation not yet replicated. Stop before sending commands.")
             return {"ok": False, "reason": "no_car_token", "hypothesis": "A_cartoken_from_logintsp"}
 
-        # 2) bind veicolo (NON tocca il TBOX)
+        # 2) vehicle bind (does NOT touch the TBOX)
         sc_s, j_s = set_vec_default(VIN)
         publish(f"🔗 setVecDefault → {W._code_of(j_s)}")
 
@@ -323,7 +323,7 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
             return {"ok": False, "reason": "no_taskid", "code": W._code_of(j_p)}
         publish("🔐 PIN ok, taskId obtained. Sending command with car_token…")
 
-        # 4) comando con Authorization = car_token
+        # 4) command with Authorization = car_token
         sc_c, j_c = send_command(cmd, car_token, vin=VIN, tuser_id=tu,
                                  task_id=task_id, extra_body=extra_body)
         code_c = W._code_of(j_c)
@@ -345,60 +345,60 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
         return {"ok": False, "reason": "exception", "error": str(e)}
 
 
-# ───────────────────────── self-test (NESSUNA chiamata di rete reale) ───────────
+# ───────────────────────── self-test (NO real network calls) ───────────
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else "selftest"
 
     if arg == "diagnose":
-        # FASE A LIVE (read-only) — l'utente la lancia quando dà l'OK.
+        # PHASE A LIVE (read-only) — the user runs it when they give the OK.
         pub = lambda t: print("  STATUS:", t)
         print(json.dumps(diagnose(pub), ensure_ascii=False, indent=2))
         sys.exit(0)
 
     if arg == "command":
-        # FASE B LIVE (ATTIVA) — richiede env OMODA_CONFIRM=1 per evitare lanci accidentali.
+        # PHASE B LIVE (ACTIVE) — requires env OMODA_CONFIRM=1 to avoid accidental runs.
         if os.environ.get("OMODA_CONFIRM") != "1":
-            print("RIFIUTO: FASE B attiva. Rilancia con OMODA_CONFIRM=1 e ad auto sveglia.")
+            print("REFUSED: PHASE B is active. Re-run with OMODA_CONFIRM=1 and with the car awake.")
             sys.exit(2)
         cmd = sys.argv[2] if len(sys.argv) > 2 else "remoteStart"
         pub = lambda t: print("  STATUS:", t)
         print(json.dumps(run_command(pub, cmd=cmd), ensure_ascii=False, indent=2))
         sys.exit(0)
 
-    # ── default: self-test OFFLINE con mock (nessuna rete) ──
+    # ── default: OFFLINE self-test with mocks (no network) ──
     pub = lambda t: print("  STATUS:", t)
 
-    print("== TEST find_our_vehicle: car_token presente in controlCarList ==")
+    print("== TEST find_our_vehicle: car_token present in controlCarList ==")
     mock_q = {"code": "000000", "data": {"controlCarList": [
         {"vin": "VIN_PLACEHOLDER", "authorizeType": 2, "token": "CARTOK123", "defaultFlag": 1},
         {"vin": "OTHER", "authorizeType": 0}]}}
     print("  ->", {k: v for k, v in find_our_vehicle(mock_q).items() if k != "item"})
 
-    print("== TEST find_our_vehicle: VIN solo in authorized, senza token ==")
+    print("== TEST find_our_vehicle: VIN only in authorized, without token ==")
     mock_q2 = {"code": "000000", "data": {"controlCarList": [],
         "authorizedControlCarList": [{"vin": "VIN_PLACEHOLDER", "authorizeType": 0}]}}
     print("  ->", {k: v for k, v in find_our_vehicle(mock_q2).items() if k != "item"})
 
-    print("== TEST find_our_vehicle: VIN assente ==")
+    print("== TEST find_our_vehicle: VIN absent ==")
     print("  ->", {k: v for k, v in find_our_vehicle({"code": "000000", "data": {"controlCarList": []}}).items() if k != "item"})
 
-    # NB: i mock vanno assegnati ai global di QUESTO modulo (__main__), che è ciò
-    # che diagnose()/run_command() risolvono a runtime — non a un secondo `import`.
-    print("== TEST diagnose (mock, ipotesi B) ==")
+    # NB: the mocks must be assigned to the globals of THIS module (__main__), which is what
+    # diagnose()/run_command() resolve at runtime — not to a second `import`.
+    print("== TEST diagnose (mock, hypothesis B) ==")
     W._bff_login = lambda: ("FAKE_UT", "FAKE_TUSERID")
     get_tuser_id = lambda user_id=None: (200, {"code": "000000", "data": "FAKE_TUSERID"})
     query_list   = lambda: (200, mock_q)
     print("  ->", diagnose(pub))
 
-    print("== TEST diagnose (mock, ipotesi A: VIN presente, no token) ==")
+    print("== TEST diagnose (mock, hypothesis A: VIN present, no token) ==")
     query_list = lambda: (200, mock_q2)
     print("  ->", diagnose(pub))
 
-    print("== TEST run_command bloccato se no car_token (no rete comando) ==")
+    print("== TEST run_command blocked if no car_token (no command network) ==")
     query_list = lambda: (200, mock_q2)
     print("  ->", run_command(pub, cmd="remoteStart", is_awake=lambda: True))
 
-    print("== TEST run_command flusso completo (mock, car_token presente) ==")
+    print("== TEST run_command full flow (mock, car_token present) ==")
     query_list      = lambda: (200, mock_q)
     set_vec_default = lambda vin=None: (200, {"code": "000000"})
     check_password  = lambda tuser_id, pin=None, vin=None, scene=2: (200, {"code": "000000", "data": {"taskId": "TASK99"}}, "TASK99")
@@ -408,6 +408,6 @@ if __name__ == "__main__":
         return 200, {"code": "A00079"}
     send_command = fake_send
     print("  ->", run_command(pub, cmd="remoteStart", is_awake=lambda: True))
-    print("     (comando inviato con car_token =", sent.get("car_token"), ", taskId =", sent.get("task_id"), ")")
+    print("     (command sent with car_token =", sent.get("car_token"), ", taskId =", sent.get("task_id"), ")")
 
-    print("\nOK self-test concluso (nessuna chiamata di rete reale).")
+    print("\nOK self-test finished (no real network calls).")

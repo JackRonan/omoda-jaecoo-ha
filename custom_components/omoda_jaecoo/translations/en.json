@@ -180,6 +180,9 @@
       "range_electric": {
         "name": "Range Electric"
       },
+      "range_electric_wltp": {
+        "name": "Range Electric (WLTP)"
+      },
       "range_gasoline": {
         "name": "Range Gasoline"
       },
@@ -237,6 +240,9 @@
       "charge_remaining_time": {
         "name": "Charge Remaining Time"
       },
+      "charging_power": {
+        "name": "Charging Power"
+      },
       "charge_state": {
         "name": "Charge State"
       },
@@ -292,24 +298,6 @@
       },
       "ventilate_windows": {
         "name": "Ventilate Windows"
-      },
-      "climate_cool_on": {
-        "name": "Climate Cool Down All ON"
-      },
-      "climate_cool_off": {
-        "name": "Climate Cool Down All OFF"
-      },
-      "climate_heat_on": {
-        "name": "Climate Heat Up All ON"
-      },
-      "climate_heat_off": {
-        "name": "Climate Heat Up All OFF"
-      },
-      "alarm_theft_on": {
-        "name": "Alarm Theft ON"
-      },
-      "alarm_theft_off": {
-        "name": "Alarm Theft OFF"
       },
       "diagnostic_wake_car": {
         "name": "Diagnostic Wake Car"

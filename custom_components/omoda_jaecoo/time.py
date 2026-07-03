@@ -1,17 +1,17 @@
-"""Time: orari di configurazione locali (non comandi diretti all'auto).
+"""Time: local configuration times (not direct commands to the car).
 
-Come i number di configurazione, queste entità NON inviano nulla all'auto da sole:
-memorizzano una preferenza usata dagli altri controlli al momento dell'invio.
-  - Ricarica programmata · orario di inizio: l'ora (HH:MM) da cui far partire la
-    ricarica. Lo switch "Ricarica programmata" compone il piano `chargeAppointControl`
-    usando questo valore.
+Like the configuration numbers, these entities do NOT send anything to the car on their own:
+they store a preference used by the other controls at send time.
+  - Scheduled charging · start time: the time (HH:MM) from which to start
+    charging. The "Scheduled charging" switch composes the `chargeAppointControl` plan
+    using this value.
 
-Perché un'entità `time` e non un number 0–23: l'auto accetta l'orario in MINUTI dalla
-mezzanotte (verificato dal vivo sulla ricarica programmata reale: startTime 465 = 07:45)
-→ con un selettore orario si può scegliere anche i minuti, non solo l'ora intera.
+Why a `time` entity and not a 0–23 number: the car accepts the time in MINUTES from
+midnight (verified live on real scheduled charging: startTime 465 = 07:45)
+→ with a time selector you can also pick the minutes, not just the whole hour.
 
-È RestoreEntity → al riavvio di HA ripristina l'ultimo orario impostato e lo riscrive
-sul coordinator (da cui lo switch lo legge come `charge_start_minutes`).
+It is a RestoreEntity → on HA restart it restores the last set time and rewrites it
+onto the coordinator (from which the switch reads it as `charge_start_minutes`).
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import DOMAIN
 from .entity import OmodaJaecooEntity
 
-# (nome, suffix, attributo-minuti sul coordinator, default HH, default MM, icona)
+# (name, suffix, minutes-attribute on the coordinator, default HH, default MM, icon)
 TIMES = [
     ("Charge Start Time", "charging_start_time",
      "charge_start_minutes", 8, 0, "mdi:clock-start"),
@@ -40,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 
 class OmodaJaecooConfigTime(OmodaJaecooEntity, TimeEntity, RestoreEntity):
-    """Selettore orario di configurazione locale: pubblica i minuti-da-mezzanotte sul coordinator."""
+    """Local configuration time selector: publishes the minutes-from-midnight onto the coordinator."""
 
     _attr_entity_category = EntityCategory.CONFIG
 
@@ -49,7 +49,7 @@ class OmodaJaecooConfigTime(OmodaJaecooEntity, TimeEntity, RestoreEntity):
         self._attr = attr
         self._attr_icon = icon
         self._value = time(hour=def_h, minute=def_m)
-        setattr(coord, attr, def_h * 60 + def_m)   # default subito disponibile allo switch
+        setattr(coord, attr, def_h * 60 + def_m)   # default immediately available to the switch
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -70,7 +70,7 @@ class OmodaJaecooConfigTime(OmodaJaecooEntity, TimeEntity, RestoreEntity):
         return self._value
 
     async def async_set_value(self, value: time) -> None:
-        # i secondi non servono (l'auto ragiona in minuti) → li azzeriamo
+        # seconds are not needed (the car works in minutes) → we zero them out
         self._value = value.replace(second=0, microsecond=0)
         self._push()
         self.async_write_ha_state()

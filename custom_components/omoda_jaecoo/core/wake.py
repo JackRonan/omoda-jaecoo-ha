@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-wake.py — "Sveglia auto" Omoda / Jaecoo: replica ESATTA del flusso dell'app ufficiale
-          (1× smsAwaken → poll realtime/location), pensato per essere richiamato
-          dal pulsante Home Assistant esposto da ha_bridge.py.
+wake.py — "Wake car" Omoda / Jaecoo: EXACT replica of the official app's flow
+          (1× smsAwaken → poll realtime/location), meant to be invoked
+          by the Home Assistant button exposed by ha_bridge.py.
 
-Flusso (verificato sul codice reale, SESSIONE11_REPORT.md):
+Flow (verified against the real code, SESSIONE11_REPORT.md):
   1) bff_login()  : token.json (access_token) → POST {BFF}/tsp/v1/app/auth/login → userToken/tUserId
-  2) smsAwaken    : POST {TSP}/asc/vehicleControl/smsAwaken {vin}, firmato tsp_sign
-                    code "000000" = sveglia accettata; "A07312" = rate-limit/quota SMS-wake.
-  3) poll ~60s    : /asr/manager/realtime + /asc/vehicleControl/queryVehicleLocation ogni 5s.
-                    In parallelo il listener MQTT del ponte cattura i 5A02 → is_awake() diventa True.
+  2) smsAwaken    : POST {TSP}/asc/vehicleControl/smsAwaken {vin}, signed with tsp_sign
+                    code "000000" = wake accepted; "A07312" = rate-limit/quota SMS-wake.
+  3) poll ~60s    : /asr/manager/realtime + /asc/vehicleControl/queryVehicleLocation every 5s.
+                    In parallel the bridge's MQTT listener catches the 5A02 → is_awake() becomes True.
 
-⚠️  smsAwaken HA UN RATE-LIMIT REALE. Il pulsante NON va martellato:
-    - `do_wake` rispetta un COOLDOWN (default 300s) tra due smsAwaken davvero inviati;
-    - un solo `do_wake` per volta (lock anti doppio-tap).
+⚠️  smsAwaken HAS A REAL RATE-LIMIT. The button must NOT be hammered:
+    - `do_wake` respects a COOLDOWN (default 300s) between two smsAwaken actually sent;
+    - only one `do_wake` at a time (anti double-tap lock).
 
-Uso strettamente personale (auto/account di Rino). NON pubblicare token/cert.
+Strictly personal use (the user's car/account). Do NOT publish the token/cert.
 """
 import os, sys, json, time, threading
 
@@ -29,39 +29,39 @@ import omoda_auth as A
 import tsp_sign as S
 import codes
 
-# C1: serializza i refresh del token. keep-alive (coordinator) e un comando possono
-# innescare _refresh_token() insieme: senza lock entrambi userebbero lo STESSO
-# refresh_token, Chery lo ruota a ogni uso → il secondo refresh invalida il token
-# del primo e la sessione cade. Il lock + double-check (sotto) evita il doppio refresh.
+# C1: serializes the token refreshes. keep-alive (coordinator) and a command can
+# trigger _refresh_token() together: without a lock both would use the SAME
+# refresh_token, Chery rotates it on every use → the second refresh invalidates the
+# first one's token and the session drops. The lock + double-check (below) avoids the double refresh.
 _TOKEN_LOCK = threading.Lock()
 
-TSP_HOST   = os.environ.get("TSP_HOST", "https://tspconsole-eu.cheryinternational.com")   # regione (default EU)
-VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: vedi omoda_jaecoo.env.example
+TSP_HOST   = os.environ.get("TSP_HOST", "https://tspconsole-eu.cheryinternational.com")   # region (default EU)
+VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
 
 
 def _token_path() -> str:
-    """Path del token canonico, riletto da env a OGNI accesso (NON congelato all'import).
+    """Path of the canonical token, re-read from env on EVERY access (NOT frozen at import).
 
-    Necessario perché core/ viene importato una sola volta nel processo HA ma con
-    contesti diversi: il config flow conia il token in un path 'pending', il runtime
-    usa quello per-VIN. Leggere TOKEN_PATH a import-time darebbe il path sbagliato
-    (es. la verifica post-OTP leggeva il vecchio token per-VIN già invalidato)."""
+    Needed because core/ is imported only once in the HA process but with
+    different contexts: the config flow mints the token in a 'pending' path, the runtime
+    uses the per-VIN one. Reading TOKEN_PATH at import-time would give the wrong path
+    (e.g. the post-OTP verification was reading the old, already-invalidated per-VIN token)."""
     return os.environ.get("OMODA_TOKEN_PATH") or os.path.join(HERE, "token.json")
 
 
-# Compat: alcune chiamate storiche usano wake.TOKEN_PATH come valore iniziale.
+# Compat: some legacy calls use wake.TOKEN_PATH as the initial value.
 TOKEN_PATH = _token_path()
-# stato persistente del cooldown (sopravvive ai riavvii del ponte)
+# persistent cooldown state (survives bridge restarts)
 WAKE_STATE = os.environ.get("OMODA_WAKE_STATE", os.path.join(HERE, "data", "wake_state.json"))
 
-COOLDOWN_S = int(os.environ.get("WAKE_COOLDOWN", "300"))   # min secondi tra due smsAwaken inviati
-POLL_N     = int(os.environ.get("WAKE_POLL_N", "12"))      # n. cicli di poll
-POLL_EVERY = int(os.environ.get("WAKE_POLL_EVERY", "5"))   # secondi tra un poll e l'altro
+COOLDOWN_S = int(os.environ.get("WAKE_COOLDOWN", "300"))   # min seconds between two smsAwaken sent
+POLL_N     = int(os.environ.get("WAKE_POLL_N", "12"))      # no. of poll cycles
+POLL_EVERY = int(os.environ.get("WAKE_POLL_EVERY", "5"))   # seconds between one poll and the next
 
-_BUSY = threading.Lock()   # un solo wake per volta
+_BUSY = threading.Lock()   # only one wake at a time
 
 
-# ───────────────────────── persistenza cooldown ────────────────────────────────
+# ───────────────────────── cooldown persistence ────────────────────────────────
 def _load_last_sms() -> float:
     try:
         with open(WAKE_STATE, "r", encoding="utf-8") as f:
@@ -78,11 +78,11 @@ def _save_last_sms(ts: float):
         pass
 
 
-# ───────────────────────── chiamate REST (patchabili nei test) ──────────────────
+# ───────────────────────── REST calls (patchable in tests) ──────────────────
 def _access_token():
-    """Legge l'access_token dal token.json. Difensivo: gestisce sia {data:{...}} sia
-    il formato flat, e non esplode con KeyError se il campo manca (ritorna None).
-    Unico punto di lettura del token: commands/provision usano questo."""
+    """Reads the access_token from token.json. Defensive: handles both {data:{...}} and
+    the flat format, and does not blow up with KeyError if the field is missing (returns None).
+    Single point for reading the token: commands/provision use this."""
     with open(_token_path()) as fh:
         tok = json.load(fh)
     if not isinstance(tok, dict):
@@ -93,15 +93,15 @@ def _access_token():
     return tok.get("access_token")
 
 def _refresh_token() -> bool:
-    """Rinnova l'access_token col grant `refresh_token` (NIENTE OTP) e riscrive token.json.
-    Stesso endpoint/headers del login OTP (login_otp.py), che NON è dietro il firewall Aliyun.
-    Ritorna True se ha ottenuto un nuovo access_token, False altrimenti (es. refresh scaduto → serve OTP).
+    """Renews the access_token with the `refresh_token` grant (NO OTP) and rewrites token.json.
+    Same endpoint/headers as the OTP login (login_otp.py), which is NOT behind the Aliyun firewall.
+    Returns True if it obtained a new access_token, False otherwise (e.g. expired refresh → OTP needed).
 
-    C1: protetto da `_TOKEN_LOCK` con double-check. Fotografo l'access_token che il
-    chiamante ha visto (PRIMA del lock); dentro il lock rileggo token.json: se sul
-    disco l'access_token è già cambiato, un altro thread ha già rinnovato → NON rifaccio
-    il refresh (rifarlo brucerebbe il nuovo refresh_token e invaliderebbe la sessione)."""
-    # snapshot pre-lock: il token che il chiamante considerava scaduto
+    C1: protected by `_TOKEN_LOCK` with double-check. I snapshot the access_token the
+    caller saw (BEFORE the lock); inside the lock I re-read token.json: if on
+    disk the access_token has already changed, another thread has already renewed → I do NOT redo
+    the refresh (redoing it would burn the new refresh_token and invalidate the session)."""
+    # pre-lock snapshot: the token the caller considered expired
     try:
         with open(_token_path()) as fh:
             tok0 = json.load(fh)
@@ -110,7 +110,7 @@ def _refresh_token() -> bool:
     seen_at = (tok0.get("data", tok0) or {}).get("access_token") if isinstance(tok0, dict) else None
 
     with _TOKEN_LOCK:
-        # double-check DENTRO il lock: rileggo lo stato corrente del file
+        # double-check INSIDE the lock: re-read the current state of the file
         try:
             with open(_token_path()) as fh:
                 tok = json.load(fh)
@@ -119,13 +119,13 @@ def _refresh_token() -> bool:
         d = (tok.get("data", tok) or {}) if isinstance(tok, dict) else {}
         cur_at = d.get("access_token")
         if seen_at and cur_at and cur_at != seen_at:
-            # già rinnovato da un altro thread: il token su disco è valido, non toccarlo
+            # already renewed by another thread: the token on disk is valid, don't touch it
             return True
         rt = d.get("refresh_token")
         if not rt:
             return False
-        # Ricetta verificata (= identica all'OTP login di prova_token.py): firma applicativa
-        # via headers_post + parametri in QUERY STRING. Senza firma il gateway risponde 428.
+        # Verified recipe (= identical to the OTP login in prova_token.py): application signature
+        # via headers_post + parameters in QUERY STRING. Without the signature the gateway responds 428.
         TP = "/auth/oauth2/token"
         params = {"grant_type": "refresh_token", "refresh_token": rt, "scope": "server"}
         try:
@@ -139,7 +139,7 @@ def _refresh_token() -> bool:
         at = j.get("access_token") or (j.get("data") or {}).get("access_token")
         if not at:
             return False
-        # scrittura atomica: nuovo token su file temporaneo poi rename (token.json mai corrotto)
+        # atomic write: new token to a temp file then rename (token.json never corrupted)
         try:
             path = _token_path()
             tmp = path + ".tmp"
@@ -151,8 +151,8 @@ def _refresh_token() -> bool:
         return True
 
 def _bff_login(_allow_refresh=True):
-    """Ritorna (userToken, tUserId). Solleva su errore di rete; (None,None) se rifiutato.
-    Se la sessione è scaduta tenta UN refresh_token automatico (senza OTP) e riprova una volta."""
+    """Returns (userToken, tUserId). Raises on network error; (None,None) if rejected.
+    If the session has expired it attempts ONE automatic refresh_token (without OTP) and retries once."""
     tok = _access_token()
     H = A.headers_post("/tsp/v1/app/auth/login", extra={
         "Authorization": f"Bearer {tok}",
@@ -160,15 +160,15 @@ def _bff_login(_allow_refresh=True):
         "Accept": "application/json, text/plain, */*"})
     r = requests.post(A.BFF + "/tsp/v1/app/auth/login",
                       data=json.dumps({"channelId": A.CHANNEL_ID}), headers=H, timeout=20)
-    # token scaduto/424: il BFF può restituire un body il cui TOP-LEVEL è una stringa
-    # (non un dict) → r.json() è un str e .get esploderebbe. Tratto tutto come sessione non valida.
+    # expired token/424: the BFF may return a body whose TOP-LEVEL is a string
+    # (not a dict) → r.json() is a str and .get would blow up. Treat everything as an invalid session.
     try:
         j = r.json()
     except Exception:
         return None, None
     d = j.get("data", {}) if isinstance(j, dict) else None
     if not isinstance(d, dict):
-        # sessione scaduta: prova UN rinnovo automatico del token e ritenta una sola volta
+        # expired session: try ONE automatic token renewal and retry only once
         if _allow_refresh and _refresh_token():
             return _bff_login(_allow_refresh=False)
         return None, None
@@ -191,9 +191,9 @@ def _code_of(j):
     return j.get("code") if isinstance(j, dict) else j
 
 def _payload(j):
-    """Payload utile della risposta tspconsole: sotto "data" su alcuni endpoint e
-    sotto "body" su altri (es. /asr/manager/realtime → "body" con 84 campi). Ritorna
-    il primo dict non vuoto, o None."""
+    """Useful payload of the tspconsole response: under "data" on some endpoints and
+    under "body" on others (e.g. /asr/manager/realtime → "body" with 84 fields). Returns
+    the first non-empty dict, or None."""
     if not isinstance(j, dict):
         return None
     for k in ("data", "body"):
@@ -207,15 +207,15 @@ def _has_live_data(j):
     return _payload(j) is not None
 
 
-# ───────────────────────── orchestrazione del pulsante ──────────────────────────
+# ───────────────────────── button orchestration ──────────────────────────
 def do_wake(publish, is_awake=None, send_sms=True):
-    """Esegue il flusso sveglia e riporta lo stato (stringhe già leggibili) via `publish`.
+    """Runs the wake flow and reports the status (already-readable strings) via `publish`.
 
-      publish(text)  -> callback che scrive lo stato su HA + monitor (chiamata più volte)
-      is_awake()     -> callback opzionale: True se il ponte sta già ricevendo eventi MQTT (auto sveglia)
-      send_sms       -> se False NON invia davvero smsAwaken (solo per test/diagnostica)
+      publish(text)  -> callback that writes the status to HA + monitor (called multiple times)
+      is_awake()     -> optional callback: True if the bridge is already receiving MQTT events (car awake)
+      send_sms       -> if False does NOT actually send smsAwaken (only for test/diagnostics)
 
-    Ritorna un dict riepilogativo {ok, online, code, ...}. Mai solleva: ogni errore → status.
+    Returns a summary dict {ok, online, code, ...}. Never raises: every error → status.
     """
     if not _BUSY.acquire(blocking=False):
         publish("⏳ Wake already in progress, please wait…")
@@ -223,7 +223,7 @@ def do_wake(publish, is_awake=None, send_sms=True):
     try:
         return _do_wake_inner(publish, is_awake, send_sms)
     except Exception as e:
-        publish(f"⚠️ Errore sveglia: {type(e).__name__}: {e}")
+        publish(f"⚠️ Wake error: {type(e).__name__}: {e}")
         return {"ok": False, "reason": "exception", "error": str(e)}
     finally:
         _BUSY.release()
@@ -232,44 +232,44 @@ def do_wake(publish, is_awake=None, send_sms=True):
 def _do_wake_inner(publish, is_awake, send_sms):
     now = time.time()
 
-    # 0) cooldown anti rate-limit (solo se invieremo davvero l'SMS)
+    # 0) anti rate-limit cooldown (only if we will actually send the SMS)
     if send_sms:
         last = _load_last_sms()
         wait = COOLDOWN_S - (now - last)
         if last and wait > 0:
             mm, ss = divmod(int(wait), 60)
-            publish(f"⏳ Anti rate-limit: aspetta ancora {mm}m{ss:02d}s prima di risvegliare di nuovo")
+            publish(f"⏳ Anti rate-limit: wait another {mm}m{ss:02d}s before waking again")
             return {"ok": False, "reason": "cooldown", "wait_s": int(wait)}
 
-    # se l'auto sta già pubblicando su MQTT, è già sveglia: niente SMS
+    # if the car is already publishing on MQTT, it is already awake: no SMS
     if is_awake and is_awake():
         publish("🟢 Car already awake (sending data) — wake not needed")
         return {"ok": True, "online": True, "reason": "already_awake"}
 
-    # 1) login BFF → userToken
+    # 1) BFF login → userToken
     publish("🔑 Logging in…")
     ut, tu = _bff_login()
     if not ut:
         publish("🔑 Session expired (old token or official app open): redo OTP login")
         return {"ok": False, "reason": "no_usertoken"}
 
-    # 2) smsAwaken (una sola volta)
+    # 2) smsAwaken (only once)
     code = None
     if send_sms:
         sc, j = _signed_post(ut, "/asc/vehicleControl/smsAwaken", {"vin": VIN})
         code = _code_of(j)
-        _save_last_sms(time.time())     # registra SUBITO per il cooldown, anche se in errore
+        _save_last_sms(time.time())     # record IMMEDIATELY for the cooldown, even on error
         if str(code) in ("000000", "A00079"):
             publish("✅ Wake sent — waiting for car to connect…")
         elif str(code) == "A07312":
             publish("🚫 Wake rate-limited (A07312): the car is refusing more wakes right now. Try again later")
             return {"ok": False, "online": False, "code": code, "reason": "rate_limit"}
         else:
-            publish(f"⚠️ Sveglia non accettata ({code}: {codes.meaning(code)}). Provo comunque ad ascoltare…")
+            publish(f"⚠️ Wake not accepted ({code}: {codes.meaning(code)}). Listening anyway…")
     else:
         publish("🧪 (test) smsAwaken NOT sent; proceeding to poll only")
 
-    # 3) poll realtime/location + ascolto MQTT, per ~POLL_N*POLL_EVERY secondi
+    # 3) poll realtime/location + MQTT listening, for ~POLL_N*POLL_EVERY seconds
     for i in range(POLL_N):
         if is_awake and is_awake():
             publish("🟢 Car ONLINE — sending real-time data")
@@ -281,30 +281,30 @@ def _do_wake_inner(publish, is_awake, send_sms):
             return {"ok": True, "online": True, "code": code, "via": "rest",
                     "data": _payload(j1) or _payload(j2)}
         secs_left = (POLL_N - i - 1) * POLL_EVERY
-        publish(f"… in attesa risveglio ({_code_of(j1)}) — ancora ~{secs_left}s")
+        publish(f"… waiting for wake ({_code_of(j1)}) — ~{secs_left}s left")
         time.sleep(POLL_EVERY)
 
     publish("⌛ Car still asleep (A07900). Try again when it has been used recently or has good signal")
     return {"ok": True, "online": False, "code": code, "reason": "still_asleep"}
 
 
-# ───────────────────────── self-test (NESSUNA chiamata di rete) ─────────────────
+# ───────────────────────── self-test (NO network calls) ─────────────────
 if __name__ == "__main__":
-    # Test dell'orchestrazione SENZA toccare la rete né inviare smsAwaken.
+    # Test of the orchestration WITHOUT touching the network or sending smsAwaken.
     import wake as W
     msgs = []
     pub = lambda t: (msgs.append(t), print("  STATUS:", t))[1]
 
-    print("== TEST 1: auto già sveglia (is_awake=True) → nessun SMS ==")
+    print("== TEST 1: car already awake (is_awake=True) → no SMS ==")
     msgs.clear()
     print("  ->", W.do_wake(pub, is_awake=lambda: True, send_sms=True))
 
-    print("== TEST 2: cooldown attivo ==")
+    print("== TEST 2: cooldown active ==")
     msgs.clear()
-    W._load_last_sms = lambda: time.time() - 10   # ultimo SMS 10s fa
+    W._load_last_sms = lambda: time.time() - 10   # last SMS 10s ago
     print("  ->", W.do_wake(pub, is_awake=lambda: False, send_sms=True))
 
-    print("== TEST 3: flusso completo MOCK (no rete): smsAwaken=000000, poi MQTT sveglio ==")
+    print("== TEST 3: full MOCK flow (no network): smsAwaken=000000, then MQTT awake ==")
     msgs.clear()
     W._load_last_sms = lambda: 0.0
     W._save_last_sms = lambda ts: None
@@ -314,17 +314,17 @@ if __name__ == "__main__":
         calls["n"] += 1
         if path.endswith("smsAwaken"):
             return 200, {"code": "000000"}
-        return 200, {"code": "A07900"}   # realtime/location ancora offline
+        return 200, {"code": "A07900"}   # realtime/location still offline
     W._signed_post = fake_post
     awake_state = {"v": False}
     def fake_awake():
-        # diventa sveglia dopo il 2° giro di poll
+        # becomes awake after the 2nd poll round
         awake_state["v"] = calls["n"] >= 3
         return awake_state["v"]
-    W.POLL_EVERY = 0    # test veloce
+    W.POLL_EVERY = 0    # fast test
     print("  ->", W.do_wake(pub, is_awake=fake_awake, send_sms=True))
 
-    print("== TEST 4: token scaduto (bff_login → None) ==")
+    print("== TEST 4: expired token (bff_login → None) ==")
     msgs.clear()
     W._bff_login = lambda: (None, None)
     print("  ->", W.do_wake(pub, is_awake=lambda: False, send_sms=True))
@@ -334,4 +334,4 @@ if __name__ == "__main__":
     W._bff_login = lambda: ("FAKE", "1")
     W._signed_post = lambda ut, path, params: (200, {"code": "A07312"})
     print("  ->", W.do_wake(pub, is_awake=lambda: False, send_sms=True))
-    print("\nOK self-test concluso (nessuna chiamata di rete reale).")
+    print("\nOK self-test finished (no real network calls).")

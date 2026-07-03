@@ -1,15 +1,15 @@
-"""Diagnostica scaricabile dell'integrazione Omoda / Jaecoo / Jaecoo.
+"""Downloadable diagnostics for the Omoda / Jaecoo / Jaecoo integration.
 
-Genera il report che HA offre con «Scarica diagnostica» nella pagina
-dell'integrazione. Pensato per il SUPPORTO: contiene stato sessione, parametri
-di regione, presenza di token/certificati e l'ultima telemetria ricevuta, ma
-NON espone alcun dato personale o segreto:
+Generates the report HA offers via «Download diagnostics» on the integration
+page. Intended for SUPPORT: it contains session state, region parameters,
+presence of tokens/certificates and the last telemetry received, but does
+NOT expose any personal or secret data:
 
-  • email, PIN, VIN, tUserId            → oscurati (REDACTED)
-  • posizione GPS (lat/lon)             → oscurata (dove vivi non esce mai)
-  • token e certificati mutual-TLS      → solo «presente: sì/no», mai il contenuto
+  • email, PIN, VIN, tUserId            → obscured (REDACTED)
+  • GPS position (lat/lon)              → obscured (where you live never leaks)
+  • tokens and mutual-TLS certificates  → only «present: yes/no», never the content
 
-Così l'utente può inviarti il file in tutta sicurezza.
+This way the user can send you the file completely safely.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, CERT_FILES
 
-# Chiavi da oscurare ovunque compaiano (config entry + eventuali dict annidati).
+# Keys to obscure wherever they appear (config entry + any nested dicts).
 TO_REDACT = {
     "email", "pin", "vin", "tuserid",
     "lat", "lon", "latitude", "longitude", "position",
@@ -32,11 +32,11 @@ TO_REDACT = {
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
-    """Report diagnostico per un config entry (richiamato da «Scarica diagnostica»)."""
+    """Diagnostic report for a config entry (invoked by «Download diagnostics»)."""
     diag: dict[str, Any] = {
         "entry": {
             "version": entry.version,
-            # titolo forzato senza VIN (il titolo reale è "Omoda / Jaecoo (<VIN>)")
+            # title forced without VIN (the real title is "Omoda / Jaecoo (<VIN>)")
             "title": "Omoda / Jaecoo",
             "data": async_redact_data(dict(entry.data), TO_REDACT),
             "options": dict(entry.options),
@@ -45,10 +45,10 @@ async def async_get_config_entry_diagnostics(
 
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is None:
-        diag["coordinator"] = "non inizializzato (entry non caricato)"
+        diag["coordinator"] = "not initialized (entry not loaded)"
         return diag
 
-    # Presenza dei file sensibili come semplici booleani — mai il loro contenuto.
+    # Presence of the sensitive files as plain booleans — never their content.
     token_present = await hass.async_add_executor_job(
         os.path.isfile, coordinator.token_path
     )
@@ -59,7 +59,7 @@ async def async_get_config_entry_diagnostics(
 
     data = dict(coordinator.data or {})
     has_position = bool(data.get("position"))
-    # La posizione GPS è sensibile (dove abiti) → mai esportata, neanche oscurata coord-per-coord.
+    # The GPS position is sensitive (where you live) → never exported, not even obscured coord-by-coord.
     realtime = data.get("realtime")
     if isinstance(realtime, dict):
         realtime = async_redact_data(realtime, TO_REDACT)
@@ -92,7 +92,7 @@ async def async_get_config_entry_diagnostics(
             "wake_status": data.get("wake_status"),
             "probe_status": data.get("probe_status"),
             "realtime": realtime,
-            # Telemetria 5A02 (stato porte/clima/sedili…): utile al debug, non è un dato personale.
+            # 5A02 telemetry (door/climate/seat state…): useful for debugging, not personal data.
             "fields_count": len(data.get("fields") or {}),
             "fields": data.get("fields"),
         },

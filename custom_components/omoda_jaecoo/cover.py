@@ -1,11 +1,11 @@
-"""Cover: baule, finestrini, tetto (stato campi 5A02 + comandi apri/chiudi).
+"""Cover: trunk, windows, sunroof (state of 5A02 fields + open/close commands).
 
-Fonde gli stati di sola lettura (baule trunkDoor, finestrini, tetto sunroofState) con i
-relativi pulsanti apri/chiudi in entità "tapparella" native, con stato + azione in
-un'unica card. NB: i 4 finestrini restano anche come binary_sensor singoli (dettaglio
-"quale finestrino"); il cover "Finestrini" è il comando aggregato. La ventilazione
-finestrini resta un pulsante a sé (non mappabile su apri/chiudi). Ogni apri/chiudi
-ATTUA sull'auto (= consenso esplicito dell'utente).
+Merges the read-only states (trunk trunkDoor, windows, sunroof sunroofState) with the
+associated open/close buttons into native "cover" entities, with state + action in
+a single card. NB: the 4 windows also remain as individual binary_sensors (detail of
+"which window"); the "Windows" cover is the aggregate command. Window ventilation
+remains a standalone button (not mappable onto open/close). Every open/close
+ACTS on the car (= explicit consent from the user).
 """
 from __future__ import annotations
 
@@ -39,10 +39,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 
 class OmodaJaecooCover(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, CoverEntity, RestoreEntity):
-    """Apertura motorizzata: APERTA se almeno uno dei campi associati è != 0.
+    """Motorized opening: OPEN if at least one of the associated fields is != 0.
 
-    Lo stato reale arriva via MQTT solo ad auto sveglia → dopo un comando si mostra
-    subito lo stato target (ottimistico) e al riavvio di HA si ripristina l'ultimo noto."""
+    The real state arrives via MQTT only when the car is awake → after a command the
+    target state is shown immediately (optimistic) and on HA restart the last known state is restored."""
 
     _attr_supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
 
@@ -53,7 +53,7 @@ class OmodaJaecooCover(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, CoverEntit
         self._close_cmd = close_cmd
         self._attr_device_class = dclass
         self._attr_icon = icon
-        self._restored: bool | None = None  # True = chiuso
+        self._restored: bool | None = None  # True = closed
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -63,21 +63,21 @@ class OmodaJaecooCover(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, CoverEntit
 
     def _live_closed(self) -> bool | None:
         fields = self.coordinator.data.get("fields", {})
-        # field_on per ogni campo: None=assente, True=aperto. Allinea "0.0" col resto.
+        # field_on for each field: None=absent, True=open. Aligns "0.0" with the rest.
         states = [field_on(fields.get(k)) for k in self._keys]
         if all(s is None for s in states):
-            return None  # nessun campo noto → emerge restored/unknown
-        return not any(states)  # almeno uno aperto → cover aperta
+            return None  # no known field → restored/unknown surfaces
+        return not any(states)  # at least one open → cover open
 
     @property
     def is_closed(self) -> bool | None:
         if self._opt_value is not None:
-            return self._opt_value  # True = chiuso
+            return self._opt_value  # True = closed
         live = self._live_closed()
         return live if live is not None else self._restored
 
     async def async_open_cover(self, **kwargs) -> None:
-        await self._run_command(self._open_cmd, False)  # non chiuso = aperto
+        await self._run_command(self._open_cmd, False)  # not closed = open
 
     async def async_close_cover(self, **kwargs) -> None:
         await self._run_command(self._close_cmd, True)

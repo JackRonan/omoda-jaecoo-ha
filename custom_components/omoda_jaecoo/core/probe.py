@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-probe.py — "Sonda posizione" Omoda / Jaecoo.
+probe.py — "Location probe" Omoda / Jaecoo.
 
-Domanda a cui risponde (mai testata pulita finora): quando l'auto è DAVVERO
-sveglia (sta pubblicando 5A02 su MQTT), il canale tspconsole-eu restituisce
-posizione GPS / dati realtime, oppure ancora `A07900`?
+Question it answers (never cleanly tested so far): when the car is REALLY
+awake (it is publishing 5A02 on MQTT), does the tspconsole-eu channel return
+GPS location / realtime data, or still `A07900`?
 
-Scoperta SESSIONE 14 (verificata sul codice di ENTRAMBE le app, EU + russa):
-  - NON esiste un endpoint BFF per i comandi. Il BFF "legend" ha solo
-    auth/cpm(PIN)/env/map/vac/vmc. I comandi/posizione passano TUTTI dalla SDK
-    Chery → tspconsole-eu `/asc/vehicleControl/*` e `/asr/manager/realtime`,
-    cioè ESATTAMENTE i path che già usiamo. Niente canale nascosto.
-  - Quindi l'unica variabile che resta è lo STATO SVEGLIA dell'auto. L'app
-    riesce perché comanda ad auto appena usata; noi cadiamo su A07900 (dorme)
-    e non possiamo svegliarla (smsAwaken in A07312, quota per-account).
+SESSIONE 14 discovery (verified against the code of BOTH apps, EU + Russian):
+  - There is NO BFF endpoint for the commands. The "legend" BFF only has
+    auth/cpm(PIN)/env/map/vac/vmc. The commands/location ALL go through the Chery
+    SDK → tspconsole-eu `/asc/vehicleControl/*` and `/asr/manager/realtime`,
+    i.e. EXACTLY the paths we already use. No hidden channel.
+  - So the only remaining variable is the car's AWAKE STATE. The app
+    succeeds because it commands a just-used car; we fall onto A07900 (asleep)
+    and cannot wake it (smsAwaken at A07312, per-account quota).
 
-Questa sonda è di SOLA LETTURA: chiama `/asr/manager/realtime {vin}` e
-`/asc/vehicleControl/queryVehicleLocation {vin}` (gli stessi del poll di
-wake.py). NON invia smsAwaken, NON manda comandi, NON tocca il PIN. È benigna:
-è ciò che l'app fa quando apri la pagina "posizione".
+This probe is READ-ONLY: it calls `/asr/manager/realtime {vin}` and
+`/asc/vehicleControl/queryVehicleLocation {vin}` (the same ones as wake.py's
+poll). It does NOT send smsAwaken, does NOT send commands, does NOT touch the PIN. It's benign:
+it's what the app does when you open the "location" page.
 
-Va richiamata dal ponte (ha_bridge.py) al fronte di salita asleep→awake, con
-un cooldown lungo (default 30 min) per non ripetere a ogni 5A02.
+It should be invoked by the bridge (ha_bridge.py) on the asleep→awake rising edge, with
+a long cooldown (default 30 min) so it doesn't repeat on every 5A02.
 
-Uso strettamente personale (auto/account di Rino). NON pubblicare token/cert.
+Strictly personal use (the user's car/account). Do NOT publish the token/cert.
 """
 import os, sys, json, time, threading
 
@@ -32,18 +32,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-# Riusa l'infrastruttura già verificata di wake.py: login BFF + POST firmato tspconsole.
+# Reuses the already-verified infrastructure of wake.py: BFF login + signed tspconsole POST.
 import wake as W
 import codes
 
-VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: vedi omoda_jaecoo.env.example
+VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
 PROBE_LOG  = os.environ.get("OMODA_PROBE_LOG", os.path.join(HERE, "data", "probe.jsonl"))
-COOLDOWN_S = int(os.environ.get("PROBE_COOLDOWN", "1800"))   # 30 min: 1 sonda per risveglio
+COOLDOWN_S = int(os.environ.get("PROBE_COOLDOWN", "1800"))   # 30 min: 1 probe per wake
 
 _BUSY = threading.Lock()
 _last_run = {"ts": 0.0}
 
-# campi "ricchi" del CVRealtimeResBean che ci interessano di più (se mai arrivano)
+# "rich" fields of the CVRealtimeResBean we care about most (if they ever arrive)
 RICH_KEYS = ("lat", "lon", "altitude", "direction", "gpsSpeed", "vehicleSpeed",
              "odometer", "dumpEnergy", "electricRange", "pureElectricRange",
              "chargeState", "inCarTemperature", "onlineStatus")
@@ -61,19 +61,19 @@ def _log(rec: dict):
 
 
 def _rich(data: dict) -> dict:
-    """Estrae i campi interessanti se presenti, per il riepilogo leggibile."""
+    """Extracts the interesting fields if present, for the readable summary."""
     if not isinstance(data, dict):
         return {}
     return {k: data[k] for k in RICH_KEYS if k in data}
 
 
 def probe_once(publish, force=False, on_data=None):
-    """Esegue UNA sonda di sola lettura e riporta l'esito via `publish(text)`.
+    """Runs ONE read-only probe and reports the outcome via `publish(text)`.
 
-    Ritorna un dict {ok, online, got_data, codes, rich}. Mai solleva.
-    `force=True` ignora il cooldown (per il test manuale).
-    `on_data(data)` (opzionale): callback invocata col dict `data` grezzo SOLO quando
-    si ricevono dati live (auto sveglia) — il ponte la usa per pubblicare GPS/batteria in HA.
+    Returns a dict {ok, online, got_data, codes, rich}. Never raises.
+    `force=True` ignores the cooldown (for the manual test).
+    `on_data(data)` (optional): callback invoked with the raw `data` dict ONLY when
+    live data is received (car awake) — the bridge uses it to publish GPS/battery in HA.
     """
     if not _BUSY.acquire(blocking=False):
         return {"ok": False, "reason": "busy"}
@@ -84,23 +84,23 @@ def probe_once(publish, force=False, on_data=None):
                     "wait_s": int(COOLDOWN_S - (now - _last_run["ts"]))}
         _last_run["ts"] = now
 
-        publish("🛰️ Sonda posizione: l'auto è sveglia, provo a leggere GPS/realtime…")
+        publish("🛰️ Location probe: the car is awake, trying to read GPS/realtime…")
         ut, tu = W._bff_login()
         if not ut:
-            publish("🔑 Sonda: sessione scaduta (rifai login OTP). Riprovo al prossimo risveglio")
+            publish("🔑 Probe: session expired (redo OTP login). Retrying at the next wake")
             _log({"event": "probe", "ok": False, "reason": "no_usertoken"})
             return {"ok": False, "reason": "no_usertoken"}
 
         sc1, j1 = W._signed_post(ut, "/asr/manager/realtime", {"vin": VIN})
         sc2, j2 = W._signed_post(ut, "/asc/vehicleControl/queryVehicleLocation", {"vin": VIN})
-        # travelQuery: cerchiamo km/odometro (campo non ancora visto; lo riveleremo al 1° wake reale)
+        # travelQuery: we look for km/odometer (field not seen yet; we'll reveal it on the 1st real wake)
         sc3, j3 = W._signed_post(ut, "/asd/travelManage/travelQuery", {"vin": VIN})
         c1, c2, c3 = W._code_of(j1), W._code_of(j2), W._code_of(j3)
         got1, got2, got3 = W._has_live_data(j1), W._has_live_data(j2), W._has_live_data(j3)
 
-        # data combinato: realtime ha priorità (lat/lon/batteria), travel/location aggiungono campi extra.
-        # Il payload sta sotto "data" o "body" a seconda dell'endpoint (realtime → "body"): W._payload
-        # li gestisce entrambi, altrimenti i 84 campi realtime venivano persi.
+        # combined data: realtime has priority (lat/lon/battery), travel/location add extra fields.
+        # The payload is under "data" or "body" depending on the endpoint (realtime → "body"): W._payload
+        # handles both, otherwise the 84 realtime fields were being lost.
         data = {}
         for src, got in ((j2, got2), (j3, got3), (j1, got1)):
             payload = W._payload(src)
@@ -112,38 +112,38 @@ def probe_once(publish, force=False, on_data=None):
               "rich": rich, "data": data or None,
               "travel_data": j3.get("data") if got3 else None})
 
-        got1 = got1 or got3   # se travelQuery porta dati ad auto sveglia, vale come "live"
+        got1 = got1 or got3   # if travelQuery brings data with the car awake, it counts as "live"
         if (got1 or got2) and on_data and data:
             try:
                 on_data(data)
             except Exception as e:
-                publish(f"⚠️ Sonda: errore pubblicazione dati ({type(e).__name__})")
+                publish(f"⚠️ Probe: data publishing error ({type(e).__name__})")
 
         if got1 or got2:
             if rich:
                 bits = ", ".join(f"{k}={v}" for k, v in rich.items())
-                publish(f"🟢🛰️ SVOLTA: dati realtime ricevuti ad auto sveglia! {bits}")
+                publish(f"🟢🛰️ BREAKTHROUGH: realtime data received with the car awake! {bits}")
             else:
-                publish("🟢🛰️ Sonda: dati ricevuti ad auto sveglia (vedi data/probe.jsonl)")
+                publish("🟢🛰️ Probe: data received with the car awake (see data/probe.jsonl)")
             return {"ok": True, "online": True, "got_data": True,
                     "codes": [c1, c2, c3], "rich": rich}
 
-        publish(f"🟡 Sonda: ancora niente posizione ad auto sveglia "
+        publish(f"🟡 Probe: still no location with the car awake "
                 f"(realtime={c1} [{codes.meaning(c1)}], location={c2}, travel={c3}). "
-                "Confermato: serve un altro passo")
+                "Confirmed: another step is needed")
         return {"ok": True, "online": False, "got_data": False, "codes": [c1, c2, c3]}
     except Exception as e:
-        publish(f"⚠️ Sonda errore: {type(e).__name__}: {e}")
+        publish(f"⚠️ Probe error: {type(e).__name__}: {e}")
         return {"ok": False, "reason": "exception", "error": str(e)}
     finally:
         _BUSY.release()
 
 
-# ───────────────────────── self-test (NESSUNA rete) ─────────────────────────────
+# ───────────────────────── self-test (NO network) ─────────────────────────────
 if __name__ == "__main__":
     pub = lambda t: print("  STATUS:", t)
 
-    print("== TEST 1: dati realtime ricevuti (mock) → SVOLTA ==")
+    print("== TEST 1: realtime data received (mock) → BREAKTHROUGH ==")
     W._bff_login = lambda: ("FAKE_UT", "1")
     W._signed_post = lambda ut, path, params: (200, {"code": "000000", "data": {
         "lat": "45.07", "lon": "7.68", "dumpEnergy": "82", "vehicleSpeed": "0",
@@ -151,17 +151,17 @@ if __name__ == "__main__":
     _last_run["ts"] = 0.0
     print("  ->", probe_once(pub, force=True))
 
-    print("== TEST 2: ancora A07900 ad auto sveglia (mock) ==")
+    print("== TEST 2: still A07900 with the car awake (mock) ==")
     W._signed_post = lambda ut, path, params: (200, {"code": "A07900"})
     _last_run["ts"] = 0.0
     print("  ->", probe_once(pub, force=True))
 
-    print("== TEST 3: cooldown attivo ==")
+    print("== TEST 3: cooldown active ==")
     _last_run["ts"] = time.time()
     print("  ->", probe_once(pub))
 
-    print("== TEST 4: token scaduto ==")
+    print("== TEST 4: expired token ==")
     W._bff_login = lambda: (None, None)
     _last_run["ts"] = 0.0
     print("  ->", probe_once(pub, force=True))
-    print("\nOK self-test concluso (nessuna chiamata di rete reale).")
+    print("\nOK self-test finished (no real network calls).")

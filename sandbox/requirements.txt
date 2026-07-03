@@ -1,0 +1,8 @@
+# Standalone OMODA/Jaecoo API sandbox deps.
+# Mirror of the HA integration's runtime deps (captcha solver needs numpy+pillow+pycryptodome),
+# plus rich for readable raw-JSON output.
+requests>=2.31
+pycryptodome>=3.20
+numpy>=1.26
+pillow>=10.0
+rich>=13.0

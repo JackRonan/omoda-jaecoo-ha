@@ -1,30 +1,30 @@
 """
-omoda_auth.py — replica ESATTA della firma e del login email dell'app OMODA/JAECOO
-('legend', Chery). Ricostruito dal codice decompilato (blutter_out):
+omoda_auth.py — EXACT replica of the signature and email login of the OMODA/JAECOO app
+('legend', Chery). Reconstructed from the decompiled code (blutter_out):
   - EncryptUtils.headerSignature  (encrypt_utils.dart ~299)
-  - HttpUtils.request             (http_utils.dart ~438, blocco firma ~1200)
+  - HttpUtils.request             (http_utils.dart ~438, signing block ~1200)
   - UserService.mailVerifyLogin   (user_service.dart ~3478)
   - SM4 / sm4RandomString         (sm4.dart createHexKey/encrypt)
 
-FIRMA (per richieste POST): la mappa-valori passata a headerSignature e' VUOTA
+SIGNATURE (for POST requests): the value map passed to headerSignature is EMPTY
   => signature = SHA256_hex(secret + nonce + url + timestamp_ms)
-     (NIENTE "[valori]", NIENTE header 'keys')
+     (NO "[values]", NO 'keys' header)
   secret = cX5f... (prod, CURRENT_CAR_CONTROL_ENV=0), nonce = "chery_legend_h5".
-Header inviati: signature, nonce, url, timestamp (+ tenant, Authorization, ecc.).
+Headers sent: signature, nonce, url, timestamp (+ tenant, Authorization, etc.).
 
-CODE: il campo 'code' del login = base64( SM4_ECB_PKCS7( <code-trasformato>, key ) )
-  key = b"mHU80av2zFtf4OY6" (16 byte, da SM4.createHexKey, fissa).
+CODE: the login 'code' field = base64( SM4_ECB_PKCS7( <transformed-code>, key ) )
+  key = b"mHU80av2zFtf4OY6" (16 bytes, from SM4.createHexKey, fixed).
 
-EMAIL: il campo 'email' del login = "APP-LOGIN@" + email (dal builder).
+EMAIL: the login 'email' field = "APP-LOGIN@" + email (from the builder).
 
-Uso strettamente personale (auto/account di Rino).
+Strictly personal use (Rino's car/account).
 """
 import os, time, hashlib, base64, json
 
-# ── Costanti (da .env.prod + decompilato) ────────────────────────────────────
-# Endpoint/parametri di REGIONE: default = Europa, override via env.
+# ── Constants (from .env.prod + decompiled) ──────────────────────────────────
+# REGION endpoints/parameters: default = Europe, override via env.
 BFF          = os.environ.get("OMODA_BFF", "https://legend-oj.omodaauto.nl/api")
-APP_BASIC    = "Basic bGVnZW5kQXBwOmxlZ2VuZEFwcA=="   # AUTHENTICATION_SECRET_KEY (costante app)
+APP_BASIC    = "Basic bGVnZW5kQXBwOmxlZ2VuZEFwcA=="   # AUTHENTICATION_SECRET_KEY (app constant)
 TENANT_CODE  = os.environ.get("OMODA_TENANT_CODE", "300006")
 CHANNEL_ID   = os.environ.get("CHANNEL_ID", "1")
 COUNTRY_ID   = os.environ.get("OMODA_COUNTRY_ID", "1")
@@ -33,9 +33,9 @@ APP_VERSION  = "1.1.9"
 SIGN_NONCE   = "chery_legend_h5"                       # headerSignature nonce
 SIGN_SECRET  = "cX5fR8lJ6pK2xD4uH1eK4pY6wA4xO0sK"     # prod (ENV=0)
 SIGN_SECRET_TEST = "eQ9fQ9zM9yI7bZ1uY9wR2dQ1pJ6xU0zT"
-SM4_KEY      = b"mHU80av2zFtf4OY6"                     # SM4.createHexKey -> hex di questa
+SM4_KEY      = b"mHU80av2zFtf4OY6"                     # SM4.createHexKey -> hex of this
 
-# ── SM4 (ECB) — implementazione pura ─────────────────────────────────────────
+# ── SM4 (ECB) — pure implementation ──────────────────────────────────────────
 _SM4_SBOX = bytes.fromhex(
     "d690e9fecce13db716b614c228fb2c052b679a762abe04c3aa441326498606999c42"
     "50f491ef987a33540b43edcfac62e4b31ca9c59830510af0d3d4f49c0c6c3110d8a92"
@@ -43,7 +43,7 @@ _SM4_SBOX = bytes.fromhex(
     "f458c34d6d52e8a1adf3a3401de8f56158f6cce28db9a3e60553d7d3540eebfca8e92"
     "df9d7adcb2c1a8eb5705a16fc60bbaace2bf2c00aaa8b89dfac3a6c298657d3092b6e"
 )
-# NB: la sbox sopra e' un placeholder; sovrascritta sotto con quella corretta.
+# NOTE: the sbox above is a placeholder; overwritten below with the correct one.
 _SM4_SBOX = bytes([
 0xd6,0x90,0xe9,0xfe,0xcc,0xe1,0x3d,0xb7,0x16,0xb6,0x14,0xc2,0x28,0xfb,0x2c,0x05,
 0x2b,0x67,0x9a,0x76,0x2a,0xbe,0x04,0xc3,0xaa,0x44,0x13,0x26,0x49,0x86,0x06,0x99,
@@ -105,18 +105,18 @@ def sm4_code(code: str, transform: str="plain") -> str:
     ct = sm4_ecb_encrypt_pkcs7(s.encode("utf-8"))
     return base64.b64encode(ct).decode()
 
-# ── Firma app (POST: mappa valori vuota -> niente brackets/keys) ──────────────
+# ── App signature (POST: empty value map -> no brackets/keys) ─────────────────
 def sign_post(url_path: str, ts_ms: int=None, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE):
     ts = ts_ms if ts_ms is not None else int(time.time()*1000)
     sig = hashlib.sha256(f"{secret}{nonce}{url_path}{ts}".encode("utf-8")).hexdigest()
     return sig, ts
 
-DEPT_ID = os.environ.get("OMODA_DEPT_ID", "39")   # CountryArea.value() per Italia (mappa paese->prefisso, da area_config.dart). Francia=33, Germania=49...
+DEPT_ID = os.environ.get("OMODA_DEPT_ID", "39")   # CountryArea.value() for Italy (country->prefix map, from area_config.dart). France=33, Germany=49...
 
 def headers_post(url_path: str, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE, dept_id: str=DEPT_ID, extra=None):
     sig, ts = sign_post(url_path, secret=secret, nonce=nonce)
-    # Set header COMPLETO come l'app (http_config.dart headersJson + headerSignature).
-    # Content-Type/Authorization sono override dell'extraHeaderParams del builder token.
+    # Set the COMPLETE header like the app (http_config.dart headersJson + headerSignature).
+    # Content-Type/Authorization are overrides of the token builder's extraHeaderParams.
     h = {
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -129,12 +129,12 @@ def headers_post(url_path: str, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE, 
         "TENANT-ID": TENANT_CODE,
         "TENANT-CODE": TENANT_CODE,
         "CLIENT-TOC": "Y",
-        # varianti lowercase che mandavamo prima (innocue, alcune route le leggono)
+        # lowercase variants we used to send before (harmless, some routes read them)
         "tenantCode": TENANT_CODE, "tenantID": TENANT_CODE,
         "channelId": CHANNEL_ID, "countryId": COUNTRY_ID,
         "appversion": APP_VERSION,
         "User-Agent": "okhttp/4.9.0",
-        # firma
+        # signature
         "nonce": nonce, "timestamp": str(ts), "url": url_path,
         "signature": sig,
     }
@@ -142,7 +142,7 @@ def headers_post(url_path: str, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE, 
     return h
 
 if __name__ == "__main__":
-    # self-test SM4 con vettore standard GM/T 0002-2012:
+    # SM4 self-test with standard vector GM/T 0002-2012:
     # key=plaintext=0123456789abcdeffedcba9876543210 -> 681edf34d206965e86b3e94f536e4246
     k=bytes.fromhex("0123456789abcdeffedcba9876543210")
     p=bytes.fromhex("0123456789abcdeffedcba9876543210")
@@ -151,4 +151,4 @@ if __name__ == "__main__":
     print("SM4 self-test:", ct, "OK" if ct=="681edf34d206965e86b3e94f536e4246" else "FAIL")
     print("createHexKey =", SM4_KEY.hex())
     s,ts = sign_post("/auth/oauth2/token")
-    print("sign esempio:", s[:24], "ts", ts)
+    print("sign example:", s[:24], "ts", ts)

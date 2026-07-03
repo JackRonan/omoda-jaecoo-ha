@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-session.py — salute del token Omoda + re-login OTP guidato da Home Assistant.
+session.py — Omoda token health + OTP re-login driven by Home Assistant.
 
-Il token che fa funzionare i pulsanti comando vive in token.json (wake.TOKEN_PATH).
-Due modi in cui può "cadere":
-  1) l'access_token scade normalmente  -> refresh() lo rinnova col refresh_token (NIENTE OTP);
-  2) Rino apre l'app ufficiale          -> la sessione viene invalidata (424) e nemmeno il
-                                           refresh basta -> serve un OTP nuovo.
+The token that makes the command buttons work lives in token.json (wake.TOKEN_PATH).
+Two ways it can "fall over":
+  1) the access_token expires normally  -> refresh() renews it with the refresh_token (NO OTP);
+  2) the user opens the official app     -> the session is invalidated (424) and even the
+                                           refresh isn't enough -> a new OTP is needed.
 
-Questo modulo espone le primitive che il ponte cabla a 3 entità HA:
-  - check()         -> (ok, dettaglio)   : il token è valido? (prova un login BFF)
-  - refresh()       -> bool              : rinnova l'access_token senza OTP (keep-alive)
-  - request_otp()   -> bool              : invia il codice OTP alla mail (login_omoda.py invia)
-  - confirm_otp(c)  -> (ok, dettaglio)   : conia il token col codice (prova_token.py)  poi ricontrolla
+This module exposes the primitives the bridge wires to 3 HA entities:
+  - check()         -> (ok, detail)      : is the token valid? (tries a BFF login)
+  - refresh()       -> bool              : renews the access_token without OTP (keep-alive)
+  - request_otp()   -> bool              : sends the OTP code to the email (login_omoda.py sends it)
+  - confirm_otp(c)  -> (ok, detail)      : mints the token with the code (prova_token.py) then re-checks
 
-request_otp/confirm_otp girano login_omoda.py / prova_token.py COME SOTTOPROCESSO nella
-cartella OMODA_SRC_DIR (default = questa stessa cartella `core/`, dove vivono anche
-captcha_solver/omoda) col python corrente (sys.executable). Nel component HA = il python
-di HA, che ha le requirements del manifest (requests/pycryptodome/numpy/pillow).
+request_otp/confirm_otp run login_omoda.py / prova_token.py AS A SUBPROCESS in the
+OMODA_SRC_DIR folder (default = this same `core/` folder, where captcha_solver/omoda
+also live) with the current python (sys.executable). In the HA component = HA's
+python, which has the manifest's requirements (requests/pycryptodome/numpy/pillow).
 
-Contratto sottoprocessi (H7): login_omoda.py e prova_token.py stampano su stdout una
-riga-sentinella stabile `RESULT: OK` / `RESULT: FAIL` e usano il returncode (0 ok, !=0
-errore). request_otp/confirm_otp decidono l'esito su returncode + sentinella, NON su
-sottostringhe localizzate (che cambierebbero con la lingua dei messaggi).
+Subprocess contract (H7): login_omoda.py and prova_token.py print to stdout a
+stable sentinel line `RESULT: OK` / `RESULT: FAIL` and use the returncode (0 ok, !=0
+error). request_otp/confirm_otp decide the outcome from returncode + sentinel, NOT from
+localized substrings (which would change with the language of the messages).
 """
 import os, sys, subprocess
 
@@ -31,29 +31,29 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import wake  # riusa _bff_login / _refresh_token / TOKEN_PATH
+import wake  # reuses _bff_login / _refresh_token / TOKEN_PATH
 
-EMAIL     = os.environ.get("OMODA_EMAIL", "")   # PER-ACCOUNT: vedi omoda_jaecoo.env.example
-# Cartella con login_omoda.py / prova_token.py / omoda.py: di default sono in questa stessa
-# cartella (pacchetto). Override con OMODA_SRC_DIR se vivono altrove.
+EMAIL     = os.environ.get("OMODA_EMAIL", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
+# Folder with login_omoda.py / prova_token.py / omoda.py: by default they are in this same
+# folder (package). Override with OMODA_SRC_DIR if they live elsewhere.
 OMODA_DIR = os.environ.get("OMODA_SRC_DIR", HERE)
-PYEXE     = sys.executable  # il venv del ponte (ha captcha/sm4/requests)
+PYEXE     = sys.executable  # the bridge's venv (has captcha/sm4/requests)
 _TIMEOUT  = int(os.environ.get("OMODA_OTP_TIMEOUT", "120"))
 
 
 def check():
-    """Ritorna (ok: bool, dettaglio: str). ok=True se un login BFF col token attuale riesce."""
+    """Returns (ok: bool, detail: str). ok=True if a BFF login with the current token succeeds."""
     try:
         ut, tu = wake._bff_login()
     except Exception as e:
-        return False, f"errore rete: {type(e).__name__}"
+        return False, f"network error: {type(e).__name__}"
     if ut:
         return True, "Session active ✅"
     return False, "Session expired ❌ — press «Request OTP code» (close the official app first)"
 
 
 def refresh():
-    """Rinnova l'access_token col refresh_token (senza OTP). True se rinnovato."""
+    """Renews the access_token with the refresh_token (without OTP). True if renewed."""
     try:
         return bool(wake._refresh_token())
     except Exception:
@@ -61,7 +61,7 @@ def refresh():
 
 
 def request_otp(emit=lambda m: None):
-    """Invia il codice OTP alla mail di Rino. True se l'invio è andato a buon fine."""
+    """Sends the OTP code to the user's email. True if the send succeeded."""
     emit("sending OTP code to email…")
     try:
         r = subprocess.run([PYEXE, "login_omoda.py", "invia", EMAIL],
@@ -70,7 +70,7 @@ def request_otp(emit=lambda m: None):
         emit("OTP sending timed out — try again")
         return False
     out = (r.stdout or "") + (r.stderr or "")
-    # H7: esito su returncode + sentinella stabile, non su sottostringhe localizzate
+    # H7: outcome from returncode + stable sentinel, not from localized substrings
     if r.returncode == 0 and "RESULT: OK" in out:
         emit(f"📧 Code sent to {EMAIL} — enter it in the «OTP code» field and press «Confirm OTP»")
         return True
@@ -80,7 +80,7 @@ def request_otp(emit=lambda m: None):
 
 
 def confirm_otp(code, emit=lambda m: None):
-    """Conia il token col codice OTP. Ritorna (ok, dettaglio)."""
+    """Mints the token with the OTP code. Returns (ok, detail)."""
     code = (code or "").strip()
     if not code:
         return False, "no code entered"
@@ -91,7 +91,7 @@ def confirm_otp(code, emit=lambda m: None):
     except subprocess.TimeoutExpired:
         return False, "token minting timed out"
     out = (r.stdout or "") + (r.stderr or "")
-    # H7: esito su returncode + sentinella stabile, non su sottostringhe localizzate
+    # H7: outcome from returncode + stable sentinel, not from localized substrings
     if r.returncode == 0 and "RESULT: OK" in out:
         ok, detail = check()
         return ok, ("Session restored ✅" if ok else "token minted but login still failing")

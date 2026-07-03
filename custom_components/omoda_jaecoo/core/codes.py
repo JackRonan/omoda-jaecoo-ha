@@ -1,46 +1,46 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-codes.py — Mappa UNICA dei codici di risposta tspconsole/BFF Chery → testo leggibile.
+codes.py — SINGLE map of tspconsole/BFF Chery response codes → readable text.
 
-Sorgente di verità per i SOLI testi diagnostici mostrati all'utente (HA/monitor).
-Prima della FASE 1 lo stesso codice (es. A07900) aveva 3 significati diversi
-sparsi in commands/wake/probe/provision; questa mappa li unifica. NON cambia la
-logica dei comandi: i moduli decidono il flusso sui codici, qui c'è solo la
-traduzione del codice in una frase.
+Source of truth for the ONLY diagnostic texts shown to the user (HA/monitor).
+Before PHASE 1 the same code (e.g. A07900) had 3 different meanings
+scattered across commands/wake/probe/provision; this map unifies them. It does NOT change the
+command logic: the modules decide the flow on the codes, here there's only the
+translation of the code into a phrase.
 
-⚠️ Alcuni codici (in primis A07900) sono CONTESTUALI sul backend Chery: il testo
-qui è quello più ricorrente/utile; ogni chiamante può aggiungere contesto.
+⚠️ Some codes (first of all A07900) are CONTEXTUAL on the Chery backend: the text
+here is the most recurring/useful one; each caller can add context.
 """
 
-# Codice → frase leggibile (italiano, per non tecnici).
+# Code → readable phrase (English, for non-technical users).
 CODE_MEANING = {
     "000000": "ok ✅",
     "A00079": "command accepted ✅",
-    # A00084 (i18n: "No vehicle control command permission"): l'account/veicolo non ha il
-    # permesso PER QUEL comando. Visto dal vivo su remoteStart (2026-06-21): la nostra Omoda / Jaecoo
-    # non consente l'avvio remoto del motore, mentre clima/serratura/GPS funzionano.
+    # A00084 (i18n: "No vehicle control command permission"): the account/vehicle does not have
+    # permission FOR THAT command. Seen live on remoteStart (2026-06-21): our Omoda / Jaecoo
+    # does not allow remote engine start, while climate/lock/GPS work.
     "A00084": "command not allowed on this car 🚫 (permission denied for this function)",
     "A00089": "invalid taskId ❌ (requires a taskId authenticated by checkPassword)",
     "A00546": "invalid taskId ❌ (incorrect scene in checkPassword)",
     "A00567": "incomplete checkPassword parameters ❌",
     "A00000": "token expired/invalid ❌ (please redo OTP login)",
     "A07312": "wake rate-limit 🚫 (car is refusing further wake requests right now, try again later)",
-    # A07900 è contestuale: in poll/probe = auto a riposo; coi comandi = firma o
-    # car_token non validi. Testo neutro che copre il caso più frequente.
+    # A07900 is contextual: in poll/probe = car at rest; with commands = invalid signature or
+    # car_token. Neutral text that covers the most frequent case.
     "A07900": "car asleep / unreachable (or signature/car_token invalid) ⌛",
 }
 
 
 def meaning(code, default=None):
-    """Ritorna la frase leggibile per `code`. Se sconosciuto ritorna `default`
-    (o una stringa generica col codice grezzo). Accetta anche code=None/non-str."""
+    """Returns the readable phrase for `code`. If unknown returns `default`
+    (or a generic string with the raw code). Also accepts code=None/non-str."""
     if code is None:
-        return default if default is not None else "nessun codice"
+        return default if default is not None else "no code"
     key = str(code)
     if key in CODE_MEANING:
         return CODE_MEANING[key]
-    return default if default is not None else f"codice {key}"
+    return default if default is not None else f"code {key}"
 
 
 if __name__ == "__main__":

@@ -1,38 +1,37 @@
-"""Costanti del custom component Omoda / Jaecoo / Jaecoo."""
+"""Constants for the Omoda / Jaecoo custom component."""
 
 DOMAIN = "omoda_jaecoo"
 PLATFORMS = ["sensor", "binary_sensor", "button", "lock", "switch", "climate",
              "number", "time", "cover", "device_tracker", "text"]
 
-# Campi auto (5A02) ora rappresentati da entità native ATTUABILI (lock/switch/cover):
-# esclusi dalla creazione di sensor/binary_sensor "di sola lettura" per non duplicarli.
-# I campi comfort (sbrinamenti/volante/sedili guida-passeggero-posteriori) sono ora
-# interruttori ON/OFF (vedi switch.py). NB: il sedile posteriore CENTRALE
-# (mSeatHeatingState2/mSeatVentilateState2) NON ha un comando dedicato → resta sola lettura.
+# Car fields (5A02) now represented by native ACTUATABLE entities (lock/switch/cover):
+# excluded from creating read-only sensor/binary_sensor so we don't duplicate them.
+# The comfort fields (defrost/steering wheel/driver-passenger-rear seats) are now
+# ON/OFF switches (see switch.py). NB: the rear CENTER seat
+# (mSeatHeatingState2/mSeatVentilateState2) has NO dedicated command → stays read-only.
 FIELDS_AS_RICH_ENTITY = {
     "doorLock", "frontHVACState", "trunkDoor", "sunroofState",
     "frontWindshieldHeat", "rWinHeatingState", "steerWheelHeating",
     "dSeatHeatingState", "dSeatVentilateState",
-    # sedile passeggero
+    # passenger seat
     "pSeatHeatingState", "pSeatVentilateState",
-    # sedili posteriori SX/DX (telemetria *State2 ↔ comando bl/br SeatControl)
+    # rear left/right seats (telemetry *State2 ↔ bl/br SeatControl command)
     "lSeatHeatingState2", "lSeatVentilateState2",
     "rSeatHeatingState2", "rSeatVentilateState2",
 }
 
-# Comandi del catalogo ora gestiti da lock/switch/cover → esclusi dai pulsanti singoli
-# (il tap sul lock/switch/cover invoca lo stesso comando del catalogo).
+# Catalog commands now handled by lock/switch/cover → excluded from single buttons
+# (tapping the lock/switch/cover invokes the same catalog command).
 COMMANDS_AS_RICH_ENTITY = {
     "blocca", "sblocca",
-    # clima_on/clima_off ora pilotati dalla climate entity (climate.py) → niente pulsanti.
+    # clima_on/clima_off are now driven by the climate entity (climate.py) → no buttons.
     "clima_on", "clima_off",
-    # ricarica EV: switch dedicati (switch.py) → niente pulsanti singoli.
-    # NB: `avvio_remoto` NON è qui → resta un pulsante (button.omoda_jaecoo_avvio_remoto).
+    # EV charging: dedicated switches (switch.py) → no single buttons.
     "ricarica_start", "ricarica_stop", "ricarica_prog_on", "ricarica_prog_off",
     "baule_apri", "baule_chiudi",
     "finestrini_apri", "finestrini_chiudi",
     "tetto_apri", "tetto_chiudi",
-    # comfort: ogni funzione è uno switch (ON+OFF) → niente pulsanti singoli
+    # comfort: every function is a switch (ON+OFF) → no single buttons
     "defrost_parabrezza", "defrost_parabrezza_off",
     "defrost_lunotto", "defrost_lunotto_off",
     "volante_caldo", "volante_caldo_off",
@@ -44,37 +43,42 @@ COMMANDS_AS_RICH_ENTITY = {
     "sedile_post_sx_aria", "sedile_post_sx_aria_off",
     "sedile_post_dx_caldo", "sedile_post_dx_caldo_off",
     "sedile_post_dx_aria", "sedile_post_dx_aria_off",
-    # ricarica limit (number entity in number.py)
+    # climate "all" macros: dedicated switches (Climate Cool/Heat Up All) → no duplicate buttons.
+    "climate_cool_on", "climate_cool_off",
+    "climate_heat_on", "climate_heat_off",
+    # theft alarm: dedicated switch (Alarm Theft) → no duplicate ON/OFF buttons.
+    "alarm_theft_on", "alarm_theft_off",
+    # charge limit (number entity in number.py)
     "charge_limit_set",
 }
 
-# Chiavi del config_entry (dati per-account, inseriti nel config flow)
+# config_entry keys (per-account data, entered in the config flow)
 CONF_EMAIL = "email"
 CONF_PIN = "pin"
 CONF_VIN = "vin"
 CONF_TUSERID = "tuserid"
 
-# Identità veicolo per il device HA (nome dinamico: "Omoda / Jaecoo", "Jaecoo 7"…). `vehicle_name`
-# = nickname/modello dall'app, salvato in entry.data (catturato al config flow o backfillato);
-# è anche un'OPZIONE per l'override manuale. model/brand restano solo in entry.data.
+# Vehicle identity for the HA device (dynamic name: "Omoda / Jaecoo", "Jaecoo 7"…). `vehicle_name`
+# = nickname/model from the app, saved in entry.data (captured at config flow or backfilled);
+# it is also an OPTION for the manual override. model/brand stay only in entry.data.
 CONF_VEHICLE_NAME = "vehicle_name"
 DATA_VEHICLE_MODEL = "vehicle_model"
 DATA_VEHICLE_BRAND = "vehicle_brand"
-# fallback quando il modello non è (ancora) noto
+# fallback when the model is not (yet) known
 DEFAULT_VEHICLE_NAME = "Omoda / Jaecoo"
 
-# Parametri di REGIONE (default = Europa). Esposti come options per supportare altre regioni.
+# REGION parameters (default = Europe). Exposed as options to support other regions.
 CONF_BFF = "bff"
 CONF_TSP_HOST = "tsp_host"
 CONF_CAR_MQTT_HOST = "car_mqtt_host"
 CONF_CAR_MQTT_PORT = "car_mqtt_port"
 CONF_CHANNEL_ID = "channel_id"
 
-# Provisioning certificati mutual-TLS MQTT (FASE 3c). Cartella (dentro il filesystem di HA)
-# da cui importare i 4 cert nella certs_dir per-entry. Vuoto = i cert si mettono a mano.
+# MQTT mutual-TLS certificate provisioning (PHASE 3c). Folder (inside the HA filesystem)
+# to import the 4 certs from into the per-entry certs_dir. Empty = certs placed by hand.
 CONF_CERTS_SRC = "certs_src"
 
-# I 4 file mutual-TLS attesi nella certs_dir per-entry (= quelli del bridge certs_eu/).
+# The 4 mutual-TLS files expected in the per-entry certs_dir (= those of the bridge certs_eu/).
 CERT_FILES = ("ca.pem", "client.pem", "client.key", "eu_prd_cheryinternational.cer")
 
 DEFAULTS = {
@@ -85,67 +89,67 @@ DEFAULTS = {
     CONF_CHANNEL_ID: "1",
 }
 
-# Costante app condivisa (non un segreto utente): seed per derivare la password MQTT
+# Shared app constant (not a user secret): seed to derive the MQTT password
 CAR_SEED = "fa89db3abe8045919d70c6ed3cc65bc5"
 
-# Intervalli (secondi)
+# Intervals (seconds)
 DEFAULT_SESSION_EVERY = 900
 DEFAULT_AWAKE_WINDOW = 300
 
-# Poll telemetria periodico (sveglia + lettura realtime). DUE intervalli in MINUTI,
-# personalizzabili dalle opzioni dell'integrazione; 0 = disattivato:
-#   - CONF_POLL_NORMAL  : a riposo/parcheggiata (default 60 min)
-#   - CONF_POLL_CHARGING: quando è attaccata alla colonnina (default 30 min). Da v1.5.14 NON è
-#     più il meccanismo che segue la ricarica (lo fa il loop a 2 min di CHARGING_POLL_EVERY, in
-#     sola lettura): qui resta solo come BACKSTOP che avvia quel loop se l'auto non annuncia da
-#     sola l'attacco del cavo, + refresh GPS periodico. Mentre carica l'auto è alimentata.
-# Lo stato "attaccata" si rileva da `chargeGunState` (spina collegata).
-# ⚠️ ogni ciclo SVEGLIA l'auto (vehicleLocation) per posizione + telemetria fresche anche
-# a vettura parcheggiata → micro-consumo 12V e possibile contesa con l'app ufficiale.
+# Periodic telemetry poll (wake + realtime read). TWO intervals in MINUTES,
+# customizable from the integration options; 0 = disabled:
+#   - CONF_POLL_NORMAL  : at rest/parked (default 60 min)
+#   - CONF_POLL_CHARGING: when plugged into the charger (default 30 min). Since v1.5.14 it is NO
+#     longer the mechanism that follows the charge (that's the 2-min CHARGING_POLL_EVERY loop, in
+#     read-only): here it stays only as a BACKSTOP that starts that loop if the car doesn't announce
+#     the cable connection by itself, + periodic GPS refresh. While charging the car is powered.
+# The "plugged in" state is detected from `chargeGunState` (cable connected).
+# ⚠️ every cycle WAKES the car (vehicleLocation) for fresh position + telemetry even
+# when parked → tiny 12V drain and possible contention with the official app.
 CONF_POLL_NORMAL = "poll_normal_min"
 CONF_POLL_CHARGING = "poll_charging_min"
 DEFAULT_POLL_NORMAL_MIN = 60
 DEFAULT_POLL_CHARGING_MIN = 30
-# attesa tra la sveglia (localizza) e la lettura realtime forzata, perché l'auto torni online
+# wait between the wake (locate) and the forced realtime read, so the car comes back online
 POLL_WAKE_WAIT = 25
-# Alta tensione (HV) e telemetria FRESCA. Scoperta verificata dal vivo 2026-06-22: il canale
-# /asr/manager/realtime riporta odometro/SOC/tensione/corrente VERI solo quando l'alta tensione
-# è accesa (hVoltageState=1: marcia, ricarica o clima acceso); ad HV spento ritorna uno snapshot
-# stantio (odometro vecchio, dumpEnergy=0, totalVoltage=0, totalCurrent=-1000). Non esiste un
-# comando "leggero" che forzi un report fresco (confermato dal reverse-engineering della SDK
-# nativa Chery): l'unico modo è leggere mentre l'HV è GIÀ acceso. Perciò, appena vediamo l'HV
-# acceso, rileggiamo il realtime a raffica per catturare i valori che salgono (odometro/batteria),
-# poi smettiamo da soli quando si rispegne. Zero comandi all'auto.
-HV_ON_POLL_EVERY = 60   # secondi tra due letture realtime mentre l'alta tensione è accesa
-HV_ON_POLL_MAX = 90     # cap di sicurezza al numero di letture ravvicinate (~90 min di marcia)
-# RICARICA: quando la spina è collegata l'auto carica per ORE (es. 246 min visti dal vivo 2026-06-23)
-# e l'HV è acceso → il realtime ha batteria/corrente/tensione/tempo-residuo VERI. Lo stesso loop
-# ravvicinato segue allora l'avanzamento della carica, ma con intervallo più rilassato e cap molto
-# più alto della marcia (una carica AC piena può durare diverse ore). Verificato 2026-06-23: ad auto
-# in ricarica una lettura realtime dà subito stato_ricarica/corrente_hv/tempo_residuo aggiornati.
-CHARGING_POLL_EVERY = 120   # secondi tra due letture realtime mentre la spina è collegata (carica)
-CHARGING_POLL_MAX = 300     # cap di sicurezza (~10h: copre una carica AC completa con margine)
-# MARCIA (battito di rilevamento): l'auto IN MOVIMENTO non manda push MQTT (verificato dal vivo
-# 2026-06-24: a vettura in marcia la sessione MQTT è connessa ma non arriva alcun 5A02 → motore/
-# velocità restavano fermi al giorno prima) e il poll periodico "sveglia+leggi" è ogni ~ora. Senza
-# un battito dedicato il refresh automatico durante un viaggio non partiva MAI. Questo timer fa SOLO
-# una lettura realtime (NESSUN comando, NESSUNA sveglia, zero 12V): appena trova l'HV acceso, la
-# stessa lettura arma il follow-up a HV_ON_POLL_EVERY (60s) che poi segue tutto il viaggio. Se il
-# follow-up è già attivo (marcia/ricarica) il battito non fa nulla. A vettura ferma è una sola GET
-# al cloud ogni intervallo (il realtime torna lo snapshot stantio, scartato): nessun consumo auto.
-DRIVE_WATCH_EVERY = 180     # secondi tra due controlli "sei in marcia?" (sola lettura, no comandi)
-# attesa nelle macro comfort tra la sveglia (localizza) e l'invio di coolingControl/heatingControl:
-# i moduli clima+sedili rispondono solo a vettura DESTA e serve tempo perché la TBOX alimenti il
-# bus comfort. Verificato dal vivo 2026-06-21: con ~35s il comando macro va a buon fine; con
-# 14s falliva (timeout TBOX↔centraline). Sotto questo valore le macro tornano a dare errore.
+# High voltage (HV) and FRESH telemetry. Discovery verified live 2026-06-22: the
+# /asr/manager/realtime channel reports REAL odometer/SOC/voltage/current only when the high voltage
+# is on (hVoltageState=1: driving, charging, or climate on); with HV off it returns a stale
+# snapshot (old odometer, dumpEnergy=0, totalVoltage=0, totalCurrent=-1000). There is no
+# "light" command that forces a fresh report (confirmed by reverse-engineering the native
+# Chery SDK): the only way is to read while the HV is ALREADY on. So, as soon as we see the HV
+# on, we re-read the realtime rapidly to capture the values as they rise (odometer/battery),
+# then stop by ourselves when it turns off again. Zero commands to the car.
+HV_ON_POLL_EVERY = 60   # seconds between two realtime reads while the high voltage is on
+HV_ON_POLL_MAX = 90     # safety cap on the number of close reads (~90 min of driving)
+# CHARGING: when the cable is connected the car charges for HOURS (e.g. 246 min seen live 2026-06-23)
+# and the HV is on → the realtime has REAL battery/current/voltage/remaining-time. The same close
+# loop then follows the charge progress, but with a more relaxed interval and a much higher cap
+# than driving (a full AC charge can last several hours). Verified 2026-06-23: with the car
+# charging a realtime read immediately gives updated stato_ricarica/corrente_hv/tempo_residuo.
+CHARGING_POLL_EVERY = 120   # seconds between two realtime reads while the cable is connected (charging)
+CHARGING_POLL_MAX = 300     # safety cap (~10h: covers a full AC charge with margin)
+# DRIVING (detection heartbeat): the car IN MOTION does not send MQTT pushes (verified live
+# 2026-06-24: while driving the MQTT session is connected but no 5A02 arrives → engine/
+# speed stayed at the previous day) and the periodic "wake+read" poll is every ~hour. Without
+# a dedicated heartbeat the automatic refresh during a trip would NEVER start. This timer does ONLY
+# a realtime read (NO command, NO wake, zero 12V): as soon as it finds the HV on, that same
+# read arms the follow-up at HV_ON_POLL_EVERY (60s) which then follows the whole trip. If the
+# follow-up is already active (driving/charging) the heartbeat does nothing. With the car parked it's a
+# single GET to the cloud each interval (the realtime returns the stale snapshot, discarded): no car drain.
+DRIVE_WATCH_EVERY = 180     # seconds between two "are you driving?" checks (read-only, no commands)
+# wait in the comfort macros between the wake (locate) and sending coolingControl/heatingControl:
+# the climate+seat modules only respond with the car AWAKE and it takes time for the TBOX to power the
+# comfort bus. Verified live 2026-06-21: with ~35s the macro command succeeds; with
+# 14s it failed (TBOX↔ECU timeout). Below this value the macros go back to erroring.
 MACRO_WAKE_WAIT = 35
-# durata del preset comfort (coolingControl/heatingControl usano duration/times = 15 min):
-# l'auto lo spegne da sola dopo questo tempo → lo switch macro torna OFF da solo per non
-# restare "acceso" a vuoto. +60s di margine.
+# duration of the comfort preset (coolingControl/heatingControl use duration/times = 15 min):
+# the car turns it off by itself after this time → the macro switch returns to OFF on its own so it
+# doesn't stay "on" for nothing. +60s of margin.
 MACRO_PRESET_S = 15 * 60 + 60
 
-# Anti-doppio-tap: l'auto esegue UN comando alla volta (A00082 = "veicolo occupato").
-# Dopo un comando, per questi secondi un nuovo comando ATTUATIVO viene rifiutato con un
-# messaggio chiaro invece di accodarsi/floodare. Il lock si libera prima se arriva la
-# conferma dall'auto. Cap di sicurezza in caso la conferma non arrivi.
+# Anti double-tap: the car runs ONE command at a time (A00082 = "vehicle busy").
+# After a command, for these seconds a new ACTUATING command is rejected with a
+# clear message instead of queuing/flooding. The lock releases earlier if the
+# confirmation arrives from the car. Safety cap in case the confirmation never arrives.
 COMMAND_LOCK_S = 12

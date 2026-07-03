@@ -1,10 +1,10 @@
-"""Binary sensor: porte/finestrini/cofano/baule (open) + comfort on/off + stato auto.
+"""Binary sensor: doors/windows/hood/trunk (open) + comfort on/off + car state.
 
-Lo stato fisico dell'auto (5A02) e la connettività sono in-memory nel coordinator →
-dopo un riavvio di HA tornano `unknown`. I binary_sensor di stato sono RestoreEntity:
-ripristinano l'ultimo on/off noto come fallback (parità col bridge, che persisteva via
-MQTT retained) finché non arriva un dato live. Eccezione: `auto_sveglia` NON persiste
-(è un flag derivato "l'auto sta pubblicando adesso" → al boot deve essere off).
+The car's physical state (5A02) and connectivity are in-memory in the coordinator →
+after an HA restart they go back to `unknown`. The state binary_sensors are RestoreEntity:
+they restore the last known on/off as a fallback (parity with the bridge, which persisted via
+MQTT retained) until live data arrives. Exception: `auto_sveglia` does NOT persist
+(it's a derived flag "the car is publishing right now" → at boot it must be off).
 """
 from __future__ import annotations
 
@@ -34,16 +34,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents.append(OmodaJaecooOnline(coord))
     ents.append(OmodaJaecooAwake(coord))
     ents.append(OmodaJaecooSession(coord))
-    # — avvisi dal canale realtime (Round B): gomme + batteria scarica —
+    # — warnings from the realtime channel (Round B): tires + low battery —
     for suffix, name, field, dc in _RT_BINARIES:
         ents.append(OmodaJaecooRealtimeBinary(coord, name, suffix, field, dc))
     add(ents)
 
 
-# Avvisi (warning) presenti sul canale realtime: ON = anomalia. `*TyreCall` = avviso
-# pressione gomma (device_class PROBLEM); `socLowCall` = batteria di trazione scarica
-# (device_class BATTERY → on = "low"). Convenzione ON/OFF (1=avviso) da confermare dal
-# vivo. (suffix, nome, campo realtime, device_class)
+# Warnings present on the realtime channel: ON = anomaly. `*TyreCall` = tire
+# pressure warning (device_class PROBLEM); `socLowCall` = traction battery low
+# (device_class BATTERY → on = "low"). ON/OFF convention (1=warning) to be confirmed from
+# the live car. (suffix, name, realtime field, device_class)
 _RT_BINARIES = [
     ("front_left_tire_warning", "Tire Front Left Warning", "lFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
     ("front_right_tire_warning", "Tire Front Right Warning", "rFrontTyreCall", BinarySensorDeviceClass.PROBLEM),
@@ -54,10 +54,10 @@ _RT_BINARIES = [
 
 
 class _OmodaJaecooRestoreBinary(OmodaJaecooEntity, BinarySensorEntity, RestoreEntity):
-    """Binary sensor che ripristina l'ultimo stato on/off al riavvio di HA.
+    """Binary sensor that restores the last on/off state on HA restart.
 
-    Le sottoclassi forniscono `_live_is_on()` (stato corrente dal coordinator, o
-    None se assente); finché il live è None si usa l'ultimo valore ripristinato."""
+    Subclasses provide `_live_is_on()` (current state from the coordinator, or
+    None if absent); while live is None the last restored value is used."""
 
     def __init__(self, coord, name: str, unique_suffix: str) -> None:
         super().__init__(coord, name, unique_suffix, entity_id_format=ENTITY_ID_FORMAT)
@@ -79,21 +79,21 @@ class _OmodaJaecooRestoreBinary(OmodaJaecooEntity, BinarySensorEntity, RestoreEn
 
 
 class OmodaJaecooBinarySensor(_OmodaJaecooRestoreBinary):
-    """ON se il campo è != 0 (open/onoff)."""
+    """ON if the field is != 0 (open/onoff)."""
 
     def __init__(self, coord, spec: dict) -> None:
         super().__init__(coord, spec["name"], spec["key"])
         self._key = spec["key"]
         dc = spec.get("dclass")
         self._attr_device_class = BinarySensorDeviceClass(dc) if dc else None
-        # campi che l'auto non invia mai da ferma (es. tendina tetto, risc. parabrezza):
-        # restano sempre "unknown" → in categoria diagnostica, fuori dai controlli principali.
+        # fields the car never sends while parked (e.g. sunroof blind, windshield heating):
+        # they always stay "unknown" → in the diagnostic category, out of the main controls.
         if spec.get("diag"):
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def _live_is_on(self) -> bool | None:
-        # [MED] None/"None"/"" = assente → None (emerge il restored, non un falso off);
-        # confronto numerico via field_on (allinea "0.0" con lock/switch/cover).
+        # [MED] None/"None"/"" = absent → None (the restored value surfaces, not a false off);
+        # numeric comparison via field_on (aligns "0.0" with lock/switch/cover).
         return field_on(self.coordinator.data.get("fields", {}).get(self._key))
 
 
@@ -111,10 +111,10 @@ class OmodaJaecooOnline(_OmodaJaecooRestoreBinary):
 
 
 class OmodaJaecooRealtimeBinary(_OmodaJaecooRestoreBinary):
-    """Avviso generico su un campo del canale realtime (vedi `_RT_BINARIES`).
+    """Generic warning on a realtime channel field (see `_RT_BINARIES`).
 
-    Stesso pattern di `OmodaJaecooOnline` (legge da coordinator.data["realtime"]) ma in
-    categoria diagnostica. ON se il campo è != 0; assente → ripristina l'ultimo noto."""
+    Same pattern as `OmodaJaecooOnline` (reads from coordinator.data["realtime"]) but in
+    the diagnostic category. ON if the field is != 0; absent → restores the last known."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -130,7 +130,7 @@ class OmodaJaecooRealtimeBinary(_OmodaJaecooRestoreBinary):
 
 
 class OmodaJaecooAwake(OmodaJaecooEntity, BinarySensorEntity):
-    """Flag derivato "l'auto sta pubblicando adesso" — NON persistente (off al boot)."""
+    """Derived flag "the car is publishing right now" — NOT persistent (off at boot)."""
 
     _attr_device_class = BinarySensorDeviceClass.RUNNING
     _attr_entity_category = EntityCategory.DIAGNOSTIC

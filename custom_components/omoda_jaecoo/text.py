@@ -1,4 +1,4 @@
-"""Text: campo dove inserire il codice OTP ricevuto via email (recupero sessione)."""
+"""Text: field for entering the OTP code received via email (session recovery)."""
 from __future__ import annotations
 
 from homeassistant.components.text import ENTITY_ID_FORMAT, TextEntity
@@ -16,8 +16,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 
 class OmodaJaecooOtpCode(OmodaJaecooEntity, TextEntity):
-    # NB: niente `pattern` (come il bridge): uno stato vuoto iniziale NON deve far
-    # fallire la validazione TextEntity (romperebbe l'update del coordinator).
+    # NB: no `pattern` (like the bridge): an initial empty state must NOT make
+    # TextEntity validation fail (it would break the coordinator update).
     _attr_icon = "mdi:numeric"
     _attr_mode = "text"
     _attr_native_min = 0

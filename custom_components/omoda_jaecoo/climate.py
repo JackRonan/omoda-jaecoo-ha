@@ -1,17 +1,17 @@
-"""Climate: clima avanzato Omoda / Jaecoo (preclimatizzazione con temperatura impostabile).
+"""Climate: advanced Omoda / Jaecoo climate control (pre-conditioning with settable temperature).
 
-Sostituisce il vecchio interruttore clima a 21° fisso: ora si imposta la temperatura
-desiderata (16–30 °C) e l'auto la applica (riscalda o raffredda fino al setpoint).
-Usa il comando `airControl` (lo stesso, verificato dal vivo, che faceva partire il
-clima fisso), variando `temperature` e la durata `times` (da number.omoda_jaecoo_clima_durata).
+Replaces the old fixed 21° climate switch: now you set the desired temperature
+(16–30 °C) and the car applies it (heats or cools up to the setpoint).
+Uses the `airControl` command (the same, live-verified one that started the
+fixed climate), varying `temperature` and the `times` duration (from number.omoda_jaecoo_clima_durata).
 
-Modello HA: un'unica climate entity con modi OFF / HEAT_COOL (= l'auto porta l'abitacolo
-al setpoint scaldando o raffreddando) + un solo cursore di temperatura. Lo stato
-acceso/spento arriva dalla telemetria `frontHVACState`; dopo un comando si mostra subito
-lo stato target (ottimistico) finché non arriva un nuovo dato dall'auto.
+HA model: a single climate entity with OFF / HEAT_COOL modes (= the car brings the cabin
+to the setpoint by heating or cooling) + a single temperature slider. The
+on/off state comes from the `frontHVACState` telemetry; after a command the target
+(optimistic) state is shown immediately until new data arrives from the car.
 
-I sedili riscaldati/ventilati e gli sbrinamenti restano interruttori separati (switch.py):
-così accendere il clima NON tocca lo stato dei sedili.
+Heated/ventilated seats and the defrosters stay separate switches (switch.py):
+so turning on the climate does NOT touch the seat state.
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 
 class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
-    """Clima dell'auto: ON (HEAT_COOL) al setpoint scelto / OFF, via airControl."""
+    """Car climate: ON (HEAT_COOL) at the chosen setpoint / OFF, via airControl."""
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT_COOL]
@@ -58,9 +58,9 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
     _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(self, coord) -> None:
-        # entity_id FORZATO a climate.omoda_jaecoo_clima (come le altre entità del componente,
-        # altrimenti HA lo deriva "sporco" col nome device: climate.omoda_9_omoda_jaecoo_clima).
-        # unique_id distinto dal vecchio switch (suffix "climate") → entità nuova, non rename.
+        # entity_id FORCED to climate.omoda_jaecoo_clima (like the other component entities,
+        # otherwise HA derives it "dirty" with the device name: climate.omoda_9_omoda_jaecoo_clima).
+        # unique_id distinct from the old switch (suffix "climate") → new entity, not a rename.
         super().__init__(coord, "Climate", "climate", entity_id_format=ENTITY_ID_FORMAT)
         self._target = DEFAULT_TEMP
         self._opt_on: bool | None = None
@@ -77,7 +77,7 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
             except (TypeError, ValueError):
                 pass
 
-    # ── stato ──
+    # ── state ──
     def _live_on(self) -> bool | None:
         return field_on(self.coordinator.data.get("fields", {}).get("frontHVACState"))
 
@@ -93,7 +93,7 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         return HVACMode.HEAT_COOL if on else HVACMode.OFF
 
     def _handle_coordinator_update(self) -> None:
-        # un nuovo messaggio dall'auto (last_seen cambiato) invalida l'ottimismo
+        # a new message from the car (last_seen changed) invalidates the optimism
         if self._opt_on is not None and \
                 self.coordinator.data.get("last_seen") != self._opt_anchor:
             self._opt_on = None
@@ -105,7 +105,7 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         self._opt_anchor = self.coordinator.data.get("last_seen")
         self.async_write_ha_state()
 
-    # ── comandi ──
+    # ── commands ──
     def _params(self) -> dict:
         dur = int(getattr(self.coordinator, "clima_duration", 15) or 15)
         return {"temperature": f"{self._target:.1f}", "times": str(dur)}
@@ -136,8 +136,8 @@ class OmodaJaecooClimate(OmodaJaecooEntity, ClimateEntity, RestoreEntity):
         if temp is None:
             return
         self._target = min(MAX_TEMP, max(MIN_TEMP, float(temp)))
-        # se il clima è già acceso, riapplica subito il nuovo setpoint; altrimenti
-        # memorizza soltanto (verrà usato alla prossima accensione).
+        # if the climate is already on, immediately reapply the new setpoint; otherwise
+        # just store it (it will be used at the next turn-on).
         if self.hvac_mode != HVACMode.OFF:
             await self._send("clima_on", True)
         else:

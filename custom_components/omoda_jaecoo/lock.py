@@ -1,8 +1,8 @@
-"""Lock: serratura porte (stato campo doorLock + comandi blocca/sblocca).
+"""Lock: door lock (state of doorLock field + lock/unlock commands).
 
-Fonde in un'unica entità nativa ciò che prima erano due cose separate: il sensore
-"Serratura" (sola lettura) e i due pulsanti Blocca/Sblocca. Il tap su blocca/sblocca
-ATTUA sull'auto (= consenso esplicito dell'utente), come i vecchi pulsanti.
+Merges into a single native entity what were previously two separate things: the
+"Lock" sensor (read-only) and the two Lock/Unlock buttons. Tapping lock/unlock
+ACTS on the car (= explicit consent from the user), like the old buttons.
 """
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 
 class OmodaJaecooLock(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, LockEntity, RestoreEntity):
-    """Serratura auto: 0=Bloccata, 1=Sbloccata (campo doorLock).
+    """Car lock: 0=Locked, 1=Unlocked (doorLock field).
 
-    Lo stato reale arriva via MQTT solo ad auto sveglia → dopo un comando si mostra
-    subito lo stato target (ottimistico, vedi OmodaJaecooOptimisticMixin) e al riavvio di
-    HA si ripristina l'ultimo stato noto."""
+    The real state arrives via MQTT only when the car is awake → after a command the
+    target state is shown immediately (optimistic, see OmodaJaecooOptimisticMixin) and on
+    HA restart the last known state is restored."""
 
     _attr_icon = "mdi:car-door-lock"
 
@@ -40,8 +40,8 @@ class OmodaJaecooLock(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, LockEntity,
             self._restored = last.state == "locked"
 
     def _live_locked(self) -> bool | None:
-        # doorLock: 0 = Bloccata, !=0 = Sbloccata → locked = NOT field_on (allineato
-        # a binary/switch/cover, "0.0" incluso). field_on None = campo assente.
+        # doorLock: 0 = Locked, !=0 = Unlocked → locked = NOT field_on (aligned
+        # with binary/switch/cover, "0.0" included). field_on None = field absent.
         on = field_on(self.coordinator.data.get("fields", {}).get("doorLock"))
         return None if on is None else not on
 

@@ -1,13 +1,13 @@
-"""Switch: clima + comfort (sbrinamenti, volante, sedili).
+"""Switch: climate + comfort (defrost, steering wheel, seats).
 
-Ogni interruttore fonde lo stato di sola lettura (un campo telemetria 5A02) con i due
-comandi ON/OFF del catalogo in un'unica card: ON via app = funzione attivata (clima a
-21°/sbrinamenti/sedili per ~15 min con timer auto-spegnimento dell'auto), OFF = comando
-di spegnimento manuale. Il toggle ATTUA sull'auto (= consenso esplicito dell'utente).
+Each switch merges the read-only state (a 5A02 telemetry field) with the two
+ON/OFF commands from the catalog into a single card: ON via app = function enabled (climate at
+21°/defrost/seats for ~15 min with the car's auto-shutoff timer), OFF = manual
+shutoff command. The toggle ACTUATES on the car (= explicit user consent).
 
-I due sedili (riscaldamento / ventilazione guida) sono MUTUAMENTE ESCLUSIVI lato auto:
-accendere l'aria spegne il caldo e viceversa (verificato in telemetria) → lo riflettiamo
-subito anche nello stato ottimistico, oltre che dai campi reali quando arrivano.
+The two seats (driver heating / ventilation) are MUTUALLY EXCLUSIVE on the car side:
+turning on the air turns off the heat and vice versa (verified in telemetry) → we reflect it
+immediately in the optimistic state too, in addition to the real fields when they arrive.
 """
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ from .entity import OmodaJaecooEntity, OmodaJaecooOptimisticMixin, field_on
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
     coord = hass.data[DOMAIN][entry.entry_id]
-    # NB: il clima NON è più qui → è una climate entity (climate.py) con temperatura
-    # impostabile. Restano comfort/sedili/sbrinamenti + i due switch ricarica EV.
+    # NB: the climate is NO longer here → it's a climate entity (climate.py) with a settable
+    # temperature. What remains: comfort/seats/defrost + the two EV charging switches.
     ricarica = OmodaJaecooChargeSwitch(coord)
     ricarica_prog = OmodaJaecooScheduledChargeSwitch(coord)
     parabrezza = OmodaJaecooComfortSwitch(
@@ -53,8 +53,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     sedile_aria = OmodaJaecooComfortSwitch(
         coord, "Seat Driver Ventilation", "dSeatVentilateState", "dSeatVentilateState",
         "sedile_guida_aria", "sedile_guida_aria_off", "mdi:car-seat-cooler")
-    # sedili passeggero e posteriori SX/DX: stesso modello del guida (telemetria *State*
-    # ↔ comando seatControl). Posteriore centrale escluso (nessun comando dedicato).
+    # passenger and rear L/R seats: same model as the driver (telemetry *State*
+    # ↔ seatControl command). Rear center excluded (no dedicated command).
     pass_caldo = OmodaJaecooComfortSwitch(
         coord, "Seat Passenger Heating", "pSeatHeatingState", "pSeatHeatingState",
         "sedile_passeggero_caldo", "sedile_passeggero_caldo_off", "mdi:car-seat-heater")
@@ -73,14 +73,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     pdx_aria = OmodaJaecooComfortSwitch(
         coord, "Seat Rear Right Ventilation", "rSeatVentilateState2", "rSeatVentilateState2",
         "sedile_post_dx_aria", "sedile_post_dx_aria_off", "mdi:car-seat-cooler")
-    # caldo e aria si escludono a vicenda su OGNI sedile → wiring reciproco per coppia
+    # heat and air are mutually exclusive on EVERY seat → reciprocal wiring per pair
     for caldo, aria in ((sedile_caldo, sedile_aria), (pass_caldo, pass_aria),
                         (psx_caldo, psx_aria), (pdx_caldo, pdx_aria)):
         caldo._exclusive = aria
         aria._exclusive = caldo
-    # macro comfort "tutto" (coolingControl/heatingControl): clima + tutti i sedili (+ volante
-    # e sbrinatori per il caldo) in un unico comando, come l'app. Funzionano a auto SPENTA.
-    # Raffredda e riscalda si escludono a vicenda.
+    # comfort "all" macro (coolingControl/heatingControl): climate + all seats (+ steering wheel
+    # and defrosters for heat) in a single command, like the app. They work with the car OFF.
+    # Cool and heat are mutually exclusive.
     raffredda = OmodaJaecooClimaMacroSwitch(
         coord, "Climate Cool Down All", "raffredda_tutto",
         "climate_cool_on", "climate_cool_off", "mdi:snowflake")
@@ -98,11 +98,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 
 class OmodaJaecooComfortSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, SwitchEntity, RestoreEntity):
-    """Interruttore comfort: ON se il campo 5A02 associato è != 0.
+    """Comfort switch: ON if the associated 5A02 field is != 0.
 
-    Lo stato reale arriva via MQTT solo ad auto sveglia → dopo un comando si mostra
-    subito lo stato target (ottimistico, vedi OmodaJaecooOptimisticMixin) e al riavvio di
-    HA si ripristina l'ultimo stato noto."""
+    The real state arrives via MQTT only when the car is awake → after a command the
+    target state is shown immediately (optimistic, see OmodaJaecooOptimisticMixin) and on an
+    HA restart the last known state is restored."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
 
@@ -133,7 +133,7 @@ class OmodaJaecooComfortSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, Sw
         return live if live is not None else self._restored
 
     async def async_turn_on(self, **kwargs) -> None:
-        # mutua esclusione: accendere questo spegne subito il gemello (es. aria↔caldo sedile)
+        # mutual exclusion: turning this on immediately turns off the twin (e.g. seat air↔heat)
         if self._exclusive is not None:
             self._exclusive._set_optimistic(False)
         await self._run_command(self._on_cmd, True)
@@ -143,11 +143,11 @@ class OmodaJaecooComfortSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, Sw
 
 
 class OmodaJaecooChargeSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, SwitchEntity, RestoreEntity):
-    """Ricarica IMMEDIATA on/off (chargeStartStopControl, controlType 1/0).
+    """IMMEDIATE charging on/off (chargeStartStopControl, controlType 1/0).
 
-    Su questo canale l'auto NON pubblica uno stato "in ricarica" → lo switch è
-    ottimistico: dopo il comando mostra subito il target e al riavvio ripristina
-    l'ultimo stato noto. La spina collegata è il binary_sensor `Spina ricarica`."""
+    On this channel the car does NOT publish a "charging" state → the switch is
+    optimistic: after the command it shows the target immediately and on restart restores
+    the last known state. The plug-connected state is the binary_sensor `Charge plug`."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_icon = "mdi:battery-charging"
@@ -176,21 +176,21 @@ class OmodaJaecooChargeSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, Swi
 
 
 class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, SwitchEntity, RestoreEntity):
-    """Macro clima "tutto" (coolingControl/heatingControl): un preset che accende clima +
-    TUTTI i sedili (+ sbrinatori parabrezza/lunotto e volante per il caldo) in un colpo solo,
-    con un unico comando — esattamente come l'app ufficiale.
+    """Climate "all" macro (coolingControl/heatingControl): a preset that turns on climate +
+    ALL seats (+ windshield/rear-window defrosters and steering wheel for heat) in one shot,
+    with a single command — exactly like the official app.
 
-    ⚠️ I moduli comfort (clima+sedili) rispondono SOLO a vettura desta e con i sistemi
-    alimentati. Premendo la macro a auto dormiente (parcheggiata da poco) tutti i moduli vanno
-    in timeout. Perciò la macro SVEGLIA prima l'auto (localizza/vehicleLocation) e ATTENDE
-    MACRO_WAKE_WAIT secondi che la TBOX alimenti il bus comfort, POI invia il comando — su
-    ENTRAMBE le direzioni (anche lo spegnimento sveglia, così "tutto OFF" arriva ai sedili
-    posteriori, che sono indipendenti dal clima). Verificato dal vivo 2026-06-21.
+    ⚠️ The comfort modules (climate+seats) respond ONLY when the vehicle is awake and its systems
+    are powered. Pressing the macro on a sleeping car (parked recently) makes all the modules
+    time out. So the macro WAKES the car first (locate/vehicleLocation) and WAITS
+    MACRO_WAKE_WAIT seconds for the TBOX to power the comfort bus, THEN sends the command — in
+    BOTH directions (shutdown wakes too, so "all OFF" reaches the rear
+    seats, which are independent of the climate). Verified live 2026-06-21.
 
-    Stato: l'auto NON pubblica uno stato "preset attivo" dedicato → interruttore a stato
-    proprio (ottimistico PERSISTENTE: non viene azzerato dai messaggi telemetria, altrimenti
-    non si potrebbe spegnere). Si auto-spegne da solo dopo MACRO_PRESET_S (l'auto chiude il
-    preset dopo ~15 min). Raffredda e Riscalda si escludono a vicenda."""
+    State: the car does NOT publish a dedicated "preset active" state → a switch with its own
+    state (PERSISTENT optimistic: not cleared by telemetry messages, otherwise
+    it couldn't be turned off). It auto-shuts off by itself after MACRO_PRESET_S (the car closes the
+    preset after ~15 min). Cool and Heat are mutually exclusive."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
 
@@ -221,8 +221,8 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
         return bool(self._restored)
 
     def _handle_coordinator_update(self) -> None:
-        # macro SENZA stato reale dall'auto → NON azzerare lo stato sui messaggi telemetria
-        # (il mixin lo farebbe): manteniamo lo stato impostato, aggiorniamo solo la UI.
+        # macro WITHOUT a real state from the car → do NOT clear the state on telemetry messages
+        # (the mixin would): we keep the state we set, we only update the UI.
         self.async_write_ha_state()
 
     def _cancel_expire(self) -> None:
@@ -236,19 +236,19 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
         self._restored = value
 
     async def _wake_then(self, cmd: str, target: bool) -> None:
-        """Sveglia l'auto, attende che i moduli comfort siano alimentati, poi invia il comando."""
+        """Wake the car, wait for the comfort modules to be powered, then send the command."""
         if self.coordinator.command_busy():
             raise HomeAssistantError(
                 "Another command is still in progress — the car handles one at a time. "
                 "Wait a few seconds (check «Command result») and try again.")
         self._cancel_expire()
         self._set_state(target)
-        # sveglia (vehicleLocation = sveglia + GPS, benigno); non bloccare la macro se fallisce
+        # wake (vehicleLocation = wake + GPS, benign); don't block the macro if it fails
         try:
             await self.coordinator.async_send_command("locate_car")
         except Exception:  # noqa: BLE001
             pass
-        await asyncio.sleep(MACRO_WAKE_WAIT)  # lascia accendere il bus comfort (e scade il lock)
+        await asyncio.sleep(MACRO_WAKE_WAIT)  # let the comfort bus power up (and the lock expires)
         try:
             await self.coordinator.async_send_command(cmd)
         except Exception as err:  # noqa: BLE001
@@ -257,7 +257,7 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
             self.async_write_ha_state()
             raise HomeAssistantError(f"Command «{cmd}» failed: {err}") from err
         if target:
-            # l'auto chiude il preset dopo ~15 min → riporta lo switch a OFF da solo
+            # the car closes the preset after ~15 min → brings the switch back to OFF by itself
             @callback
             def _expire(_now) -> None:
                 self._expire_unsub = None
@@ -277,12 +277,12 @@ class OmodaJaecooClimaMacroSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
 
 
 class OmodaJaecooScheduledChargeSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, SwitchEntity, RestoreEntity):
-    """Ricarica PROGRAMMATA on/off (chargeAppointControl, body con array annidato).
+    """SCHEDULED charging on/off (chargeAppointControl, body with a nested array).
 
-    Quando si accende, costruisce il piano dalle preferenze (entità time "orario di
-    inizio" + number "durata", tutti i giorni) e invia mainSwitch=1 + piano attivo;
-    spegnendo invia mainSwitch=0. startTime è in MINUTI dalla mezzanotte (verificato dal
-    vivo: 465 = 07:45). Lo stato reale arriva dalla telemetria `chargeAppointPlans`."""
+    When turned on, it builds the plan from the preferences (time entity "start
+    time" + number "duration", every day) and sends mainSwitch=1 + active plan;
+    turning off sends mainSwitch=0. startTime is in MINUTES from midnight (verified
+    live: 465 = 07:45). The real state arrives from the `chargeAppointPlans` telemetry."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_icon = "mdi:calendar-clock"
@@ -318,8 +318,8 @@ class OmodaJaecooScheduledChargeSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEn
         return live if live is not None else self._restored
 
     def _plan(self, switch_status: int) -> dict:
-        # orario di inizio in minuti-da-mezzanotte dall'entità time; fallback al vecchio
-        # cursore ore (compat) e infine 08:00 se nessuna preferenza è ancora disponibile.
+        # start time in minutes-from-midnight from the time entity; fallback to the old
+        # hours slider (compat) and finally 08:00 if no preference is available yet.
         mins = getattr(self.coordinator, "charge_start_minutes", None)
         if mins is None:
             mins = int(getattr(self.coordinator, "charge_start_hour", 8) or 8) * 60
@@ -337,12 +337,12 @@ class OmodaJaecooScheduledChargeSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEn
 
 
 class OmodaJaecooPollingSwitch(OmodaJaecooEntity, SwitchEntity, RestoreEntity):
-    """Interruttore "Aggiornamento automatico": attiva/disattiva il poll periodico
-    (sveglia + lettura) senza toccare le opzioni. NON è un comando all'auto: agisce solo
-    sul timer locale. ON di default; lo stato si ripristina al riavvio di HA.
+    """"Auto Update" switch: enables/disables the periodic poll
+    (wake + read) without touching the options. It is NOT a command to the car: it acts only
+    on the local timer. ON by default; the state is restored on an HA restart.
 
-    Quando è OFF l'auto non viene più svegliata automaticamente: i sensori restano
-    sull'ultimo valore noto (aggiornabili a mano col pulsante "Aggiorna posizione")."""
+    When it is OFF the car is no longer woken automatically: the sensors stay
+    on the last known value (refreshable by hand with the "Refresh location" button)."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_entity_category = EntityCategory.CONFIG
@@ -354,7 +354,7 @@ class OmodaJaecooPollingSwitch(OmodaJaecooEntity, SwitchEntity, RestoreEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        # ripristina l'ultima scelta: se era OFF, ferma il poll avviato di default nel setup.
+        # restore the last choice: if it was OFF, stop the poll started by default in setup.
         last = await self.async_get_last_state()
         if last is not None and last.state in ("on", "off"):
             self.coordinator.set_poll_enabled(last.state == "on")
@@ -373,14 +373,14 @@ class OmodaJaecooPollingSwitch(OmodaJaecooEntity, SwitchEntity, RestoreEntity):
 
 
 class OmodaJaecooTheftAlarmSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity, SwitchEntity, RestoreEntity):
-    """Antifurto dell'auto (theftAlarm setSwitch, endpoint /act).
+    """Car theft alarm (theftAlarm setSwitch, /act endpoint).
 
-    ON = l'auto fa scattare l'allarme e invia avvisi in caso di movimento non autorizzato,
-    scasso porte, rottura finestrini o altre effrazioni (descrizione ufficiale dell'app).
-    A differenza dei comfort, lo stato NON è in telemetria MQTT: si legge via REST
-    (querySwitch). Strategia: seed iniziale dalla lettura reale, poi stato ottimistico dopo
-    il toggle (il setSwitch ATTUA e vuole un tasko l'auto sveglia), e ripristino dell'ultimo
-    stato noto al riavvio di HA."""
+    ON = the car triggers the alarm and sends alerts in case of unauthorized movement,
+    door forcing, window breakage or other break-ins (official app description).
+    Unlike the comfort features, the state is NOT in MQTT telemetry: it's read via REST
+    (querySwitch). Strategy: initial seed from the real reading, then optimistic state after
+    the toggle (setSwitch ACTUATES and wants the car awake), and restore of the last
+    known state on an HA restart."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_icon = "mdi:shield-car"
@@ -395,7 +395,7 @@ class OmodaJaecooTheftAlarmSwitch(OmodaJaecooOptimisticMixin, OmodaJaecooEntity,
         last = await self.async_get_last_state()
         if last is not None and last.state in ("on", "off"):
             self._restored = last.state == "on"
-        # seed dello stato reale dal backend (read-only, best-effort: non deve rompere il setup)
+        # seed the real state from the backend (read-only, best-effort: must not break the setup)
         try:
             v = await self.coordinator.async_query_theft()
             if v is not None:

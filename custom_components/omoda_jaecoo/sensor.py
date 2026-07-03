@@ -1,10 +1,10 @@
-"""Sensor: serratura (lock), livelli sedili (level) + batteria/velocità/sessione
-+ sensori diagnostici del ponte (esiti comando/sveglia/sonda, timestamp).
+"""Sensor: lock, seat levels (level) + battery/speed/session
++ bridge diagnostic sensors (command/wake-up/probe results, timestamps).
 
-Gli entity_id riproducono 1:1 quelli del bridge (omoda_jaecoo_*) per continuità storico.
-Tutti i sensori sono RestoreSensor: al riavvio di HA ripristinano l'ultimo valore
-noto come fallback (parità col bridge, che persisteva via MQTT retained) finché non
-arriva un dato live dall'auto.
+The entity_ids reproduce 1:1 those of the bridge (omoda_jaecoo_*) for history continuity.
+All sensors are RestoreSensor: on HA restart they restore the last known value
+as a fallback (parity with the bridge, which persisted via MQTT retained) until
+live data arrives from the car.
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from homeassistant.const import (
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfLength,
+    UnitOfPower,
     UnitOfPressure,
     UnitOfSpeed,
     UnitOfTemperature,
@@ -39,19 +40,19 @@ from .coordinator import SENSORS
 from .entity import OmodaJaecooEntity, get_rt_field
 
 
-# ───────────────────────── sensori "realtime" (Round B) ─────────────────────────
-# Campi del canale REST /asr/manager/realtime (in coordinator.data["realtime"]),
-# aggiornati al RISVEGLIO dell'auto (probe read-only). A differenza del 5A02 (MQTT),
-# qui i VALORI reali di autonomia/odometro/gomme/consumi/ricarica ci sono davvero
-# (sul 5A02 erano solo flag di unità "1"). Validati 1:1 contro il bean ufficiale
-# CVRealtimeResBean dell'SDK Chery. Una tabella di spec evita 20+ classi gemelle.
+# ───────────────────────── "realtime" sensors (Round B) ─────────────────────────
+# Fields of the REST channel /asr/manager/realtime (in coordinator.data["realtime"]),
+# updated at the car's WAKE-UP (read-only probe). Unlike the 5A02 (MQTT),
+# here the real VALUES of range/odometer/tires/consumption/charging are actually present
+# (on the 5A02 they were only unit flags "1"). Validated 1:1 against the official
+# CVRealtimeResBean bean of the Chery SDK. A spec table avoids 20+ twin classes.
 #
-# Valori/unità CONFERMATI dal vivo ad auto sveglia (2026-06-21, 84 campi):
-#   pureElectricRange=60 km · mileageSurplus=215 km (totale) · cruiseRange=134 (stima)
-#   lFrontTyreKpa=292 (=42 psi) → kPa · gomme temp 34-35 °C · *TyreCall/socLowCall=0=ok
-#   oilSurplus=23 → LITRI (215−60=155 km a benzina /23 L ≈ 15 L/100km) · averageFuel=0.0
-#   avgHkPowerKwh50km=20.6 → kWh/100km · totalVoltage=323.1 V · totalCurrent=0.0 A (HV reali!)
-#   remainChargeTime ASSENTE ad auto non in carica (comparirà sotto carica).
+# Values/units CONFIRMED from the live car while awake (2026-06-21, 84 fields):
+#   pureElectricRange=60 km · mileageSurplus=215 km (total) · cruiseRange=134 (estimate)
+#   lFrontTyreKpa=292 (=42 psi) → kPa · tire temp 34-35 °C · *TyreCall/socLowCall=0=ok
+#   oilSurplus=23 → LITERS (215−60=155 km on gasoline /23 L ≈ 15 L/100km) · averageFuel=0.0
+#   avgHkPowerKwh50km=20.6 → kWh/100km · totalVoltage=323.1 V · totalCurrent=0.0 A (real HV!)
+#   remainChargeTime ABSENT when the car isn't charging (will appear while charging).
 
 C = UnitOfTemperature.CELSIUS
 KM = UnitOfLength.KILOMETERS
@@ -60,78 +61,104 @@ BAR = UnitOfPressure.BAR
 MIN = UnitOfTime.MINUTES
 VOLT = UnitOfElectricPotential.VOLT
 AMP = UnitOfElectricCurrent.AMPERE
+KW = UnitOfPower.KILO_WATT
 DIST = SensorDeviceClass.DISTANCE
 TEMP = SensorDeviceClass.TEMPERATURE
 PRESS = SensorDeviceClass.PRESSURE
 DUR = SensorDeviceClass.DURATION
 VOLTAGE = SensorDeviceClass.VOLTAGE
 CURRENT = SensorDeviceClass.CURRENT
+POWER = SensorDeviceClass.POWER
 MEAS = SensorStateClass.MEASUREMENT
 TOTAL = SensorStateClass.TOTAL_INCREASING
 
 
 @dataclass(frozen=True)
 class _RtSpec:
-    """Spec di un sensore realtime. `numeric=False` → valore grezzo (stato/enum)."""
+    """Spec of a realtime sensor. `numeric=False` → raw value (state/enum)."""
 
-    suffix: str           # unique_id suffix (stabile): f"{vin}_rt_<suffix>"
-    name: str             # nome → "Omoda / Jaecoo <name>" → entity_id slugificato
-    field: str            # chiave nel dict realtime
+    suffix: str           # unique_id suffix (stable): f"{vin}_rt_<suffix>"
+    name: str             # name → "Omoda / Jaecoo <name>" → slugified entity_id
+    field: str | tuple    # key(s) in the realtime dict (tuple = fallback: first present wins,
+                          #   so a single spec covers different field names PHEV vs BEV)
     device_class: SensorDeviceClass | None = None
     unit: str | None = None
     state_class: SensorStateClass | None = None
     icon: str | None = None
     diag: bool = False
     numeric: bool = True
-    vmap: dict | None = None  # codice grezzo → testo leggibile (campi enum)
-    invalid: tuple = ()       # valori (float) = segnaposto "nessuna lettura" (HV spenta) → tieni l'ultimo noto
-    compute: Callable | None = None  # valore CALCOLATO da più campi realtime (ignora `field`)
-    scale: float | None = None  # fattore moltiplicativo sul valore grezzo (es. kPa→bar = 0.01)
-    precision: int | None = None  # cifre decimali suggerite per la UI
+    vmap: dict | None = None  # raw code → readable text (enum fields)
+    invalid: tuple = ()       # values (float) = "no reading" placeholder (HV off) → keep the last known
+    compute: Callable | None = None  # value COMPUTED from several realtime fields (ignores `field`)
+    scale: float | None = None  # multiplicative factor on the raw value (e.g. kPa→bar = 0.01)
+    precision: int | None = None  # decimal digits suggested for the UI
 
 
-# ── Mappe codice→testo per i campi enum di ricarica ──
-# I valori sono enum a 3 stati ("0"/"1"/"2", confermati dai confronti nel codice
-# dell'app `rus_car_state_model.dart`). `0` = stato a riposo verificato dal vivo
-# (auto parcheggiata non in carica). La semantica di 1/2 segue la convenzione EV;
-# qualunque codice non previsto resta leggibile come "Sconosciuto (N)" (vedi
-# OmodaJaecooRealtimeSensor._live_value) → nessuna informazione persa, nessun valore inventato.
+# ── code→text maps for the charging enum fields ──
+# The values are 3-state enums ("0"/"1"/"2", confirmed by the comparisons in the app
+# code `rus_car_state_model.dart`). `0` = idle state verified from the live car
+# (car parked, not charging). The semantics of 1/2 follow the EV convention;
+# any unexpected code stays readable as "Unknown (N)" (see
+# OmodaJaecooRealtimeSensor._live_value) → no information lost, no invented value.
 CHARGE_STATE_MAP = {"0": "Not charging", "1": "Charging", "2": "Charging completed"}
-APPT_CHARGE_STATE_MAP = {"0": "Disattivata", "1": "Attiva", "2": "In esecuzione"}
+APPT_CHARGE_STATE_MAP = {"0": "Disabled", "1": "Active", "2": "Running"}
 FAST_GUN_MAP = {"0": "Disconnected", "1": "Connected", "2": "Connected (fast charging)"}
 
 
+def _rt_float(rt: dict, *fields):
+    """First realtime field present and parsable as a float (multi-name fallback), or None."""
+    for f in fields:
+        v = get_rt_field(rt, f)
+        if v is None or str(v).strip() in ("", "None"):
+            continue
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 def _range_totale(rt: dict):
-    """Autonomia totale REALE = elettrica (`pureElectricRange`) + benzina (`mileageSurplus`).
-    None se manca un pezzo → resta l'ultimo valore noto (RestoreSensor)."""
-    try:
-        return float(rt["pureElectricRange"]) + float(rt["mileageSurplus"])
-    except (TypeError, ValueError, KeyError):
+    """REAL total range.
+    PHEV = electric (`pureElectricRange`) + gasoline (`mileageSurplus`).
+    BEV  = electric only (no gasoline field): uses `dynamicPureElectricRange`.
+    None if the electric range is missing entirely → the last known value stays (RestoreSensor)."""
+    elec = _rt_float(rt, "pureElectricRange", "dynamicPureElectricRange")
+    if elec is None:
         return None
+    fuel = _rt_float(rt, "mileageSurplus") or 0.0
+    return elec + fuel
 
 
 _RT_SENSORS: list[_RtSpec] = [
-    # ── P1 · autonomia / chilometri (valori km confermati dal vivo) ──
-    _RtSpec("range_elettrico", "Range Electric", "pureElectricRange",
+    # ── P1 · range / kilometers (km values confirmed from the live car) ──
+    # `pureElectricRange` = PHEV; on BEVs that field does NOT exist → the car sends
+    # `dynamicPureElectricRange` (real range, = the one shown in the app: e.g. 235 km /
+    # 146 mi). Fallback in order so a single spec covers both powertrains.
+    _RtSpec("range_elettrico", "Range Electric",
+            ("pureElectricRange", "dynamicPureElectricRange"),
             DIST, KM, MEAS, "mdi:map-marker-distance"),
-    # mileageSurplus = autonomia a BENZINA (motore termico), NON il totale: verificato dal
-    # vivo 2026-06-23 che resta 215 km mentre l'autonomia elettrica scende (60→27 km) e il
-    # carburante è invariato (oilSurplus 23 L) → segue il serbatoio, non la batteria.
+    # WLTP (homologated) range — on BEVs `wltcPureElectricRange` (e.g. 279 km); diagnostic.
+    _RtSpec("range_elettrico_wltp", "Range Electric (WLTP)", "wltcPureElectricRange",
+            DIST, KM, MEAS, "mdi:map-marker-distance", diag=True),
+    # mileageSurplus = GASOLINE range (combustion engine), NOT the total: verified on
+    # the live car 2026-06-23 that it stays 215 km while the electric range drops (60→27 km) and
+    # the fuel is unchanged (oilSurplus 23 L) → it follows the tank, not the battery.
     _RtSpec("range_benzina", "Range Gasoline", "mileageSurplus",
             DIST, KM, MEAS, "mdi:gas-station"),
-    # Autonomia TOTALE reale = elettrica + benzina (campo CALCOLATO, non un field grezzo).
-    # Riusa la suffix storica "range_totale" → l'entità sensor.omoda_jaecoo_autonomia_totale resta,
-    # ma ora mostra la somma corretta invece del solo mileageSurplus.
+    # Real TOTAL range = electric + gasoline (COMPUTED field, not a raw field).
+    # Reuses the historical suffix "range_totale" → the entity sensor.omoda_jaecoo_autonomia_totale stays,
+    # but now shows the correct sum instead of just mileageSurplus.
     _RtSpec("range_totale", "Range Total", "",
             DIST, KM, MEAS, "mdi:map-marker-distance", compute=_range_totale),
-    # cruiseRange = stima combinata alternativa (134 km dal vivo) → diagnostico.
+    # cruiseRange = alternative combined estimate (134 km from the live car) → diagnostic.
     _RtSpec("range_combinato", "Range Combined (Estimate)", "cruiseRange",
             DIST, KM, MEAS, "mdi:map-marker-distance", diag=True),
     _RtSpec("odometro", "Odometer", "odometer",
             DIST, KM, TOTAL, "mdi:counter"),
     _RtSpec("km_ibrido", "Hybrid Mileage", "hybridMileage",
             DIST, KM, TOTAL, "mdi:counter", diag=True),
-    # ── P1 · TPMS pressione (campo auto in kPa → mostrata in BAR come nell'app: ÷100) ──
+    # ── P1 · TPMS pressure (car field in kPa → shown in BAR as in the app: ÷100) ──
     _RtSpec("gomma_ant_sx_press", "Tire Front Left Pressure", "lFrontTyreKpa",
             PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
     _RtSpec("gomma_ant_dx_press", "Tire Front Right Pressure", "rFrontTyreKpa",
@@ -140,7 +167,7 @@ _RT_SENSORS: list[_RtSpec] = [
             PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
     _RtSpec("gomma_post_dx_press", "Tire Rear Right Pressure", "rRearTyreKpa",
             PRESS, BAR, MEAS, "mdi:car-tire-alert", scale=0.01, precision=2),
-    # ── P1 · TPMS temperatura (°C, diagnostica) ──
+    # ── P1 · TPMS temperature (°C, diagnostic) ──
     _RtSpec("gomma_ant_sx_temp", "Tire Front Left Temperature", "lFrontTyreTemp",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
     _RtSpec("gomma_ant_dx_temp", "Tire Front Right Temperature", "rFrontTyreTemp",
@@ -149,29 +176,35 @@ _RT_SENSORS: list[_RtSpec] = [
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
     _RtSpec("gomma_post_dx_temp", "Tire Rear Right Temperature", "rRearTyreTemp",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
-    # ── P2 · consumi e residui (unità confermate dal vivo) ──
+    # ── P2 · consumption and remaining (units confirmed from the live car) ──
     _RtSpec("consumo_carburante", "Fuel Average Consumption", "averageFuel",
             None, "L/100 km", MEAS, "mdi:gas-station"),
-    # avgHkPowerKwh50km=20.6 dal vivo → kWh/100km (il nome "50km" è fuorviante).
-    # -100 = segnaposto "nessun dato" ad auto ferma (HV spenta) → tieni l'ultimo noto.
-    _RtSpec("consumo_elettrico", "Electric Average Consumption", "avgHkPowerKwh50km",
+    # avgHkPowerKwh50km=20.6 from the live car (PHEV) → kWh/100km (the "50km" name is misleading).
+    # On BEVs that field is NOT there: the car sends `avgHkPower` (e.g. 17.7 = 177 Wh/km) → fallback.
+    # -100 = "no data" placeholder when the car is parked (HV off) → keep the last known.
+    _RtSpec("consumo_elettrico", "Electric Average Consumption",
+            ("avgHkPowerKwh50km", "avgHkPower"),
             None, "kWh/100 km", MEAS, "mdi:lightning-bolt", invalid=(-100.0,)),
-    # oilSurplus=23 dal vivo → LITRI (confermato dal calcolo autonomia benzina).
+    # oilSurplus=23 from the live car → LITERS (confirmed by the gasoline range calculation).
     _RtSpec("carburante_residuo", "Fuel Remaining", "oilSurplus",
             None, "L", MEAS, "mdi:fuel"),
-    # ── P2 · batteria alta tensione (valide SOLO ad auto in marcia/ricarica) ──
-    # Da ferma l'auto manda 0 V / -1000 A = segnaposto "HV spenta", non letture reali:
-    # marcati invalidi → il sensore tiene l'ultimo valore noto invece di azzerarsi.
+    # ── P2 · high-voltage battery (valid ONLY when the car is driving/charging) ──
+    # When parked the car sends 0 V / -1000 A = "HV off" placeholder, not real readings:
+    # marked invalid → the sensor keeps the last known value instead of zeroing out.
     _RtSpec("tensione_hv", "HV Battery Voltage", "totalVoltage",
             VOLTAGE, VOLT, MEAS, "mdi:flash", diag=True, invalid=(0.0,)),
     _RtSpec("corrente_hv", "HV Battery Current", "totalCurrent",
             CURRENT, AMP, MEAS, "mdi:current-dc", diag=True, invalid=(-1000.0,)),
-    # ── P2 · ricarica ──
-    # remainChargeTime: ASSENTE ad auto non in carica (comparirà sotto carica). Assunto
-    # in MINUTI — da riconfermare a vettura in carica. chargeState/appointmentChargeState/
-    # fastChargingGunStatus = codici (tutti 0 = a riposo dal vivo) → grezzi da decodificare.
+    # ── P2 · charging ──
+    # remainChargeTime: ABSENT when the car isn't charging (will appear while charging). Assumed
+    # in MINUTES — to be reconfirmed with the car charging. chargeState/appointmentChargeState/
+    # fastChargingGunStatus = codes (all 0 = idle from the live car) → raw, to be decoded.
     _RtSpec("tempo_ricarica", "Charge Remaining Time", "remainChargeTime",
             DUR, MIN, None, "mdi:timer-sand"),
+    # Instantaneous charging power (kW): 0.0 at idle, rises while charging. Present on BEVs
+    # (`chargingPower`) → useful for following an AC/DC session live.
+    _RtSpec("potenza_ricarica", "Charging Power", "chargingPower",
+            POWER, KW, MEAS, "mdi:ev-station", precision=1),
     _RtSpec("stato_ricarica", "Charge State", "chargeState",
             None, None, None, "mdi:ev-station", diag=True, numeric=False,
             vmap=CHARGE_STATE_MAP),
@@ -181,26 +214,29 @@ _RT_SENSORS: list[_RtSpec] = [
     _RtSpec("presa_rapida", "Charge Fast Port", "fastChargingGunStatus",
             None, None, None, "mdi:ev-plug-ccs2", diag=True, numeric=False,
             vmap=FAST_GUN_MAP),
-    # ── P2 · clima target ──
+    # ── P2 · climate target ──
     _RtSpec("temp_imp_sx", "Climate Target Temp Left", "frontSetTempLeft",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
     _RtSpec("temp_imp_dx", "Climate Target Temp Right", "frontSetTempRight",
             TEMP, C, MEAS, "mdi:thermometer", diag=True),
-    # ── P2 · limite di carica (charge depth) ──
-    # maxSocPercent: percentuale massima di carica impostata (0 = non impostata / sconosciuta).
-    # Letto dal canale realtime; il numero interattivo in number.py lo usa come valore corrente.
+    # ── P2 · charge limit (charge depth) ──
+    # maxSocPercent: maximum charge percentage set (0 = not set / unknown).
+    # Read from the realtime channel; the interactive number in number.py uses it as the current value.
     _RtSpec("charge_limit", "Charge Limit", "maxSocPercent",
             None, "%", MEAS, "mdi:battery-lock", diag=True),
 ]
 
 
-def _rt(coord, field: str) -> str | None:
-    """Valore grezzo del campo realtime, o None se assente/vuoto."""
+def _rt(coord, field) -> str | None:
+    """Raw value of the realtime field, or None if absent/empty. `field` can be a
+    tuple of alternative names (PHEV/BEV fallback): the first present wins."""
     rt = coord.data.get("realtime") or {}
-    v = get_rt_field(rt, field)
-    if v is None or str(v).strip() in ("", "None"):
-        return None
-    return str(v)
+    fields = field if isinstance(field, (tuple, list)) else (field,)
+    for f in fields:
+        v = get_rt_field(rt, f)
+        if v is not None and str(v).strip() not in ("", "None"):
+            return str(v)
+    return None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
@@ -212,11 +248,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ]
     ents.append(OmodaJaecooBattery(coord))
     ents.append(OmodaJaecooSpeed(coord))
-    # — sensori "ricchi" dal canale realtime (Round B): autonomia, odometro, gomme,
-    #   consumi, ricarica, clima target —
+    # — "rich" sensors from the realtime channel (Round B): range, odometer, tires,
+    #   consumption, charging, climate target —
     ents += [OmodaJaecooRealtimeSensor(coord, s) for s in _RT_SENSORS]
     ents.append(OmodaJaecooSessionStatus(coord))
-    # — sensori diagnostici (parità col bridge) —
+    # — diagnostic sensors (parity with the bridge) —
     ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Command Result", "cmd_status", "cmd_status", "mdi:car-cog"))
     ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Wake-up Result", "wake_status", "wake_status", "mdi:car-connected"))
     ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Location Probe Result", "probe_status", "probe_status", "mdi:crosshairs-gps"))
@@ -227,12 +263,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
 
 
 class _OmodaJaecooRestoreSensor(OmodaJaecooEntity, RestoreSensor):
-    """Base sensore Omoda / Jaecoo che sopravvive al riavvio di HA.
+    """Base Omoda / Jaecoo sensor that survives an HA restart.
 
-    Lo stato (telemetria 5A02, realtime, diagnostica) è in-memory nel coordinator
-    → dopo un restart torna `unknown`. Qui ripristiniamo l'ultimo valore noto e lo
-    usiamo come fallback finché non arriva un dato live. Le sottoclassi forniscono
-    `_live_value()` (valore corrente dal coordinator, o None se assente)."""
+    The state (5A02 telemetry, realtime, diagnostics) is in-memory in the coordinator
+    → after a restart it goes back to `unknown`. Here we restore the last known value and
+    use it as a fallback until live data arrives. Subclasses provide
+    `_live_value()` (current value from the coordinator, or None if absent)."""
 
     def __init__(self, coord, name: str, unique_suffix: str) -> None:
         super().__init__(coord, name, unique_suffix, entity_id_format=ENTITY_ID_FORMAT)
@@ -245,7 +281,7 @@ class _OmodaJaecooRestoreSensor(OmodaJaecooEntity, RestoreSensor):
             self._restored = last.native_value
 
     def _live_value(self):
-        """Sottoclassi: valore corrente dal coordinator, o None se assente."""
+        """Subclasses: current value from the coordinator, or None if absent."""
         raise NotImplementedError
 
     @property
@@ -255,7 +291,7 @@ class _OmodaJaecooRestoreSensor(OmodaJaecooEntity, RestoreSensor):
 
 
 class OmodaJaecooFieldSensor(_OmodaJaecooRestoreSensor):
-    """serratura (0=Bloccata/1=Sbloccata), livello sedile (Livello N) o valore grezzo."""
+    """lock (0=Locked/1=Unlocked), seat level (Level N) or raw value."""
 
     def __init__(self, coord, spec: dict) -> None:
         super().__init__(coord, f"Omoda / Jaecoo {spec['name']}", spec["key"])
@@ -263,7 +299,7 @@ class OmodaJaecooFieldSensor(_OmodaJaecooRestoreSensor):
         self._kind = spec["kind"]
         if spec.get("icon"):
             self._attr_icon = spec["icon"]
-        # campi tecnici (es. codice di fase del tetto) → tra i dettagli diagnostici
+        # technical fields (e.g. roof phase code) → among the diagnostic details
         if spec.get("diag"):
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -272,9 +308,9 @@ class OmodaJaecooFieldSensor(_OmodaJaecooRestoreSensor):
         if v is None:
             return None
         if self._kind == "lock":
-            return "Bloccata" if str(v) in ("0", "0.0") else "Sbloccata"
+            return "Locked" if str(v) in ("0", "0.0") else "Unlocked"
         if self._kind == "level":
-            return f"Livello {v}"
+            return f"Level {v}"
         return str(v)
 
 
@@ -295,8 +331,8 @@ class OmodaJaecooBattery(_OmodaJaecooRestoreSensor):
             soc = float(raw)
         except (TypeError, ValueError):
             return None
-        # dumpEnergy=0 = segnaposto "alta tensione spenta" (auto ferma), NON una carica
-        # reale dello 0%: torna None così resta l'ultimo SOC noto (come fa l'app ufficiale).
+        # dumpEnergy=0 = "high voltage off" placeholder (car parked), NOT a real
+        # 0% charge: return None so the last known SOC stays (as the official app does).
         if soc <= 0:
             return None
         return soc
@@ -306,9 +342,9 @@ class OmodaJaecooBattery(_OmodaJaecooRestoreSensor):
         live = self._live_value()
         if live is not None:
             return live
-        # non riproporre uno "0%" stantio salvato prima del fix dei segnaposto: 0 non è un
-        # ultimo-valore-noto valido per la batteria → meglio "sconosciuto" finché non arriva
-        # una lettura vera (primo viaggio/ricarica o pulsante "Aggiorna stato completo").
+        # don't re-serve a stale "0%" saved before the placeholder fix: 0 is not a
+        # valid last-known-value for the battery → better "unknown" until a real
+        # reading arrives (first trip/charge or the "Refresh full state" button).
         if self._restored in (0, 0.0, "0", "0.0"):
             return None
         return self._restored
@@ -332,12 +368,12 @@ class OmodaJaecooSpeed(_OmodaJaecooRestoreSensor):
 
 
 class OmodaJaecooRealtimeSensor(_OmodaJaecooRestoreSensor):
-    """Sensore generico su un campo del canale realtime (vedi `_RT_SENSORS`).
+    """Generic sensor on a realtime channel field (see `_RT_SENSORS`).
 
-    Stesso pattern di `OmodaJaecooBattery`/`OmodaJaecooSpeed` ma parametrico: device_class,
-    unità e state_class arrivano dalla spec. `numeric=True` converte a float (None
-    se non parsabile → emerge l'ultimo valore noto del RestoreSensor); `numeric=False`
-    tiene il valore grezzo (codici di stato ricarica da decodificare)."""
+    Same pattern as `OmodaJaecooBattery`/`OmodaJaecooSpeed` but parametric: device_class,
+    unit and state_class come from the spec. `numeric=True` converts to float (None
+    if not parsable → the RestoreSensor's last known value surfaces); `numeric=False`
+    keeps the raw value (charge state codes to be decoded)."""
 
     def __init__(self, coord, spec: _RtSpec) -> None:
         super().__init__(coord, f"Omoda / Jaecoo {spec.name}", f"rt_{spec.suffix}")
@@ -355,8 +391,17 @@ class OmodaJaecooRealtimeSensor(_OmodaJaecooRestoreSensor):
         if spec.diag:
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
+    @property
+    def available(self) -> bool:
+        """PHEV/BEV universality: a realtime field that THIS car never sends (e.g.
+        gasoline range on a BEV, or an EV-only field on a PHEV) must not stay
+        "unknown" forever. It's available only if it has a live or restored value;
+        fields absent for the powertrain come out as «unavailable» (the card
+        hides them) instead of cluttering the UI with empty sensors."""
+        return self._live_value() is not None or self._restored is not None
+
     def _live_value(self):
-        # campo CALCOLATO da più field realtime (es. autonomia totale = elettrica + benzina)
+        # field COMPUTED from several realtime fields (e.g. total range = electric + gasoline)
         if self._spec.compute is not None:
             rt = self.coordinator.data.get("realtime") or {}
             val = self._spec.compute(rt)
@@ -366,14 +411,14 @@ class OmodaJaecooRealtimeSensor(_OmodaJaecooRestoreSensor):
             return None
         if self._spec.vmap is not None:
             key = raw[:-2] if raw.endswith(".0") else raw  # "0.0" → "0"
-            return self._spec.vmap.get(key, f"Sconosciuto ({raw})")
+            return self._spec.vmap.get(key, f"Unknown ({raw})")
         if not self._spec.numeric:
             return raw
         try:
             val = float(raw)
         except (TypeError, ValueError):
             return None
-        # segnaposto "nessuna lettura" (es. HV spenta) → None ⇒ resta l'ultimo valore noto
+        # "no reading" placeholder (e.g. HV off) → None ⇒ the last known value stays
         if val in self._spec.invalid:
             return None
         return val * self._spec.scale if self._spec.scale is not None else val
@@ -391,7 +436,7 @@ class OmodaJaecooSessionStatus(_OmodaJaecooRestoreSensor):
 
 
 class OmodaJaecooTextSensor(_OmodaJaecooRestoreSensor):
-    """Sensore testuale diagnostico (esito ultimo comando/sveglia/sonda)."""
+    """Diagnostic text sensor (result of the last command/wake-up/probe)."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -405,14 +450,14 @@ class OmodaJaecooTextSensor(_OmodaJaecooRestoreSensor):
 
     @property
     def native_value(self):
-        # [H9] gli esiti diagnostici (comando/sveglia/sonda) NON si ripristinano: un
-        # esito vecchio dopo un restart sarebbe fuorviante (sembrerebbe l'ultima azione
-        # appena eseguita). Solo il valore live; in assenza → unknown.
+        # [H9] the diagnostic results (command/wake-up/probe) are NOT restored: an
+        # old result after a restart would be misleading (it would look like the last action
+        # just executed). Only the live value; if absent → unknown.
         return self._live_value()
 
 
 class OmodaJaecooTimestampSensor(_OmodaJaecooRestoreSensor):
-    """Timestamp diagnostico (ultimo contatto/sveglia/posizione)."""
+    """Diagnostic timestamp (last contact/wake-up/position)."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -424,9 +469,9 @@ class OmodaJaecooTimestampSensor(_OmodaJaecooRestoreSensor):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        # [H10] device_class TIMESTAMP esige un datetime tz-aware: valida il valore
-        # ripristinato (stringa ISO → parse), altrimenti None, per non emettere il
-        # warning HA "Invalid datetime" e non mostrare un timestamp malformato.
+        # [H10] device_class TIMESTAMP requires a tz-aware datetime: validate the
+        # restored value (ISO string → parse), otherwise None, to avoid emitting the
+        # HA "Invalid datetime" warning and showing a malformed timestamp.
         r = self._restored
         if isinstance(r, str):
             r = dt_util.parse_datetime(r)

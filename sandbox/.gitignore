@@ -1,0 +1,4 @@
+token.json
+*.env
+.venv/
+data/

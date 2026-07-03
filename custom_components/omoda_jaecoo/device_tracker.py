@@ -1,4 +1,4 @@
-"""Device tracker: posizione GPS dell'auto (push 1301 / sonda realtime)."""
+"""Device tracker: the car's GPS position (push 1301 / realtime probe)."""
 from __future__ import annotations
 
 from homeassistant.components.device_tracker import (
@@ -28,11 +28,11 @@ def _f(v):
 
 
 class OmodaJaecooTracker(OmodaJaecooEntity, TrackerEntity, RestoreEntity):
-    """Posizione GPS. La posizione live è in-memory nel coordinator (push 1301 /
-    sonda realtime) → dopo un riavvio di HA resta `unknown` finché non si preme
-    «Localizza»/«Aggiorna posizione». Per non perdere la posizione sulla mappa,
-    al boot si ripristina l'ultimo fix noto e lo si usa come fallback finché non
-    arriva un dato live (il bridge otteneva lo stesso effetto via MQTT retained)."""
+    """GPS position. The live position is held in-memory in the coordinator (push 1301 /
+    realtime probe) → after an HA restart it stays `unknown` until you press
+    «Locate»/«Refresh location». So as not to lose the position on the map,
+    at boot the last known fix is restored and used as a fallback until a live
+    reading arrives (the bridge achieved the same effect via MQTT retained)."""
 
     _attr_icon = "mdi:car"
 
