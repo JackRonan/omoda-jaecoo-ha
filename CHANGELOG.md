@@ -1,10 +1,73 @@
-# Novità di Omoda 9 / Jaecoo per Home Assistant
+# Changelog — Omoda / Jaecoo for Home Assistant (English fork)
 
-Cosa cambia a ogni aggiornamento, spiegato in parole semplici.
-Le voci più recenti sono in alto. Le versioni indicano la "puntata"
-dell'integrazione: aggiorna da **HACS → Omoda 9 / Jaecoo → Aggiorna**.
+What changes in each update, in plain words. Newest entries at the top.
+Update via **HACS → Omoda / Jaecoo → Update**, then restart Home Assistant.
 
-## [Non rilasciato]
+This is the **English fork** of the original Omoda 9 / Jaecoo integration. Everything
+above the "Pre-fork history" divider is the English fork; everything below it is the
+original project's changelog (Italian + English), preserved for history.
+
+## v1.5.27-EN — 2026-07-03
+
+- **English only.** Removed the Italian translation file, so entity names are always in
+  English regardless of your Home Assistant language (previously stale Italian names could
+  reappear). Hardened startup so the new cleanup/re-auth steps can never stop the
+  integration from loading.
+
+## v1.5.26-EN — 2026-07-03
+
+- **Windows are now a single 3-position control** — Closed / Ventilate / Open — instead of
+  a cover plus a separate "Ventilate" button.
+
+## v1.5.25-EN — 2026-07-03
+
+- **The custom dashboard card now appears in the card picker automatically** — no need to
+  add a dashboard resource by hand.
+- **Retired entities are removed automatically on upgrade** (old charge-limit, the on/off
+  buttons that became switches, and fuel-only sensors on an electric car), instead of
+  lingering as "unavailable".
+
+## v1.5.24-EN — 2026-07-03
+
+- **The integration adapts to your specific vehicle.** It reads the climate temperature
+  range and the powertrain from your account, so climate control matches your car and pure
+  electric cars no longer show fuel-only sensors.
+- **New "Charging" sensor** — on while the car is actively charging.
+- **Re-authentication prompt.** If your session expires (e.g. you open the official app),
+  Home Assistant now asks you to re-authenticate with a fresh code instead of the data
+  silently going stale.
+- **Removed the charge-limit control.** The Omoda/Jaecoo backend has no way to set a charge
+  limit (it's car-screen-only), so the non-working entities were removed.
+
+## v1.5.23-EN — 2026-07-03
+
+- **Works for electric (BEV) and plug-in hybrid (PHEV) cars.** Range, consumption and
+  related sensors now read the correct field for your car — e.g. estimated range remaining
+  now shows correctly on electric cars.
+- **New sensors:** Charging Power and WLTP range.
+- **Rewrote the dashboard card** (the old one was broken); it auto-discovers your vehicle's
+  entities and works for any model.
+- **Tidier controls** — removed duplicate on/off buttons where a switch already exists.
+- **Full English translation** of the whole integration (code comments + user messages).
+- **Added a standalone API "sandbox" tool** (`sandbox/` in the repo) for testing the car's
+  API outside Home Assistant.
+
+## v1.5.22-EN — Initial English Fork Release & Complete Localization
+
+- **Domain Rename**: Completely renamed the integration domain from `omoda9` to `omoda_jaecoo` to better reflect support for Jaecoo vehicles and the shared app platform.
+- **English Native**: Translated all default entity names, binary sensors, buttons, and switches from Italian to English.
+- **Dynamic Translation Keys**: Reworked all entity lookup strings to use standard `snake_case` english keys.
+- **Backward Compatibility**: Injected all legacy Italian entity translation strings as fallbacks into the English dictionary so that existing users upgrading to this fork will seamlessly transition without broken dashboard names.
+- **Automation Blueprint**: Renamed and translated the `failed_command.yaml` blueprint into English.
+- **Web API**: Forced HTTP requests to the Omoda backend to use the `"Accept-Language": "en-GB"` header so that OTP codes and emails are dispatched in English.
+
+---
+
+# Pre-fork history — original Italian project
+
+The entries below are the **original Omoda 9 / Jaecoo project's** changelog (Italian, with
+an English section per entry), kept unchanged for historical reference. The English fork
+starts at v1.5.22-EN above.
 
 ## v1.5.22 — 2026-06-24
 
