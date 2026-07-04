@@ -10,9 +10,20 @@ This repository is an English translation and localization fork of the original 
 * **Delegated Account (Recommended):** To maintain access to the official mobile app simultaneously, it is highly recommended to create a second account (requires a spare phone number) and delegate vehicle access to it, using that second account for this integration. Logging in with the same account on both Home Assistant and the official app will cause session logs/tokens to repeatedly kick you out of the official app.
 
 ### Model Compatibility
-* **Omoda E5 & Omoda / Jaecoo**: This integration is tested and verified to work with the **Omoda E5** (in the UK) as well as the **Omoda / Jaecoo** (according to the original author).
-* **Chery App Similarity**: The Omoda / Jaecoo app is code-similar to the Chery app. It is likely that other Chery-app based vehicles are supported (though untested as they use different endpoints and certificates).
-* **All Omoda/Jaecoo Models**: In general, this integration should work with all models compatible with the official Omoda / Jaecoo app, though you may need to manually disable some entities depending on your individual vehicle's features.
+* **Omoda E5 & Omoda / Jaecoo**: Tested and verified with the **Omoda E5** (in the UK) and the **Omoda / Jaecoo** (per the original author).
+* **All Omoda/Jaecoo models**: Should work with any model that uses the official **Omoda / Jaecoo** app. The telemetry layer is powertrain-agnostic (it falls back across BEV/PHEV field names and hides fuel attributes on a pure EV), and the command catalog is shared, so an unsupported command just returns an error and is skipped. You may still want to disable a few entities your car doesn't have.
+* **Which app you have matters.** There are three different backends in this ecosystem, and this integration targets **only the first**:
+  * **Omoda / Jaecoo ("legend" gateway)** - what this integration uses. Generalises across regions (see below).
+  * **Chery-branded app** - a *different* platform (different BFF, a separate UAA login service, and a different request-signing formula). The telemetry/MQTT layer is shared, but the auth front door is not, so Chery-app vehicles are **not** supported as-is.
+  * **CarLinko** (common in Malaysia, Indonesia, Uzbekistan, UAE) - an entirely different backend (Hangzhou Huijie, flatter REST paths, WebSockets instead of MQTT). **Not** supported; would need its own integration.
+
+### Regions (multi-market)
+The integration defaults to **Europe**, but the region parameters (BFF / TSP / MQTT hosts and the tenant code) are exposed as options, and the mutual-TLS telemetry certificates for **~40 regions** are already bundled (extracted from the app's own assets - Australia, NZ, Thailand, Brazil, Mexico, KSA, UAE, Singapore, and many more). So adding an Omoda/Jaecoo region is mostly a matter of the **BFF host** (the tenant is often shared).
+
+* **Confirmed working:** **Europe** (`legend-oj.omodaauto.nl`) and **Mexico** (`legend-oj.chirey.mx`). Mexico runs the identical gateway and accepts the **same tenant `300006`** - the only difference is the host.
+* **To try another region:** set the BFF host under **Settings → Devices & Services → Omoda / Jaecoo → Configure** (e.g. `https://legend-oj.chirey.mx/api` for Mexico). If the shared tenant `300006` is rejected, that region uses a different tenant code.
+* **Finding a region's values:** each market ships its own app build; the exact `BFF_SERVICE` and `TENANT_CODE` live in one file inside that market's APK (`assets/flutter_assets/env/.env.prod`). The sign-in page is also web-hosted at `https://<bff-domain>/h5`, so you can open it in a browser (with DevTools) to watch the login calls.
+* Contributions of non-EU captures are very welcome - see the [sandbox](#api-sandbox-developers) tool, which reuses the same login outside Home Assistant and prints the raw JSON.
 
 ---
 
