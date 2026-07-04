@@ -602,8 +602,17 @@ def act_probe_all():
 
 
 def act_default_env():
-    """App bootstrap/environment metadata (GET, no vehicle needed)."""
+    """App bootstrap/environment metadata (GET, no vehicle needed). KEY for region work:
+    the response's `domain` field is the region's TSP host (discovered dynamically, not
+    hardcoded), alongside the TSP clientId/clientSecret and the tenant."""
     bff_get("/tsp/v1/app/env/defaultEnv")
+
+
+def act_tenant_by_code():
+    """Look up a tenant by its code (region discovery / validation). NB: the query param is
+    `tenantCode` (passing `code`/`id`/`tenantId` returns 500 'tenant.code.is.number')."""
+    code = ask("tenant code", os.environ.get("OMODA_TENANT_CODE", "300006"))
+    bff_get("/marketing/v1/app/tenant/tenantByCode", params={"tenantCode": code})
 
 
 def act_error_codes():
@@ -935,7 +944,8 @@ MENU = [
     ("Travel  (travelQuery)", act_travel),
     ("Theft alarm switch  (querySwitch)", act_theft_switch),
     ("Combined probe (realtime+location+travel)", act_probe_all),
-    ("Default env / app metadata (GET)", act_default_env),
+    ("Default env / app metadata (GET) — reveals region TSP host", act_default_env),
+    ("Tenant by code (GET) — region discovery/validation", act_tenant_by_code),
     ("Error-code dictionary (GET allErrorCodes)", act_error_codes),
     ("— Commands (ACTUATE) —", None),
     ("List command catalog", act_list_commands),
