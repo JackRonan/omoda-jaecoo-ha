@@ -17,8 +17,9 @@ blueprint:
     esito_sensor:
       name: Command result sensor
       description: >
-        The integration sensor that reports the result of the last command.
-        Usually `sensor.omoda_jaecoo_command_result`.
+        The integration sensor that reports the result of the last command
+        (shown as "Diagnostic Command Result", entity `sensor.omoda_jaecoo_command_result`).
+        If the default below doesn't match, just pick it from the list.
       default: sensor.omoda_jaecoo_command_result
       selector:
         entity:

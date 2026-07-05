@@ -17,6 +17,17 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.5.42 — 2026-07-05
+
+- **Stable entity IDs for the diagnostic result sensors (fixes the failed-command blueprint).**
+  The "Command Result", "Wake-up Result" and "Location Probe Result" sensors used to derive
+  their entity ID from their display name, so the translation work renamed them and silently
+  moved the entity ID (e.g. to `sensor.diagnostic_command_result`) - which is why the
+  failed-command blueprint stopped finding the sensor. They now have fixed entity IDs
+  (`sensor.omoda_jaecoo_command_result`, `…_wake_result`, `…_location_probe_result`) that no
+  longer change when the name changes, and anyone left on the old drifted ID is migrated
+  automatically on the next start. The blueprint default matches again.
+
 ## v1.5.40 — 2026-07-03
 
 - **Card: fixed "Configuration error" on the mobile app.** The card worked on desktop but

@@ -151,6 +151,24 @@ def _do_cleanup_stale_entities(hass: HomeAssistant, coordinator) -> None:
         if ent is not None and ent.platform == DOMAIN:
             reg.async_remove(eid)
 
+    # One-time entity_id migration. The diagnostic text sensors used to derive their entity_id
+    # from the (translatable) display name, so renaming them drifted the entity_id (e.g.
+    # sensor.diagnostic_command_result) and broke the failed-command blueprint's default. They
+    # now have a stable object_id; move anyone still on the old auto-slug onto it. Guarded: only
+    # when the entity is still on the EXACT drifted default (so a user-customised id is untouched)
+    # and the target entity_id is free.
+    for suffix, old_eid, new_eid in (
+        ("cmd_status", "sensor.diagnostic_command_result", "sensor.omoda_jaecoo_command_result"),
+        ("wake_status", "sensor.diagnostic_wake_up_result", "sensor.omoda_jaecoo_wake_result"),
+        ("probe_status", "sensor.diagnostic_location_probe_result", "sensor.omoda_jaecoo_location_probe_result"),
+    ):
+        cur = reg.async_get_entity_id("sensor", DOMAIN, f"{vin}_{suffix}")
+        if cur == old_eid and reg.async_get(new_eid) is None:
+            try:
+                reg.async_update_entity(cur, new_entity_id=new_eid)
+            except Exception as err:  # noqa: BLE001 — migration is best-effort
+                _LOGGER.debug("entity_id migration %s skipped: %s", cur, err)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Initialize the integration from a config entry."""

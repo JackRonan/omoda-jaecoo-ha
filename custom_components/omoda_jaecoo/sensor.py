@@ -262,9 +262,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
              if not (bev and s.suffix in _FUEL_ONLY_SUFFIXES)]
     ents.append(OmodaJaecooSessionStatus(coord))
     # — diagnostic sensors (parity with the bridge) —
-    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Command Result", "cmd_status", "cmd_status", "mdi:car-cog"))
-    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Wake-up Result", "wake_status", "wake_status", "mdi:car-connected"))
-    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Location Probe Result", "probe_status", "probe_status", "mdi:crosshairs-gps"))
+    # Explicit object_id → the entity_id is STABLE and translation-proof. Without it the
+    # entity_id was slugify(name), so renaming the display name (e.g. "… → Diagnostic Command
+    # Result") silently moved the entity_id and broke the failed-command blueprint's default.
+    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Command Result", "cmd_status", "cmd_status",
+                                      "mdi:car-cog", object_id="omoda_jaecoo_command_result"))
+    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Wake-up Result", "wake_status", "wake_status",
+                                      "mdi:car-connected", object_id="omoda_jaecoo_wake_result"))
+    ents.append(OmodaJaecooTextSensor(coord, "Diagnostic Location Probe Result", "probe_status", "probe_status",
+                                      "mdi:crosshairs-gps", object_id="omoda_jaecoo_location_probe_result"))
     ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Seen", "lastseen", "last_seen", "mdi:car-clock"))
     ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Wake-up", "wake_ts", "last_wake", "mdi:car-clock"))
     ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Position", "pos_fix", "last_pos_fix", "mdi:map-marker-clock"))
@@ -279,8 +285,9 @@ class _OmodaJaecooRestoreSensor(OmodaJaecooEntity, RestoreSensor):
     use it as a fallback until live data arrives. Subclasses provide
     `_live_value()` (current value from the coordinator, or None if absent)."""
 
-    def __init__(self, coord, name: str, unique_suffix: str) -> None:
-        super().__init__(coord, name, unique_suffix, entity_id_format=ENTITY_ID_FORMAT)
+    def __init__(self, coord, name: str, unique_suffix: str, object_id: str | None = None) -> None:
+        super().__init__(coord, name, unique_suffix, object_id=object_id,
+                         entity_id_format=ENTITY_ID_FORMAT)
         self._restored = None
 
     async def async_added_to_hass(self) -> None:
@@ -452,8 +459,9 @@ class OmodaJaecooTextSensor(_OmodaJaecooRestoreSensor):
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, coord, name: str, suffix: str, data_key: str, icon: str) -> None:
-        super().__init__(coord, name, suffix)
+    def __init__(self, coord, name: str, suffix: str, data_key: str, icon: str,
+                 object_id: str | None = None) -> None:
+        super().__init__(coord, name, suffix, object_id=object_id)
         self._data_key = data_key
         self._attr_icon = icon
 
