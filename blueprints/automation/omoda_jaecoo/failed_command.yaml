@@ -15,7 +15,7 @@ blueprint:
     min_version: 2024.6.0
   input:
     esito_sensor:
-      name: "Command result" sensor
+      name: Command result sensor
       description: >
         The integration sensor that reports the result of the last command.
         Usually `sensor.omoda_jaecoo_command_result`.
