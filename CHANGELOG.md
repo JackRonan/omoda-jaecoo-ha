@@ -17,6 +17,25 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.5.45 — 2026-07-05 (security hardening)
+
+Security release. Update recommended for everyone.
+
+- **Dashboard card now escapes all values.** The card previously inserted vehicle name, image
+  URL, and entity values into the page without escaping; it now HTML-escapes every value and
+  validates the image URL, closing a cross-site-scripting risk.
+- **No raw telemetry written to disk by default.** The debug file that logged the raw location
+  payload (which includes VIN and GPS) is now off unless you explicitly opt in — nothing personal
+  is written under the integration folder anymore.
+- **Diagnostics fully redacted.** The downloadable diagnostics no longer leak the VIN via a
+  telemetry field, and the vehicle state is scrubbed too — so the file is genuinely safe to share.
+- **Token files locked down.** Saved token files are now written owner-only (0600).
+- Minor: the login helper no longer prints a captcha token; the MQTT TLS behaviour is documented
+  (the certificate chain is validated against the pinned CA; only the vendor's hostname mismatch
+  is tolerated).
+
+Thanks to the security researcher who reported responsibly via private disclosure.
+
 ## v1.5.44 — 2026-07-05
 
 Rolls in the improvements from the upstream Omoda 9 project (v1.5.23–v1.5.24), adapted to this fork.

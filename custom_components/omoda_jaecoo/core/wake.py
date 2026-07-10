@@ -145,6 +145,10 @@ def _refresh_token() -> bool:
             tmp = path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(j, f, ensure_ascii=False)
+            try:
+                os.chmod(tmp, 0o600)   # token file holds access/refresh tokens → owner-only
+            except OSError:
+                pass                    # non-POSIX FS (Windows): best-effort
             os.replace(tmp, path)
         except Exception:
             return False

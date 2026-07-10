@@ -152,7 +152,7 @@ def risolvi(max_tentativi=12, verbose=True):
         if d.get("repCode") == "0000":
             point_json = json.dumps(point, separators=(",", ":"))
             cv = _aes_b64(f"{token}---{point_json}", secret)
-            if verbose: print(f"  ✅ captcha solved on attempt {t} (x={x}). cv={cv[:32]}…")
+            if verbose: print(f"  ✅ captcha solved on attempt {t} (x={x}).")
             return cv
         if verbose: print(f"  attempt {t}: x={x} -> {d.get('repCode')} {d.get('repMsg')}")
         time.sleep(0.3)

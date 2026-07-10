@@ -53,7 +53,9 @@ import codes
 
 VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
 PIN        = os.environ.get("PIN", os.environ.get("OMODA_PIN", ""))   # control PIN (PER-ACCOUNT)
-PROV_LOG   = os.environ.get("OMODA_PROV_LOG", os.path.join(HERE, "data", "provision.jsonl"))
+# Opt-in ONLY (may capture tokens/VIN in the provisioning chain): off unless the user sets
+# OMODA_PROV_LOG to a path of their choosing. Avoids writing sensitive data under the package dir.
+PROV_LOG   = os.environ.get("OMODA_PROV_LOG")
 
 # BFF endpoints (legend-oj) of the provisioning chain — all POST, Bearer access_token + app sign.
 BFF_GETTUSERID    = "/tsp/v1/app/auth/getTuserId"
@@ -67,6 +69,8 @@ CAR_TOKEN_KEYS = ("token", "tspToken", "carToken", "accessToken", "vehicleToken"
 
 # ───────────────────────── util ────────────────────────────────────────────────
 def _log(rec: dict):
+    if not PROV_LOG:            # opt-in only (may contain tokens/VIN) — see above
+        return
     rec = {"ts": round(time.time(), 3),
            "iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime()), **rec}
     try:

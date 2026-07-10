@@ -454,7 +454,13 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                   certfile=os.path.join(self.certs_dir, "client.pem"),
                   keyfile=os.path.join(self.certs_dir, "client.key"),
                   cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
-        c.tls_insecure_set(True)  # the broker uses a non-matching CN (as in the bridge)
+        # The EMQX broker presents a certificate whose CN does not match the hostname, so
+        # hostname verification is disabled. The certificate CHAIN is still validated
+        # (cert_reqs=CERT_REQUIRED against the pinned ca.pem), so a MITM would need a server
+        # certificate signed by that exact CA — and the CA's PRIVATE key is not distributed
+        # (only the CA cert, for validation). Residual risk is therefore low; this is a vendor
+        # CN-mismatch workaround, not a blanket "trust anything".
+        c.tls_insecure_set(True)
 
         def on_connect(cl, u, flags, rc, props=None):
             ok = (rc == 0) or (getattr(rc, "value", 1) == 0)

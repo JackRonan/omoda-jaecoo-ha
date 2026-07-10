@@ -37,7 +37,10 @@ import wake as W
 import codes
 
 VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
-PROBE_LOG  = os.environ.get("OMODA_PROBE_LOG", os.path.join(HERE, "data", "probe.jsonl"))
+# Opt-in ONLY: this file logs the raw realtime payload (VIN + GPS + telemetry). Writing it by
+# default put personal data on disk under the package dir, so it is now OFF unless the user
+# explicitly points OMODA_PROBE_LOG at a path they choose (e.g. for debugging).
+PROBE_LOG  = os.environ.get("OMODA_PROBE_LOG")
 COOLDOWN_S = int(os.environ.get("PROBE_COOLDOWN", "120"))   # 2 min: realtime read is read-only and the car stays online for a long time → frequent opportunistic reads (was 1800=30min, too restrictive). Poll cycles use force=True and bypass it anyway.
 
 _BUSY = threading.Lock()
@@ -50,6 +53,8 @@ RICH_KEYS = ("lat", "lon", "altitude", "direction", "gpsSpeed", "vehicleSpeed",
 
 
 def _log(rec: dict):
+    if not PROBE_LOG:           # opt-in only (raw payload contains VIN + GPS) — see above
+        return
     rec = {"ts": round(time.time(), 3),
            "iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime()), **rec}
     try:

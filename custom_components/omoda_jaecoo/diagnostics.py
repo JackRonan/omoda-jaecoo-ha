@@ -23,10 +23,26 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN, CERT_FILES
 
 # Keys to obscure wherever they appear (config entry + any nested dicts).
+# NB: `seq` is included because the realtime payload's seq is "<VIN>-<timestamp>" → it embeds
+# the VIN; without this the VIN leaked into diagnostics via realtime.seq.
 TO_REDACT = {
-    "email", "pin", "vin", "tuserid",
+    "email", "pin", "vin", "tuserid", "seq",
     "lat", "lon", "latitude", "longitude", "position",
 }
+
+
+def _scrub_vin(obj: Any, vin: str) -> Any:
+    """Belt-and-braces: replace the VIN wherever it appears as a SUBSTRING (e.g. inside a
+    field the redaction-by-key list doesn't know about), so it can never reach the report."""
+    if not vin:
+        return obj
+    if isinstance(obj, dict):
+        return {k: _scrub_vin(v, vin) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_scrub_vin(v, vin) for v in obj]
+    if isinstance(obj, str) and vin in obj:
+        return obj.replace(vin, "**REDACTED**")
+    return obj
 
 
 async def async_get_config_entry_diagnostics(
@@ -59,10 +75,15 @@ async def async_get_config_entry_diagnostics(
 
     data = dict(coordinator.data or {})
     has_position = bool(data.get("position"))
+    vin = getattr(coordinator, "vin", "") or ""
     # The GPS position is sensitive (where you live) → never exported, not even obscured coord-by-coord.
     realtime = data.get("realtime")
     if isinstance(realtime, dict):
-        realtime = async_redact_data(realtime, TO_REDACT)
+        realtime = _scrub_vin(async_redact_data(realtime, TO_REDACT), vin)
+    # 5A02 telemetry (door/climate/seat state…): redact by key + scrub the VIN as a safety net.
+    fields = data.get("fields")
+    if isinstance(fields, dict):
+        fields = _scrub_vin(async_redact_data(dict(fields), TO_REDACT), vin)
 
     diag["coordinator"] = {
         "region": {
@@ -92,9 +113,8 @@ async def async_get_config_entry_diagnostics(
             "wake_status": data.get("wake_status"),
             "probe_status": data.get("probe_status"),
             "realtime": realtime,
-            # 5A02 telemetry (door/climate/seat state…): useful for debugging, not personal data.
             "fields_count": len(data.get("fields") or {}),
-            "fields": data.get("fields"),
+            "fields": fields,
         },
     }
     return diag

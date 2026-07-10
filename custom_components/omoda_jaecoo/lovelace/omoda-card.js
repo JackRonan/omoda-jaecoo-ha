@@ -61,6 +61,21 @@ class OmodaCard extends HTMLElement {
   // Escape a string for safe use inside `new RegExp(...)` (vehicle names can contain
   // regex-special chars like ( ) + . which would otherwise throw during render).
   _esc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  // Escape for an HTML text/attribute context. The card builds its DOM from vehicle- and
+  // backend-supplied strings (vehicle name, image URL, entity states, warnings) via innerHTML,
+  // so EVERY interpolated value must be neutralised to prevent HTML/script injection (XSS).
+  _h(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  // Sanitise a URL used inside background-image:url('…'): allow only http(s), root-relative, or
+  // data:image, and percent-encode the characters that could break out of the url() or the style
+  // attribute. Anything else (e.g. javascript:, data:text/html) becomes empty.
+  _imgUrl(s) {
+    s = String(s || "");
+    if (!/^(https?:\/\/|\/|data:image\/)/i.test(s)) return "";
+    return s.replace(/["'()\\<>\s]/g, encodeURIComponent);
+  }
 
   _batteryIcon(v, charging) {
     if (charging) return "mdi:battery-charging";
@@ -191,21 +206,22 @@ class OmodaCard extends HTMLElement {
     // ---- hero (photo or gradient) — subline shows the lock status ----
     const img = cfg.image || items.map((r) => r.s.attributes.vehicle_image).find(Boolean) || "";
     const sub = isCharging
-      ? `<div class="sub"><ha-icon icon="mdi:flash"></ha-icon>Charging · <ha-icon icon="${lockIcon}"></ha-icon>${lockText}</div>`
-      : `<div class="sub"><ha-icon icon="${lockIcon}"></ha-icon>${lockText}</div>`;
+      ? `<div class="sub"><ha-icon icon="mdi:flash"></ha-icon>Charging · <ha-icon icon="${lockIcon}"></ha-icon>${this._h(lockText)}</div>`
+      : `<div class="sub"><ha-icon icon="${lockIcon}"></ha-icon>${this._h(lockText)}</div>`;
     const battBadge = (bat && !this._dead(bat.s))
-      ? `<div class="batt" data-e="${bat.id}">
+      ? `<div class="batt" data-e="${this._h(bat.id)}">
            <ha-icon icon="${this._batteryIcon(batV, isCharging)}" style="color:${this._batteryColor(batV)}"></ha-icon>
-           <b>${isNaN(batV) ? bat.s.state : Math.round(batV)}%</b></div>`
+           <b>${isNaN(batV) ? this._h(bat.s.state) : Math.round(batV)}%</b></div>`
       : "";
     // Clicking the photo/hero opens the device page (not a control), so it can't actuate.
     const deviceId = this._deviceId(hass, items);
+    const safeImg = this._imgUrl(img);
     const hero = `
-      <div class="hero ${img ? "photo" : ""}" style="${img ? `background-image:url('${img}')` : ""}"
-           ${deviceId ? `data-device="${deviceId}"` : ""}>
+      <div class="hero ${safeImg ? "photo" : ""}" style="${safeImg ? `background-image:url('${safeImg}')` : ""}"
+           ${deviceId ? `data-device="${this._h(deviceId)}"` : ""}>
         <div class="scrim"></div>
         <div class="hero-content">
-          <div><div class="name">${title}</div>${sub}</div>
+          <div><div class="name">${this._h(title)}</div>${sub}</div>
           ${battBadge}
         </div>
       </div>`;
@@ -213,8 +229,8 @@ class OmodaCard extends HTMLElement {
     // ---- metrics strip (range · charging · odometer) ----
     // `entityId` omitted → the tile is read-only text (no more-info, no accidental action).
     const metric = (label, icon, value, entityId) => `
-      <div class="metric" ${entityId ? `data-e="${entityId}"` : ""}>
-        <div class="v">${value}</div><div class="l"><ha-icon icon="${icon}"></ha-icon>${label}</div></div>`;
+      <div class="metric" ${entityId ? `data-e="${this._h(entityId)}"` : ""}>
+        <div class="v">${this._h(value)}</div><div class="l"><ha-icon icon="${icon}"></ha-icon>${this._h(label)}</div></div>`;
     const chargeText = charging && !this._dead(charging.s) ? (isCharging ? "Charging" : "Idle")
       : (chargeState && !this._dead(chargeState.s) ? chargeState.s.state : "—");
     const metrics = `<div class="metrics">
@@ -234,7 +250,7 @@ class OmodaCard extends HTMLElement {
     const conn = this._find(items, "connection");
     if (conn && conn.s.state === "off") warns.push({ id: conn.id, icon: "mdi:wifi-off", text: "Offline" });
     const warnHtml = warns.length ? `<div class="warns">${warns.map((w) =>
-      `<div class="warn" data-e="${w.id}"><ha-icon icon="${w.icon}"></ha-icon>${w.text}</div>`).join("")}</div>` : "";
+      `<div class="warn" data-e="${this._h(w.id)}"><ha-icon icon="${w.icon}"></ha-icon>${this._h(w.text)}</div>`).join("")}</div>` : "";
 
     // ---- optional extra rows / full list ----
     let extra = "";
@@ -242,7 +258,7 @@ class OmodaCard extends HTMLElement {
     const rowFor = (id) => {
       const s = hass.states[id]; if (!s) return "";
       const name = (s.attributes.friendly_name || id).replace(new RegExp("^" + deviceRe + "\\s*", "i"), "").trim() || id;
-      return `<div class="row" data-e="${id}"><div>${name}</div><div class="val">${this._disp(s)}</div></div>`;
+      return `<div class="row" data-e="${this._h(id)}"><div>${this._h(name)}</div><div class="val">${this._h(this._disp(s))}</div></div>`;
     };
     if (Array.isArray(cfg.entities) && cfg.entities.length) {
       extra = `<div class="grp">Details</div>` + cfg.entities.map((e) => rowFor(typeof e === "string" ? e : e.entity)).join("");

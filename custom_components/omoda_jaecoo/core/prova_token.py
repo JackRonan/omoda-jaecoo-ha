@@ -84,6 +84,10 @@ if __name__ == "__main__":
         tmp = _TOKEN_OUT + ".tmp"
         with open(tmp, "w") as fh:
             json.dump(j, fh, indent=2, ensure_ascii=False)
+        try:
+            os.chmod(tmp, 0o600)   # token file holds access/refresh tokens → owner-only
+        except OSError:
+            pass                    # non-POSIX FS (Windows): best-effort
         os.replace(tmp, _TOKEN_OUT)
         print(f"\n✅ LOGIN OK — token saved to {_TOKEN_OUT}")
         print("RESULT: OK")          # H7: stable sentinel for session.confirm_otp
