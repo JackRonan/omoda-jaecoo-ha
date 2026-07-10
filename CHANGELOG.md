@@ -17,6 +17,18 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.5.43 — 2026-07-05
+
+- **Setup: fixed OTP send failing and retries not recovering until a restart.** If the first
+  setup attempt used a mistyped email (or you switched between your main and second account), the
+  integration kept reusing the first value and failing with "Could not send the OTP code" until
+  Home Assistant was restarted — because the login helper read the email once at import and cached
+  it. It now reads your current email (and region) on every attempt, so correcting it and trying
+  again just works, no restart needed.
+- **Setup: you can now see WHY a code couldn't be sent.** The real reason (e.g. email not
+  recognised, captcha not solved) is shown under the form and written to the log, instead of the
+  generic message with nothing in the log. No PIN, OTP or token is ever logged.
+
 ## v1.5.42 — 2026-07-05
 
 - **Stable entity IDs for the diagnostic result sensors (fixes the failed-command blueprint).**

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Omoda / Jaecoo",
-        "description": "Enter your Omoda/Jaecoo account email and vehicle PIN. An OTP code will be sent to your email; VIN and account ID are detected automatically.",
+        "description": "Enter your Omoda/Jaecoo account email and vehicle PIN. An OTP code will be sent to your email; VIN and account ID are detected automatically.{reason}",
         "data": {
           "email": "Account email",
           "pin": "Vehicle control PIN",
@@ -17,7 +17,7 @@
       },
       "otp": {
         "title": "Email verification code",
-        "description": "Enter the OTP code received by email.",
+        "description": "Enter the OTP code received by email.{reason}",
         "data": {
           "code": "OTP code"
         }
@@ -31,7 +31,7 @@
       },
       "reauth_confirm": {
         "title": "Re-authenticate Omoda / Jaecoo",
-        "description": "Your session for {email} has expired (this happens when the official app is opened). A new OTP code has been sent to your email — enter it to reconnect.",
+        "description": "Your session for {email} has expired (this happens when the official app is opened). A new OTP code has been sent to your email — enter it to reconnect.{reason}",
         "data": {
           "code": "OTP code"
         }

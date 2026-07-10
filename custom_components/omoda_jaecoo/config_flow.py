@@ -45,6 +45,14 @@ def _pending_token_path(hass: HomeAssistant) -> str:
     return hass.config.path("omoda9_pending_token.json")
 
 
+def _reason_line(detail: str | None) -> str:
+    """Format the failure detail as a line shown under the setup form (empty when there is
+    none). The detail is the tail of the login subprocess output (HTTP status / server key such
+    as `email.not.exists` / captcha message) — it carries no PIN, OTP or token."""
+    detail = (detail or "").strip()
+    return f"\n\n⚠️ Reason: {detail}" if detail else ""
+
+
 def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None) -> None:
     """Set up the environment for the core/ modules (read at import-time) from the flow data."""
     os.environ["OMODA_EMAIL"] = data.get(CONF_EMAIL, "")
@@ -158,14 +166,17 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
+        reason = ""
         if user_input is not None:
             self._data.update(user_input)
-            ok, _msg = await self.hass.async_add_executor_job(
+            ok, msg = await self.hass.async_add_executor_job(
                 _send_otp, self.hass, self._data
             )
             if ok:
                 return await self.async_step_otp()
             errors["base"] = "otp_send_failed"
+            reason = _reason_line(msg)
+            _LOGGER.warning("Omoda / Jaecoo: OTP send failed: %s", msg)
 
         schema = vol.Schema({
             vol.Required(CONF_EMAIL): str,
@@ -180,22 +191,26 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Optional(CONF_CHANNEL_ID, default=DEFAULTS[CONF_CHANNEL_ID]): str,
             vol.Optional(CONF_CERTS_SRC, default=""): str,
         })
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors,
+                                    description_placeholders={"reason": reason})
 
     async def async_step_otp(self, user_input: dict[str, Any] | None = None):
         errors: dict[str, str] = {}
+        reason = ""
         if user_input is not None:
-            ok, _msg = await self.hass.async_add_executor_job(
+            ok, msg = await self.hass.async_add_executor_job(
                 _mint_token, self.hass, self._data, user_input["code"].strip()
             )
             if ok:
-                d_ok, tu, vins, vehicles, _detail = await self.hass.async_add_executor_job(
+                d_ok, tu, vins, vehicles, detail = await self.hass.async_add_executor_job(
                     _discover, self.hass, self._data
                 )
                 if not d_ok or not vins:
                     # Token minted but no vehicle: the pending token is unusable.
                     await self.hass.async_add_executor_job(_cleanup_pending, self.hass)
                     errors["base"] = "no_vehicle"
+                    reason = _reason_line(detail)
+                    _LOGGER.warning("Omoda / Jaecoo: vehicle discovery failed: %s", detail)
                 else:
                     self._tuserid = tu
                     self._vins = vins
@@ -207,9 +222,12 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Wrong/expired OTP: discard any pending token already written.
                 await self.hass.async_add_executor_job(_cleanup_pending, self.hass)
                 errors["base"] = "otp_invalid"
+                reason = _reason_line(msg)
+                _LOGGER.warning("Omoda / Jaecoo: OTP confirm failed: %s", msg)
 
         schema = vol.Schema({vol.Required("code"): str})
-        return self.async_show_form(step_id="otp", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="otp", data_schema=schema, errors=errors,
+                                    description_placeholders={"reason": reason})
 
     async def async_step_select_vehicle(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
@@ -258,26 +276,31 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         vin = (entry.data if entry else {}).get(CONF_VIN, "")
         token_path = self.hass.config.path(f"omoda9_{vin}_token.json")
         errors: dict[str, str] = {}
+        reason = ""
 
         if user_input is not None:
             code = user_input["code"].strip()
-            ok, _detail = await self.hass.async_add_executor_job(
+            ok, detail = await self.hass.async_add_executor_job(
                 _mint_token, self.hass, self._data, code, token_path)
             if ok:
                 await self.hass.config_entries.async_reload(entry.entry_id)
                 return self.async_abort(reason="reauth_successful")
             errors["base"] = "otp_invalid"
+            reason = _reason_line(detail)
+            _LOGGER.warning("Omoda / Jaecoo: reauth OTP confirm failed: %s", detail)
         else:
             # first display → send the OTP code to the account email
-            ok, _msg = await self.hass.async_add_executor_job(
+            ok, msg = await self.hass.async_add_executor_job(
                 _send_otp, self.hass, self._data, token_path)
             if not ok:
                 errors["base"] = "otp_send_failed"
+                reason = _reason_line(msg)
+                _LOGGER.warning("Omoda / Jaecoo: reauth OTP send failed: %s", msg)
 
         schema = vol.Schema({vol.Required("code"): str})
         return self.async_show_form(
             step_id="reauth_confirm", data_schema=schema, errors=errors,
-            description_placeholders={"email": self._data.get(CONF_EMAIL, "")})
+            description_placeholders={"email": self._data.get(CONF_EMAIL, ""), "reason": reason})
 
 
 class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):
