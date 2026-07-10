@@ -51,6 +51,14 @@ _RT_BINARIES = [
     ("rear_left_tire_warning", "Tire Rear Left Warning", "lRearTyreCall", BinarySensorDeviceClass.PROBLEM),
     ("rear_right_tire_warning", "Tire Rear Right Warning", "rRearTyreCall", BinarySensorDeviceClass.PROBLEM),
     ("battery_low", "Battery Low", "socLowCall", BinarySensorDeviceClass.BATTERY),
+    # Fields VERIFIED from a live realtime-payload capture (all present, ="0" at rest), and NOT
+    # already exposed elsewhere (engineState is already the "Engine" sensor via SENSORS).
+    # oilCall = low-fuel warning, electricityCall = charge-needed warning → device_class PROBLEM
+    # (on = warning). hVoltageState = HV system active → device_class RUNNING. On a pure EV the
+    # fuel field simply stays off/absent.
+    ("low_fuel_warning", "Low Fuel Warning", "oilCall", BinarySensorDeviceClass.PROBLEM),
+    ("charge_needed_warning", "Charge Needed Warning", "electricityCall", BinarySensorDeviceClass.PROBLEM),
+    ("high_voltage_active", "High Voltage Active", "hVoltageState", BinarySensorDeviceClass.RUNNING),
 ]
 
 

@@ -260,6 +260,31 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="token_move_failed")
         return self.async_create_entry(title=f"Omoda / Jaecoo ({vin})", data=self._data)
 
+    # ───────────────────────── reconfigure the command PIN (no OTP) ─────────────────
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
+        """Change ONLY the 4-digit remote-command PIN, without an OTP.
+
+        The PIN is not used to log in (the OTP mints the token; the PIN only signs commands),
+        so correcting it is a pure write to entry.data + reload. This is the remedy for a
+        "wrong command PIN": before, you had to delete and re-add the integration."""
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        if entry is None:
+            return self.async_abort(reason="reconfigure_no_entry")
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            new_pin = (user_input.get(CONF_PIN) or "").strip()
+            if not new_pin:
+                errors["base"] = "pin_required"
+            else:
+                # close any "wrong PIN" Repair; the reload resets the anti-lockout
+                # (commands.reset_pin_lockout in _bind_core when it detects the PIN changed).
+                from homeassistant.helpers import issue_registry as ir
+                ir.async_delete_issue(self.hass, DOMAIN, f"pin_wrong_{entry.entry_id}")
+                return self.async_update_reload_and_abort(
+                    entry, data={**entry.data, CONF_PIN: new_pin})
+        schema = vol.Schema({vol.Required(CONF_PIN, default=entry.data.get(CONF_PIN, "")): str})
+        return self.async_show_form(step_id="reconfigure", data_schema=schema, errors=errors)
+
     # ───────────────────────── re-authentication (session expired → new OTP) ─────────────────
     async def async_step_reauth(self, entry_data: dict[str, Any]):
         """Triggered by the coordinator when the session hard-expires (needs a fresh OTP).

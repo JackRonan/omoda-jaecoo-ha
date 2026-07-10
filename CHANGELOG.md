@@ -17,6 +17,25 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.5.44 — 2026-07-05
+
+Rolls in the improvements from the upstream Omoda 9 project (v1.5.23–v1.5.24), adapted to this fork.
+
+- **No more fake "done" when the car refuses a command.** If the car is busy, asleep, or the
+  command isn't allowed, the switch/lock/cover now reverts to its real state and shows the reason,
+  instead of staying stuck on a false success.
+- **Wrong command PIN is now recoverable in place.** A rejected PIN raises a fixable Repair notice
+  and a **Reconfigure** option that changes just the 4-digit PIN (no email code), instead of
+  needing to delete and re-add the integration. A wrong PIN no longer looks like a session problem;
+  the anti-lockout resets automatically when you correct it. A dead session still routes to the
+  normal re-authentication card.
+- **Gentler, smarter polling.** Each poll now does a read-only check first and only wakes the car
+  if it's actually offline — saving the 12V battery and reducing clashes with the official app.
+- **New sensors:** low-fuel warning, charge-needed warning, high-voltage active, and a "Car Data
+  Updated" timestamp that shows how fresh the battery/odometer reading is.
+- **Better driving detection:** a moving car is now recognised even when it reports the engine as
+  off (uses road speed as a fallback).
+
 ## v1.5.43 — 2026-07-05
 
 - **Setup: fixed OTP send failing and retries not recovering until a restart.** If the first

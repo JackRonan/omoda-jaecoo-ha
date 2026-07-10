@@ -274,6 +274,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Seen", "lastseen", "last_seen", "mdi:car-clock"))
     ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Wake-up", "wake_ts", "last_wake", "mdi:car-clock"))
     ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Last Position", "pos_fix", "last_pos_fix", "mdi:map-marker-clock"))
+    # Freshness of the car's realtime frame (resultTime): how old the shown battery/odometer
+    # reading is — useful with a parked car to tell a recent frame from a stale one.
+    ents.append(OmodaJaecooTimestampSensor(coord, "Diagnostic Car Data Updated", "car_data_ts", "car_data_ts", "mdi:database-clock"))
     add(ents)
 
 

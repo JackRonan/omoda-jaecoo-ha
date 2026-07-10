@@ -17,6 +17,9 @@ here is the most recurring/useful one; each caller can add context.
 CODE_MEANING = {
     "000000": "ok ✅",
     "A00079": "command accepted ✅",
+    # A00082: the car is BUSY (it processes one command at a time) → the command was NOT
+    # executed. Transient: retry in a few seconds (verified live 2026-06-21).
+    "A00082": "car busy ⏳ (another command is in progress) — retry in a few seconds",
     # A00084 (i18n: "No vehicle control command permission"): the account/vehicle does not have
     # permission FOR THAT command. Seen live on remoteStart (2026-06-21): our Omoda / Jaecoo
     # does not allow remote engine start, while climate/lock/GPS work.

@@ -38,7 +38,7 @@ import codes
 
 VIN        = os.environ.get("VIN", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
 PROBE_LOG  = os.environ.get("OMODA_PROBE_LOG", os.path.join(HERE, "data", "probe.jsonl"))
-COOLDOWN_S = int(os.environ.get("PROBE_COOLDOWN", "1800"))   # 30 min: 1 probe per wake
+COOLDOWN_S = int(os.environ.get("PROBE_COOLDOWN", "120"))   # 2 min: realtime read is read-only and the car stays online for a long time → frequent opportunistic reads (was 1800=30min, too restrictive). Poll cycles use force=True and bypass it anyway.
 
 _BUSY = threading.Lock()
 _last_run = {"ts": 0.0}

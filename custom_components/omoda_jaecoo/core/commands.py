@@ -227,6 +227,42 @@ CMD_MAP = {k: v for k, v in COMMANDS}
 # tspconsole response codes → readable text: now from the SINGLE map core/codes.py.
 CODE_MEANING = codes.CODE_MEANING
 
+# Command outcome: the backend always answers HTTP 200; the real result is the body `code`.
+# SUCCESS_CODES = accepted by the backend (the car then confirms via MQTT 110x).
+# FAILURE_CODES = NOT executed (car busy/asleep, permission denied, invalid taskId or token).
+# Distinguishing the two is what lets the optimistic entities revert instead of showing a fake
+# success when the car refused (see OmodaJaecooOptimisticMixin._run_command).
+SUCCESS_CODES = frozenset({"000000", "A00079"})
+FAILURE_CODES = frozenset({
+    "A00082",   # car busy (transient, retryable)
+    "A00084",   # command not allowed on this car
+    "A00089", "A00546", "A00567",   # invalid taskId / checkPassword
+    "A00000",   # token expired/invalid
+    "A07312",   # wake rate-limit
+    "A07900",   # car asleep / invalid signature or car_token
+})
+RETRYABLE_CODES = frozenset({"A00082"})   # only "car busy" is worth retrying
+
+
+class CommandError(Exception):
+    """A command the backend/car REFUSED (not executed). `code` = tspconsole code,
+    `retryable` = retrying makes sense (e.g. car busy). `reason` routes the REMEDY in the
+    coordinator (by cause, not just code):
+      - "pin"    = wrong/missing/anti-locked command PIN → reconfigure the PIN (Repair issue /
+                   Configure → Reconfigure). NOT a session problem: the token is valid.
+      - "reauth" = session/token expired (login failed, code A00000) → native HA re-auth (new
+                   OTP). The OTP does NOT change the PIN — the two channels are distinct.
+      - None     = other car refusal (busy, not allowed, asleep): just surface the message.
+    The coordinator lets it propagate; the optimistic entity catches it to revert the optimistic
+    state and show the real error instead of staying on a fake success."""
+
+    def __init__(self, message: str, code: str | None = None, reason: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.reason = reason
+        self.retryable = code in RETRYABLE_CODES
+
+
 # H6 anti-lockout: stop after N consecutive failed checkPassword calls within a window,
 # to avoid tripping the account's PIN lock (a wrong PIN increments the
 # errors on the Chery side). A success (taskId obtained) resets the counter.
@@ -238,6 +274,16 @@ _PIN_FAIL_WINDOW = int(os.environ.get("OMODA_PIN_FAIL_WINDOW", "600"))
 _NON_PIN_CODES = {"A00000"}
 
 
+def reset_pin_lockout() -> None:
+    """Reset the wrong-PIN anti-lockout counter. `_PIN_FAIL` is module-level: a plain entry
+    reload (e.g. after correcting the PIN) does NOT re-import the module, so without this reset
+    commands would stay blocked until the window (600s) lapses or HA restarts. Called when the
+    PIN is reconfigured (config flow / Repair) and from the coordinator's _bind_core when it
+    detects the PIN changed."""
+    _PIN_FAIL["n"] = 0
+    _PIN_FAIL["ts"] = 0.0
+
+
 def _mint_taskid(tuid):
     """Mints a taskId with the app's BFF chain (queryList→setVecDefault→checkPassword).
        FIX S26 (2026-06-20): scene=0 (NOT 2) → the minted taskId is blessed by tspconsole
@@ -246,12 +292,13 @@ def _mint_taskid(tuid):
        H6: refuses to mint if the PIN is empty (does NOT call checkPassword empty) and
        auto-blocks after too many consecutive wrong PINs to avoid the account lockout."""
     if not (PIN or "").strip():
-        raise ValueError("PIN not configured (OMODA_PIN empty): cannot mint the taskId")
+        raise CommandError(
+            "Command PIN not configured — set it in the integration settings", reason="pin")
     now = time.time()
     if _PIN_FAIL["n"] >= _PIN_FAIL_MAX and (now - _PIN_FAIL["ts"]) < _PIN_FAIL_WINDOW:
-        raise RuntimeError(
-            f"minting blocked: {_PIN_FAIL['n']} consecutive wrong PINs — check OMODA_PIN "
-            "before retrying (account anti-lockout)")
+        raise CommandError(
+            f"Command PIN temporarily blocked ({_PIN_FAIL['n']} wrong attempts) — reconfigure "
+            "the PIN in the integration settings, then retry", reason="pin")
 
     import requests
     access = wake._access_token()
@@ -281,12 +328,18 @@ def _mint_taskid(tuid):
     if tid:
         _PIN_FAIL["n"] = 0          # success → reset the anti-lockout counter
         return tid
-    # no taskId: if it is NOT a session/token error, count it as a possible wrong PIN
+    # no taskId: distinguish the CAUSE to route the right remedy.
     code = j.get("code")
-    if str(code) not in _NON_PIN_CODES:
-        _PIN_FAIL["n"] += 1
-        _PIN_FAIL["ts"] = now
-    return None
+    if str(code) in _NON_PIN_CODES:
+        # session/token (A00000): NOT the PIN's fault → don't count anti-lockout, ask for reauth.
+        raise CommandError(
+            "Session expired — re-authenticate from the Home Assistant notification (new OTP)",
+            code=str(code), reason="reauth")
+    # any other no-taskId outcome = command PIN rejected → count it and ask for a PIN reconfig.
+    _PIN_FAIL["n"] += 1
+    _PIN_FAIL["ts"] = now
+    raise CommandError(
+        "Wrong command PIN — reconfigure it in the integration settings", reason="pin")
 
 
 # In-memory taskId cache. Minting a taskId runs the full checkPassword (PIN) round-trip,
@@ -322,12 +375,20 @@ def get_taskid(tuid, emit=lambda m: None, allow_cache=True):
         emit("authenticating (checkPassword)…")
         try:
             tid = _mint_taskid(tuid)
-            if tid:
-                _TASKID_CACHE["tid"] = tid
-                _TASKID_CACHE["ts"] = time.time()
-                return tid, "checkPassword"
-        except Exception as e:
+        except CommandError as e:
+            # wrong PIN / anti-lockout / session: publish the detail and PROPAGATE (no longer
+            # swallowed) → send() lets it rise with its `reason` for the remedy routing.
+            emit(str(e))
+            raise
+        except Exception as e:  # noqa: BLE001 — unexpected mint error → generic PIN reason
             emit(f"checkPassword failed: {e}")
+            raise CommandError(
+                "Command PIN could not be verified — reconfigure it in the integration "
+                f"settings ({e})", reason="pin") from e
+        if tid:
+            _TASKID_CACHE["tid"] = tid
+            _TASKID_CACHE["ts"] = time.time()
+            return tid, "checkPassword"
     return None, "none"
 
 
@@ -341,20 +402,25 @@ def send(cmd_key, emit=lambda m: None, params=None):
     c = CMD_MAP.get(cmd_key)
     if not c:
         emit(f"unknown command: {cmd_key}")
-        return f"unknown: {cmd_key}"
+        raise CommandError(f"Unknown command: {cmd_key}")
 
     token, tuid = wake._bff_login()
     if not token:
         emit("login failed (token expired? redo OTP with official app closed)")
-        return "login_failed"
+        raise CommandError(
+            "Session expired — re-authenticate from the Home Assistant notification (new OTP)",
+            reason="reauth")
 
     url = TSP_HOST + (c.get("path") or ("/asc/vehicleControl/" + c["endpoint"]))
     # Try with the cached taskId; if the car rejects it as invalid/expired, re-mint once.
     for attempt in (1, 2):
+        # get_taskid propagates CommandError (PIN/anti-lockout/session) with its `reason`.
         taskid, src = get_taskid(tuid, emit, allow_cache=(attempt == 1))
         if not taskid:
+            # no taskId but no exception = minting disabled and no env/file taskId → config issue.
             emit("no taskId available")
-            return "no_taskid"
+            raise CommandError(
+                "Wrong command PIN — reconfigure it in the integration settings", reason="pin")
 
         ts = int(time.time() * 1000)
         body = dict(c["body"])
@@ -376,7 +442,7 @@ def send(cmd_key, emit=lambda m: None, params=None):
             status = e.code
         except Exception as e:
             emit(f"network error: {e}")
-            return f"net_error: {e}"
+            raise CommandError(f"Network error while sending the command: {e}")
 
         code = None
         try:
@@ -391,6 +457,14 @@ def send(cmd_key, emit=lambda m: None, params=None):
         meaning = CODE_MEANING.get(code, raw[:120])
         out = f"{c['name']}: HTTP {status} {code or ''} — {meaning}"
         emit(out)
+        # Real outcome from `code`: a known failure code = command NOT executed → raise so the
+        # optimistic entity reverts (the emit already published the detail to «Command Result»).
+        # Unknown codes stay non-blocking (return): we don't invent a failure.
+        if str(code) in FAILURE_CODES:
+            # A00000 = token expired → reauth (new OTP); other refusals (busy / not allowed /
+            # asleep) have no automatic remedy → just surface the message.
+            reason = "reauth" if str(code) == "A00000" else None
+            raise CommandError(out, code=str(code), reason=reason)
         return out
 
 

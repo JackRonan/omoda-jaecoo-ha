@@ -191,6 +191,10 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         # remembered across restarts (RestoreEntity switch).
         self.poll_enabled = False
         self._cmd_gate = asyncio.Lock()   # serializes commands (car runs one at a time; queue, don't reject)
+        # Result of the LAST realtime probe: True = car reachable from the cloud (000000, a frame
+        # is present), False = offline (A07900), None = unknown. Used by the poll cycle to wake
+        # ONLY when needed (a car that is genuinely asleep).
+        self._online: bool | None = None
         self._fields: dict[str, str] = {}
         self._state_lock = threading.Lock()  # [H2] serializes _fields/position across paho/executor/loop threads
         self._last_msg_ts: float = 0.0
@@ -202,6 +206,9 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                      # — diagnostic sensors (parity with the bridge) —
                      "cmd_status": None, "wake_status": None, "probe_status": None,
                      "last_seen": None, "last_wake": None, "last_pos_fix": None,
+                     # instant of the car's realtime frame (resultTime): how fresh the shown
+                     # battery/odometer reading is (useful with a parked car).
+                     "car_data_ts": None,
                      "realtime": None}
 
     # ───────────────── mutual-TLS certificate provisioning (PHASE 3c) ─────────────────
@@ -403,8 +410,22 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 self._schedule_next_poll()
 
     async def _do_poll_cycle(self) -> None:
-        """One cycle: wake (position via vehicleLocation/1301) + realtime read."""
-        _LOGGER.debug("[poll] cycle: wake + realtime read (plugged=%s)", self._is_plugged())
+        """One poll cycle. CONDITIONAL WAKE: do a read-only realtime read FIRST; if the car
+        comes back ONLINE (the cloud has a frame, A07900 absent) the sensors are already fresh
+        and we do NOT wake it — the car stays reachable for hours, and at rest a wake would only
+        refresh the GPS, not battery/odometer (that needs high voltage). We wake
+        (vehicleLocation via locate_car) ONLY if the read found it offline, to bring it back
+        online. Saves 12V and reduces contention with the official app."""
+        _LOGGER.debug("[poll] cycle: read-only realtime first (plugged=%s)", self._is_plugged())
+        try:
+            await self.async_probe(force=True)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("[poll] realtime read failed: %s", err)
+        if self._online:
+            _LOGGER.debug("[poll] car online: data already fresh, no wake")
+            return
+        # car offline (A07900) → one wake (locate) + re-read to bring it back online
+        _LOGGER.debug("[poll] car offline: waking (locate) and re-reading")
         try:
             await self.async_send_command("locate_car")
         except Exception as err:  # noqa: BLE001
@@ -559,6 +580,15 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
             driving = int(float(fields_copy.get("engineState", 0))) == 1
         except (TypeError, ValueError):
             driving = False
+        # Safety net: while driving a BEV can report engineState=0 but vehicleSpeed>0 (verified
+        # live: 38 km/h with engineState=0, hVoltageState=1) → the car is awake on the HV bus, so
+        # the realtime is real and worth following.
+        if not driving:
+            try:
+                sp = fields_copy.get("vehicleSpeed")
+                driving = sp is not None and float(sp) > 0
+            except (TypeError, ValueError):
+                driving = False
         # [Charging] plug connected → charge in progress: start the close follow-up here too,
         # so the automatic refresh starts as soon as the charger is plugged in (without waiting for
         # the 39-min periodic poll) and follows the progress. `field_on` as in _is_plugged().
@@ -619,6 +649,11 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         wake.TSP_HOST = self.tsp_host
         wake.TOKEN_PATH = self.token_path
         commands.VIN = self.vin
+        # PIN changed (e.g. after a reconfigure)? Reset the anti-lockout BEFORE reassigning:
+        # `_PIN_FAIL` is module-level and an entry reload does NOT reload it → without this,
+        # commands would stay blocked on the old count even with the now-correct PIN.
+        if getattr(commands, "PIN", None) != self.pin and hasattr(commands, "reset_pin_lockout"):
+            commands.reset_pin_lockout()
         commands.PIN = self.pin
         commands.TSP_HOST = self.tsp_host
         # MINT_TASKID from the environment value (default 1 = the buttons mint their own
@@ -661,9 +696,24 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 "The car is still busy with earlier commands — please try again in a moment.")
         try:
             result = await self.hass.async_add_executor_job(self._send_command, key, params)
-        except Exception:
+        except Exception as err:   # noqa: BLE001 — route the remedy by cause, then RE-RAISE
             self._cmd_gate.release()   # send failed → free the slot immediately
+            # Route by CAUSE (CommandError.reason), not just by code:
+            #   reason="reauth" → native HA re-auth (new OTP: session/token dead)
+            #   reason="pin"    → fixable Repair issue that opens the command-PIN reconfigure
+            # A wrong PIN does NOT touch session_ok (the session is valid, sensors keep working):
+            # re-auth would be the wrong remedy (the OTP does not change the PIN).
+            reason = getattr(err, "reason", None)
+            if reason == "reauth":
+                try:
+                    self.entry.async_start_reauth(self.hass)
+                except Exception as e2:  # noqa: BLE001
+                    _LOGGER.debug("could not start reauth flow: %s", e2)
+            elif reason == "pin":
+                self._raise_pin_issue(str(err))
             raise
+        # command succeeded → a stale "wrong PIN" warning no longer applies
+        self._clear_pin_issue()
 
         async def _hold_then_release() -> None:
             try:
@@ -672,6 +722,35 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 self._cmd_gate.release()
         self.hass.async_create_background_task(_hold_then_release(), "omoda_jaecoo_cmd_settle")
         return result
+
+    # ───────────────── Repair "wrong command PIN" (reconfigure without removing) ─────────────────
+    @property
+    def _pin_issue_id(self) -> str:
+        return f"pin_wrong_{self.entry.entry_id}"
+
+    @callback
+    def _raise_pin_issue(self, detail: str) -> None:
+        """Create a fixable HA Repair issue for a wrong command PIN. Does NOT touch session_ok:
+        the session is valid (sensors work); only the 4-digit remote-command PIN is wrong. The
+        issue opens the PIN reconfigure flow (repairs.py)."""
+        from homeassistant.helpers import issue_registry as ir
+        try:
+            ir.async_create_issue(
+                self.hass, DOMAIN, self._pin_issue_id,
+                is_fixable=True, severity=ir.IssueSeverity.ERROR,
+                translation_key="pin_wrong",
+                data={"entry_id": self.entry.entry_id})
+        except Exception as err:  # noqa: BLE001 — never break a command over a Repair notice
+            _LOGGER.debug("could not raise pin_wrong issue: %s", err)
+
+    @callback
+    def _clear_pin_issue(self) -> None:
+        """Close the "wrong PIN" warning (a command succeeded → the PIN is now correct)."""
+        from homeassistant.helpers import issue_registry as ir
+        try:
+            ir.async_delete_issue(self.hass, DOMAIN, self._pin_issue_id)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("could not clear pin_wrong issue: %s", err)
 
     def _send_command(self, key: str, params: dict | None = None) -> str:
         self._bind_core()
@@ -786,8 +865,12 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
             _LOGGER.info("[probe] %s", m)
             self._update({"probe_status": str(m)[:255]})
 
-        # force=True (periodic poll): ignore the probe's 30-min cooldown.
-        PROBE.probe_once(emit, force=force, on_data=self._on_probe_data)
+        # force=True (periodic poll): ignore the probe's cooldown.
+        res = PROBE.probe_once(emit, force=force, on_data=self._on_probe_data)
+        # Remember whether the car is reachable from the cloud (for the poll cycle's conditional
+        # wake). Only when the probe actually ran (on busy/exception keep the last known value).
+        if isinstance(res, dict) and res.get("ok") and "online" in res:
+            self._online = bool(res.get("online"))
 
     def _on_probe_data(self, data: dict) -> None:
         """Realtime data (GPS/battery/speed/online + physical state) from the probe.
@@ -796,6 +879,16 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         with the lock and a COPY is always emitted (no sharing by reference)."""
         patch: dict = {"realtime": dict(data) if isinstance(data, dict) else data}
         if isinstance(data, dict):
+            # Freshness of the car frame: resultTime (epoch ms) → tz-aware datetime. Tells how
+            # old the battery/odometer reading is (at rest the frame stays the same).
+            for tk in ("resultTime", "collectTime", "time", "updateTime"):
+                raw = data.get(tk)
+                try:
+                    if raw not in (None, "", 0, "0"):
+                        patch["car_data_ts"] = dt_util.utc_from_timestamp(int(float(raw)) / 1000)
+                        break
+                except (TypeError, ValueError):
+                    continue
             # Merge the physical-state fields the realtime channel carries (doors, windows,
             # lock, trunk, sunroof, climate, seats, charge state, engine) into `fields`, so the
             # lock/cover/select/switch/binary_sensor entities show REAL states after a probe
