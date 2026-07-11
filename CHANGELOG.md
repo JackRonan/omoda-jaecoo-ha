@@ -17,6 +17,20 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.5.46 — 2026-07-05
+
+- **Clearer "no live data" message — no more false "redo OTP login".** When the car is asleep,
+  reading its live telemetry can briefly return a token-ish code (A00000). The integration was
+  showing "token expired — please redo OTP login", which was misleading: the login was fine (your
+  commands kept working). It now says the vehicle simply isn't reporting on the live channel yet
+  and will update once driven or charging. This is a message fix only — nothing about your login
+  or commands changed.
+
+_Also landed recently (not previously listed here): multi-region support (region is configurable;
+Mexico confirmed working with just a host change), a standalone sandbox tool with a small GUI for
+API debugging, refreshed README/region docs, and a SECURITY.md with private vulnerability
+reporting._
+
 ## v1.5.45 — 2026-07-05 (security hardening)
 
 Security release. Update recommended for everyone.

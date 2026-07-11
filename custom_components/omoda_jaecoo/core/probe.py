@@ -133,8 +133,18 @@ def probe_once(publish, force=False, on_data=None):
             return {"ok": True, "online": True, "got_data": True,
                     "codes": [c1, c2, c3], "rich": rich}
 
-        publish("No live data available yet — the vehicle is not reporting. "
-                f"(status {c1}: {codes.meaning(c1)}). It will update once driven or charging.")
+        # We got here WITH a valid login (`ut` is set, and _bff_login already refreshed the
+        # access_token if it was stale), so the account session is FINE. A code like A00000 /
+        # A07900 on the realtime READ is a car-side state (asleep / not reporting on the live
+        # channel), NOT an expired account token — so do NOT tell the user to redo OTP for it
+        # (that message wrongly appeared while commands kept working). Show the raw code only for
+        # genuinely unexpected codes.
+        if str(c1) in ("A00000", "A07900", "A07312", "A00082"):
+            publish("No live data yet — the vehicle isn't reporting on the live channel "
+                    "(it's likely asleep). It will update once driven or charging.")
+        else:
+            publish("No live data available yet — the vehicle is not reporting. "
+                    f"(status {c1}: {codes.meaning(c1)}). It will update once driven or charging.")
         return {"ok": True, "online": False, "got_data": False, "codes": [c1, c2, c3]}
     except Exception as e:
         publish(f"Vehicle read failed: {type(e).__name__}: {e}")
