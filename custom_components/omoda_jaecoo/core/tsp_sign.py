@@ -81,7 +81,7 @@ def build_sign(params: dict, ts_ms: int, half: str = HALF) -> str:
     # DISCOVERY S23 (2026-06-20, eCapture/Conscrypt capture): the REAL encoding of the sign
     # is base64(sha256(base)).upper(), NOT hexdigest().upper(). Verified on 71 real
     # envelopes (airControl/coolingControl/heatingControl/lockControl/seatControl/window/findCar...).
-    return base64.b64encode(hashlib.sha256(base.encode("utf-8")).digest()).decode().upper()
+    return base64.b64encode(hashlib.sha256(base.encode("utf-8"), usedforsecurity=False).digest()).decode().upper()
 
 def sign_body(body_params: dict, ts_ms: int) -> dict:
     """Replicates a(Map,J,String) tag1: returns the final JSON body {params, appId, sign}."""
@@ -100,7 +100,7 @@ def auth_headers(user_token: str, ts_ms: int, tenant_id: str = "") -> dict:
     }
 
 if __name__ == "__main__":
-    print("HALF =", HALF, "(expected EUProd89ec59274d23491084af)")
+    print("HALF loaded:", bool(HALF), f"(len {len(HALF)})")
     ts = 1700000000000
     demo = sign_body({"vin": "VIN_PLACEHOLDER"}, ts)
     print("demo body:", demo)

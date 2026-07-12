@@ -443,7 +443,8 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
 
         seed = os.environ.get("CAR_SEED", CAR_SEED)
         car_user = self.tuserid
-        car_pass = hashlib.md5((self.tuserid + seed).encode()).hexdigest()
+        # MQTT password derivation the broker REQUIRES (md5 of tuserid+seed) — interop, not security hashing.
+        car_pass = hashlib.md5((self.tuserid + seed).encode(), usedforsecurity=False).hexdigest()
         client_id = f"app_{self.channel_id}_{self.tuserid}"   # exact: the broker's ACL
         topic = f"app/{self.channel_id}/{self.tuserid}/account/msgCenter/msg"
 

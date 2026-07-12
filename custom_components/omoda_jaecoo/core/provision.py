@@ -138,7 +138,7 @@ def check_password(tuser_id: str, pin: str = None, vin: str = None, scene: int =
     Recipe settled in S10/confirmed S16: md5(pin) then sm4RandomString (padRight32),
     needDecode=0, type=0, scene=2. The RIGHT PIN is re-runnable (does not increment errors)."""
     pin = pin or PIN
-    plain = hashlib.md5(pin.encode("utf-8")).hexdigest()      # generateMd5(pin)
+    plain = hashlib.md5(pin.encode("utf-8"), usedforsecurity=False).hexdigest()   # generateMd5(pin) — API-required
     password = A.sm4_code(plain, "padRight32")                # sm4RandomString(md5(pin))
     body = {"vin": vin or VIN, "tUserId": str(tuser_id), "channelId": A.CHANNEL_ID,
             "password": password, "needDecode": 0, "scene": scene, "type": 0}
@@ -350,6 +350,18 @@ def run_command(publish, cmd: str = "remoteStart", pin: str = None,
 
 
 # ───────────────────────── self-test (NO real network calls) ───────────
+def _mask(o):
+    """Redact secret-bearing keys before printing in the CLI self-test, so a taskId / car_token /
+    token never lands in stdout (which HA would capture on the subprocess path)."""
+    _SECRET = {"token", "car_token", "carToken", "taskId", "task_id",
+               "access_token", "refresh_token", "userToken", "password", "vin"}
+    if isinstance(o, dict):
+        return {k: ("***" if k in _SECRET else _mask(v)) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_mask(x) for x in o]
+    return o
+
+
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else "selftest"
 
@@ -365,12 +377,12 @@ if __name__ == "__main__":
             print("REFUSED: PHASE B is active. Re-run with OMODA_CONFIRM=1 and with the car awake.")
             sys.exit(2)
         cmd = sys.argv[2] if len(sys.argv) > 2 else "remoteStart"
-        pub = lambda t: print("  STATUS:", t)
-        print(json.dumps(run_command(pub, cmd=cmd), ensure_ascii=False, indent=2))
+        pub = lambda t: print("  STATUS:", str(t)[:120])
+        print(json.dumps(_mask(run_command(pub, cmd=cmd)), ensure_ascii=False, indent=2))
         sys.exit(0)
 
     # ── default: OFFLINE self-test with mocks (no network) ──
-    pub = lambda t: print("  STATUS:", t)
+    pub = lambda t: print("  STATUS:", str(t)[:120])
 
     print("== TEST find_our_vehicle: car_token present in controlCarList ==")
     mock_q = {"code": "000000", "data": {"controlCarList": [
@@ -400,7 +412,7 @@ if __name__ == "__main__":
 
     print("== TEST run_command blocked if no car_token (no command network) ==")
     query_list = lambda: (200, mock_q2)
-    print("  ->", run_command(pub, cmd="remoteStart", is_awake=lambda: True))
+    print("  ->", _mask(run_command(pub, cmd="remoteStart", is_awake=lambda: True)))
 
     print("== TEST run_command full flow (mock, car_token present) ==")
     query_list      = lambda: (200, mock_q)
@@ -411,7 +423,7 @@ if __name__ == "__main__":
         sent.update(cmd=cmd, car_token=car_token, task_id=task_id)
         return 200, {"code": "A00079"}
     send_command = fake_send
-    print("  ->", run_command(pub, cmd="remoteStart", is_awake=lambda: True))
-    print("     (command sent with car_token =", sent.get("car_token"), ", taskId =", sent.get("task_id"), ")")
+    print("  ->", _mask(run_command(pub, cmd="remoteStart", is_awake=lambda: True)))
+    print("     (command sent, car_token present =", bool(sent.get("car_token")), ", taskId present =", bool(sent.get("task_id")), ")")
 
     print("\nOK self-test finished (no real network calls).")

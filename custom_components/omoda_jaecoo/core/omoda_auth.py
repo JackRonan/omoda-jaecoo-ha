@@ -108,7 +108,7 @@ def sm4_code(code: str, transform: str="plain") -> str:
 # ── App signature (POST: empty value map -> no brackets/keys) ─────────────────
 def sign_post(url_path: str, ts_ms: int=None, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE):
     ts = ts_ms if ts_ms is not None else int(time.time()*1000)
-    sig = hashlib.sha256(f"{secret}{nonce}{url_path}{ts}".encode("utf-8")).hexdigest()
+    sig = hashlib.sha256(f"{secret}{nonce}{url_path}{ts}".encode("utf-8"), usedforsecurity=False).hexdigest()
     return sig, ts
 
 DEPT_ID = os.environ.get("OMODA_DEPT_ID", "39")   # CountryArea.value() for Italy (country->prefix map, from area_config.dart). France=33, Germany=49...

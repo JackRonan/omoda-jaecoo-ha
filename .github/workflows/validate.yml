@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: these validators only read the checked-out code.
+permissions:
+  contents: read
+
 jobs:
   hacs:
     name: HACS validation

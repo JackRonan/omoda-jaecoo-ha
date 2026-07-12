@@ -318,7 +318,7 @@ def _mint_taskid(tuid):
 
     bff("/tsp/v1/app/vmc/queryList", {})
     bff("/tsp/v1/app/vmc/setVecDefault", {"vin": VIN})
-    plain = hashlib.md5(PIN.encode()).hexdigest()
+    plain = hashlib.md5(PIN.encode(), usedforsecurity=False).hexdigest()   # API-required PIN encoding, not security hashing
     password = A.sm4_code(plain, "padRight32")
     j = bff("/tsp/v1/app/cpm/checkPassword",
             {"vin": VIN, "tUserId": str(tuid), "channelId": A.CHANNEL_ID,

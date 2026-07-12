@@ -27,7 +27,9 @@ SECRET = "5c7af05e6fbf562842ef483ee96e06a0"   # gateway signing secret (universa
 NONCE  = "chery_legend_marketing"
 ROOT   = os.environ.get("OMODA_BFF", "https://legend-oj.omodaauto.nl/api")   # region (default EU)
 
-def _md5(s): return hashlib.md5(s.encode()).hexdigest()
+# MD5 here is the gateway's REQUIRED request-signature format (not password/security hashing) —
+# usedforsecurity=False documents that and satisfies static analysis.
+def _md5(s): return hashlib.md5(s.encode(), usedforsecurity=False).hexdigest()
 
 def _signed_headers(path):
     ts = int(time.time() * 1000)
@@ -40,7 +42,11 @@ def _signed_headers(path):
     }
 
 def _aes_b64(plaintext, key):
-    c = AES.new(key.encode("utf-8"), AES.MODE_ECB)
+    # AES/ECB/PKCS7 is fixed by the AJ-Captcha protocol on the server side (the server issues a
+    # per-request secretKey and expects exactly this); the mode is not our choice and cannot be
+    # changed without breaking the captcha. CodeQL flags ECB — dismiss as "won't fix (external
+    # protocol requirement)".
+    c = AES.new(key.encode("utf-8"), AES.MODE_ECB)  # noqa: S305 — protocol-mandated captcha cipher
     return base64.b64encode(c.encrypt(pad(plaintext.encode("utf-8"), 16))).decode()
 
 def _img(b64): return Image.open(io.BytesIO(base64.b64decode(b64)))

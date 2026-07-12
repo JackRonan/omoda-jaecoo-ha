@@ -15,7 +15,8 @@ import omoda
 BFF = os.environ.get("OMODA_BFF", "https://legend-oj.omodaauto.nl/api")   # region (default EU)
 SECRET = "5c7af05e6fbf562842ef483ee96e06a0"
 NONCE = "chery_legend_marketing"
-def _md5(s): return hashlib.md5(s.encode()).hexdigest()
+# MD5 = the gateway's required signature format (interop, not security hashing).
+def _md5(s): return hashlib.md5(s.encode(), usedforsecurity=False).hexdigest()
 
 def _hdr_form(path):
     ts = int(time.time() * 1000)

@@ -40,7 +40,7 @@ def call(email, code, secret="prod", emailfmt="module", codefmt="plain", verbose
         import hashlib, time
         ts = int(time.time()*1000)
         S, N = "5c7af05e6fbf562842ef483ee96e06a0", "chery_legend_marketing"
-        sig = hashlib.md5(f"{S}{N}{TOKEN_PATH}{ts}".encode()).hexdigest()
+        sig = hashlib.md5(f"{S}{N}{TOKEN_PATH}{ts}".encode(), usedforsecurity=False).hexdigest()
         H = A.headers_post(TOKEN_PATH)  # base
         H.update({"nonce": N, "timestamp": str(ts), "signature": sig})
     else:
@@ -51,7 +51,7 @@ def call(email, code, secret="prod", emailfmt="module", codefmt="plain", verbose
     tok = j.get("access_token") or (j.get("data") or {}).get("access_token")
     if verbose:
         # LOW: this script's stdout passes through HA → redact the tokens in the dumps
-        print(f"[secret={secret} email={emailfmt} code={codefmt}] HTTP {r.status_code}")
+        print(f"[email_fmt={emailfmt} code_fmt={codefmt}] HTTP {r.status_code}")
         print("  url:", r.url)
         print("  resp:", json.dumps(_redact(j), ensure_ascii=False)[:400])
     return r.status_code, j, tok

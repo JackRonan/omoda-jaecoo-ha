@@ -17,6 +17,17 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.5.47 — 2026-07-05 (code-scanning hardening)
+
+Housekeeping from GitHub code-scanning (CodeQL). No functional change.
+
+- The MD5/SHA signatures the OMODA/Chery servers require are now marked as interop (not security)
+  hashing, so they're no longer flagged as "weak hashing".
+- Developer CLI/self-test output no longer prints tokens, task IDs, or signing secrets.
+- The CI validation workflow now runs with least-privilege (read-only) permissions.
+- The captcha uses AES-ECB because the server's captcha protocol mandates it — documented; it's
+  not something we can change.
+
 ## v1.5.46 — 2026-07-05
 
 - **Clearer "no live data" message — no more false "redo OTP login".** When the car is asleep,

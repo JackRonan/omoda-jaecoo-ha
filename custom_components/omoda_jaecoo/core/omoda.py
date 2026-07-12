@@ -77,7 +77,7 @@ def _params_ordinati(params):
 def firma_ipotesi_1(params, secret):
     """MD5(ordered_params + "&key=" + secret), uppercase hex."""
     s = _params_ordinati(params) + "&key=" + secret
-    return hashlib.md5(s.encode()).hexdigest().upper()
+    return hashlib.md5(s.encode(), usedforsecurity=False).hexdigest().upper()
 
 
 def firma_ipotesi_2(params, secret):
@@ -89,7 +89,7 @@ def firma_ipotesi_2(params, secret):
 def firma_ipotesi_3(params, secret, app_id="legendApp"):
     """MD5(appId + timestamp + nonce + secret), uppercase hex."""
     s = f"{app_id}{params.get('timestamp','')}{params.get('nonce','')}{secret}"
-    return hashlib.md5(s.encode()).hexdigest().upper()
+    return hashlib.md5(s.encode(), usedforsecurity=False).hexdigest().upper()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
