@@ -3,6 +3,7 @@
   "name": "Omoda / Jaecoo",
   "codeowners": ["@Caslinovich", "@JackRonan"],
   "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/JackRonan/omoda-jaecoo-ha",
   "integration_type": "device",
   "iot_class": "cloud_push",
