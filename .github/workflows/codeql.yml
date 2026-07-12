@@ -7,6 +7,7 @@ on:
     branches: [master]
   schedule:
     - cron: "23 5 * * 1"   # weekly, Monday 05:23 UTC (static timestamp; no secrets)
+  workflow_dispatch:
 
 permissions:
   contents: read
