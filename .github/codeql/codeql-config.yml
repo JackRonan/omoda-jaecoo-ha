@@ -1,0 +1,28 @@
+name: "Omoda / Jaecoo CodeQL config"
+
+# This integration speaks a proprietary OMODA / Chery cloud protocol. The excluded queries below
+# only ever produce false positives here; each exclusion is justified. EVERYTHING ELSE
+# (injection, path traversal, SSRF, deserialization, etc.) stays ON.
+#
+#   py/weak-sensitive-data-hashing
+#     The gateway MANDATES MD5/SHA request signatures, MD5(PIN), and an MD5 MQTT-password
+#     derivation. These are the server's REQUIRED interop wire formats, not local security
+#     controls — there is no stronger primitive the server would accept. (usedforsecurity=False
+#     does not satisfy this CodeQL query, hence the exclusion.)
+#
+#   py/weak-cryptographic-algorithm
+#     The captcha uses AES/ECB/PKCS7 because the AJ-Captcha server issues a per-request key and
+#     expects exactly that mode. Not our choice; cannot change without breaking login.
+#
+#   py/clear-text-logging-sensitive-data
+#     Runtime logging was audited (see the v1.5.45 security pass) and never logs PIN/OTP/tokens.
+#     The only remaining hits are developer CLI / self-test scaffolding inside `__main__` blocks
+#     (e.g. core/provision.py) that do NOT run under Home Assistant and print masked/mock data.
+#     Keep new runtime logging secret-free in review.
+query-filters:
+  - exclude:
+      id: py/weak-sensitive-data-hashing
+  - exclude:
+      id: py/weak-cryptographic-algorithm
+  - exclude:
+      id: py/clear-text-logging-sensitive-data
