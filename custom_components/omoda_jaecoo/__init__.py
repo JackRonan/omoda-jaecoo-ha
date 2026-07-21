@@ -268,4 +268,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if coordinator is not None:
             # async_stop is blocking (loop_stop joins the paho thread) → executor.
             await hass.async_add_executor_job(coordinator.async_stop)
+        # P1-4: don't leave the account PIN/email/OTP lingering in the process environment after
+        # unload. They're re-injected on the next setup/login (config_flow._prepare_env sets the
+        # env; _bind_core sets the core module globals), so reads still work afterwards.
+        for _k in ("OMODA_PIN", "OMODA_EMAIL", "OMODA_OTP"):
+            os.environ.pop(_k, None)
     return ok

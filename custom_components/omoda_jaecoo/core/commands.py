@@ -22,8 +22,12 @@ import sys
 import json
 import time
 import hashlib
+import logging
+import threading
 import urllib.request
 import urllib.error
+
+_LOGGER = logging.getLogger(__name__)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
@@ -267,11 +271,20 @@ class CommandError(Exception):
 # to avoid tripping the account's PIN lock (a wrong PIN increments the
 # errors on the Chery side). A success (taskId obtained) resets the counter.
 _PIN_FAIL = {"n": 0, "ts": 0.0}
+# P0-1: minting must be SERIALIZED. Without a lock, two concurrent calls (e.g. a wake fallback +
+# a UI command, or a double "wake") both read `_PIN_FAIL["n"]` BEFORE the other increments it →
+# both pass the guard and fire two checkPassword calls with the same wrong PIN, nudging the
+# account lockout. The lock covers ALL of `_mint_taskid` (guard → POST → increment/reset) and
+# `reset_pin_lockout`.
+_MINT_LOCK = threading.Lock()
 _PIN_FAIL_MAX = int(os.environ.get("OMODA_PIN_FAIL_MAX", "2"))
 _PIN_FAIL_WINDOW = int(os.environ.get("OMODA_PIN_FAIL_WINDOW", "600"))
-# checkPassword codes that do NOT indicate a wrong PIN (session/token) → they don't count
-# toward the anti-lockout (otherwise an expired token would wrongly block minting).
-_NON_PIN_CODES = {"A00000"}
+# checkPassword classification BY CODE (P1-2). Session/token codes → reauth; "config" codes
+# (vehicle permission / request-construction) are NOT a wrong PIN → don't count the anti-lockout
+# and don't open the PIN Repair. Unknown codes stay on the PIN branch (conservative default).
+_SESSION_CODES = {"A00000"}
+_CONFIG_CODES = {"A00374", "A00554", "A00567", "A00604", "A00643", "A00757"}
+_NON_PIN_CODES = _SESSION_CODES   # back-compat alias
 
 
 def reset_pin_lockout() -> None:
@@ -280,8 +293,9 @@ def reset_pin_lockout() -> None:
     commands would stay blocked until the window (600s) lapses or HA restarts. Called when the
     PIN is reconfigured (config flow / Repair) and from the coordinator's _bind_core when it
     detects the PIN changed."""
-    _PIN_FAIL["n"] = 0
-    _PIN_FAIL["ts"] = 0.0
+    with _MINT_LOCK:
+        _PIN_FAIL["n"] = 0
+        _PIN_FAIL["ts"] = 0.0
 
 
 def _mint_taskid(tuid):
@@ -291,55 +305,67 @@ def _mint_taskid(tuid):
 
        H6: refuses to mint if the PIN is empty (does NOT call checkPassword empty) and
        auto-blocks after too many consecutive wrong PINs to avoid the account lockout."""
-    if not (PIN or "").strip():
-        raise CommandError(
-            "Command PIN not configured — set it in the integration settings", reason="pin")
-    now = time.time()
-    if _PIN_FAIL["n"] >= _PIN_FAIL_MAX and (now - _PIN_FAIL["ts"]) < _PIN_FAIL_WINDOW:
-        raise CommandError(
-            f"Command PIN temporarily blocked ({_PIN_FAIL['n']} wrong attempts) — reconfigure "
-            "the PIN in the integration settings, then retry", reason="pin")
+    with _MINT_LOCK:   # P0-1: guard + POST + increment are all atomic
+        if not (PIN or "").strip():
+            raise CommandError(
+                "Command PIN not configured — set it in the integration settings", reason="pin")
+        now = time.time()
+        if _PIN_FAIL["n"] >= _PIN_FAIL_MAX and (now - _PIN_FAIL["ts"]) < _PIN_FAIL_WINDOW:
+            raise CommandError(
+                f"Command PIN temporarily blocked ({_PIN_FAIL['n']} wrong attempts) — reconfigure "
+                "the PIN in the integration settings, then retry", reason="pin")
 
-    import requests
-    access = wake._access_token()
-    extra = {"Authorization": f"Bearer {access}",
-             "Content-Type": "application/json; charset=UTF-8",
-             "Accept": "application/json, text/plain, */*"}
+        import requests
+        access = wake._access_token()
+        extra = {"Authorization": f"Bearer {access}",
+                 "Content-Type": "application/json; charset=UTF-8",
+                 "Accept": "application/json, text/plain, */*"}
 
-    def bff(path, body):
-        H = A.headers_post(path, extra=extra)
-        r = requests.post(A.BFF + path, data=json.dumps(body), headers=H, timeout=25)
-        try:
-            j = r.json()
-        except Exception:
-            return {"_raw": r.text[:200]}
-        # MED: the BFF may return a non-dict top-level (string) → normalize to {}
-        return j if isinstance(j, dict) else {}
+        def bff(path, body):
+            H = A.headers_post(path, extra=extra)
+            r = requests.post(A.BFF + path, data=json.dumps(body), headers=H, timeout=25)
+            try:
+                j = r.json()
+            except Exception:
+                return {"_raw": r.text[:200]}
+            # MED: the BFF may return a non-dict top-level (string) → normalize to {}
+            return j if isinstance(j, dict) else {}
 
-    bff("/tsp/v1/app/vmc/queryList", {})
-    bff("/tsp/v1/app/vmc/setVecDefault", {"vin": VIN})
-    plain = hashlib.md5(PIN.encode(), usedforsecurity=False).hexdigest()   # API-required PIN encoding, not security hashing
-    password = A.sm4_code(plain, "padRight32")
-    j = bff("/tsp/v1/app/cpm/checkPassword",
-            {"vin": VIN, "tUserId": str(tuid), "channelId": A.CHANNEL_ID,
-             "password": password, "needDecode": 0, "scene": 0, "type": 0})
-    data = j.get("data") if isinstance(j.get("data"), dict) else {}
-    tid = data.get("taskId") or j.get("taskId")
-    if tid:
-        _PIN_FAIL["n"] = 0          # success → reset the anti-lockout counter
-        return tid
-    # no taskId: distinguish the CAUSE to route the right remedy.
-    code = j.get("code")
-    if str(code) in _NON_PIN_CODES:
-        # session/token (A00000): NOT the PIN's fault → don't count anti-lockout, ask for reauth.
+        bff("/tsp/v1/app/vmc/queryList", {})
+        bff("/tsp/v1/app/vmc/setVecDefault", {"vin": VIN})
+        plain = hashlib.md5(PIN.encode(), usedforsecurity=False).hexdigest()   # API-required PIN encoding, not security hashing
+        password = A.sm4_code(plain, "padRight32")
+        j = bff("/tsp/v1/app/cpm/checkPassword",
+                {"vin": VIN, "tUserId": str(tuid), "channelId": A.CHANNEL_ID,
+                 "password": password, "needDecode": 0, "scene": 0, "type": 0})
+        data = j.get("data") if isinstance(j.get("data"), dict) else {}
+        tid = data.get("taskId") or j.get("taskId")
+        if tid:
+            _PIN_FAIL["n"] = 0          # success → reset the anti-lockout counter
+            return tid
+        # no taskId: classify the CAUSE by CODE to route the right remedy (P1-2).
+        code = str(j.get("code"))
+        # Log the RAW checkPassword code/message — the only way to tell a real wrong PIN from a
+        # config/permission/backend cause (non-sensitive fields).
+        cp_msg = str(j.get("message") or j.get("msg") or "").strip()
+        _LOGGER.warning("[taskId] checkPassword returned no taskId → code=%s%s",
+                        code, f" '{cp_msg[:100]}'" if cp_msg else "")
+        if code in _SESSION_CODES:
+            # session/token (A00000): NOT the PIN's fault → don't count anti-lockout, ask reauth.
+            raise CommandError(
+                "Session expired — re-authenticate from the Home Assistant notification (new OTP)",
+                code=code, reason="reauth")
+        if code in _CONFIG_CODES:
+            # vehicle-permission / request-construction: not a wrong PIN → don't count the
+            # anti-lockout and don't open the PIN Repair; just surface the real cause.
+            raise CommandError(
+                f"Command rejected by the backend (code {code}) — not a PIN problem", code=code,
+                reason="config")
+        # any other no-taskId outcome = command PIN rejected → count it and ask for a PIN reconfig.
+        _PIN_FAIL["n"] += 1
+        _PIN_FAIL["ts"] = now
         raise CommandError(
-            "Session expired — re-authenticate from the Home Assistant notification (new OTP)",
-            code=str(code), reason="reauth")
-    # any other no-taskId outcome = command PIN rejected → count it and ask for a PIN reconfig.
-    _PIN_FAIL["n"] += 1
-    _PIN_FAIL["ts"] = now
-    raise CommandError(
-        "Wrong command PIN — reconfigure it in the integration settings", reason="pin")
+            "Wrong command PIN — reconfigure it in the integration settings", code=code, reason="pin")
 
 
 # In-memory taskId cache. Minting a taskId runs the full checkPassword (PIN) round-trip,
@@ -417,10 +443,12 @@ def send(cmd_key, emit=lambda m: None, params=None):
         # get_taskid propagates CommandError (PIN/anti-lockout/session) with its `reason`.
         taskid, src = get_taskid(tuid, emit, allow_cache=(attempt == 1))
         if not taskid:
-            # no taskId but no exception = minting disabled and no env/file taskId → config issue.
+            # no taskId but no exception = minting disabled and no env/file taskId → config issue,
+            # NOT a wrong PIN → reason="config" (don't open the PIN Repair over a config state).
             emit("no taskId available")
             raise CommandError(
-                "Wrong command PIN — reconfigure it in the integration settings", reason="pin")
+                "No command taskId available (auto-minting is disabled and no taskId is set)",
+                reason="config")
 
         ts = int(time.time() * 1000)
         body = dict(c["body"])

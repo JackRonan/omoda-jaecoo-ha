@@ -182,6 +182,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         # stop on our own when it turns off. Zero commands to the car (see HV_ON_POLL_* in const).
         self._hv_poll_unsub = None    # self-rescheduling timer of the HV follow-up
         self._hv_poll_count = 0       # close-together reads done in the HV-on window (cap HV_ON_POLL_MAX)
+        self._closing = False         # P0: set on unload → guards timers/probe from firing mid-teardown
         self._startup_probe_unsub = None  # one-shot: seeds the follow-up right after startup
         # drive-detection heartbeat (read-only): starts the automatic refresh during a
         # trip, since the moving car does NOT send MQTT pushes. See DRIVE_WATCH_EVERY.
@@ -343,6 +344,12 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
             if self._drive_watch_unsub is not None:
                 self._drive_watch_unsub()
                 self._drive_watch_unsub = None
+            # P0-5: also stop the HV follow-up loop when polling is turned off, so it doesn't
+            # keep waking/reading after the user disabled automatic updates.
+            if self._hv_poll_unsub is not None:
+                self._hv_poll_unsub()
+                self._hv_poll_unsub = None
+            self._hv_poll_count = 0
 
     def async_start_drive_watch(self) -> None:
         """Starts the drive-detection heartbeat (read-only). It's tied to `poll_enabled`
@@ -496,6 +503,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         called in an executor by async_unload_entry. `disconnect()` BEFORE
         `loop_stop()`: this way the loop processes the CONNACK/DISCONNECT and the thread exits
         cleanly without a join that waits for the keepalive."""
+        self._closing = True   # P0: stop any timer/probe from re-arming during teardown
         if self._keepalive_unsub is not None:
             self._keepalive_unsub()
             self._keepalive_unsub = None
@@ -601,7 +609,8 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         # the 39-min periodic poll) and follows the progress. `field_on` as in _is_plugged().
         from .entity import field_on
         plugged = field_on(fields_copy.get("chargeGunState"))
-        if (driving or plugged) and self._hv_poll_unsub is None and not is_confirmation:
+        if (driving or plugged) and self._hv_poll_unsub is None and not is_confirmation \
+                and self.poll_enabled and not self._closing:
             self.hass.loop.call_soon_threadsafe(
                 lambda: self.hass.async_create_task(self.async_probe(force=True))
             )
@@ -807,6 +816,14 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 self._send_command("locate_car")
             except Exception as err:  # noqa: BLE001 — the fallback must not make the wake fail
                 emit(f"Locate fallback failed: {err}")
+                # P0-3: this path calls _send_command directly (bypassing async_send_command's
+                # routing), so route the remedy here too — a dead session/PIN during a wake should
+                # still surface the reauth card / PIN Repair.
+                reason = getattr(err, "reason", None)
+                if reason == "reauth":
+                    self.hass.add_job(self.entry.async_start_reauth, self.hass)
+                elif reason == "pin":
+                    self.hass.add_job(self._raise_pin_issue, str(err))
 
     def _is_hv_on(self) -> bool:
         """True if high voltage is on (driving, charging or climate): it's the ONLY state in which
@@ -840,6 +857,10 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         if self._hv_poll_unsub is not None:
             self._hv_poll_unsub()
             self._hv_poll_unsub = None
+        # P0-4: don't re-arm the follow-up during teardown or when polling is off.
+        if self._closing or not self.poll_enabled:
+            self._hv_poll_count = 0
+            return
         plugged = self._is_plugged()
         # the plug takes priority: the "charging" cap/interval (longer) also covers HV on
         if plugged:
@@ -860,6 +881,8 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         await self.async_probe(force=True)
 
     async def async_probe(self, force: bool = False) -> None:
+        if self._closing:   # P0: don't start a read during teardown
+            return
         await self.hass.async_add_executor_job(self._probe, force)
         # if the read found HV on, follow the freshness window (auto-loop)
         self._arm_hv_followup()
@@ -1049,21 +1072,20 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
             return None
 
     async def async_check_session(self) -> tuple[bool, str]:
-        ok, detail = await self.hass.async_add_executor_job(self._check_session)
+        ok, detail, status = await self.hass.async_add_executor_job(self._check_session)
         self._update({"session_ok": ok, "session_detail": detail})
-        # Session hard-expired (needs a fresh OTP — refresh already tried and failed) → start
-        # HA's re-authentication flow so the user gets the standard "needs re-authentication"
-        # notification + guided re-login, instead of entities silently going stale. A transient
-        # network error is NOT an auth failure, so don't trigger reauth for it. async_start_reauth
-        # de-dupes, so calling it again while a reauth flow is already open is a no-op.
-        if not ok and "network" not in (detail or "").lower():
+        # P1-1: route reauth on the STABLE status marker (EXPIRED), not on matching the detail
+        # string. A transient NET_ERROR is NOT an expired session, so it must not pop the
+        # «Re-authenticate» card. async_start_reauth de-dupes, so re-calling while a reauth flow
+        # is already open is a no-op.
+        if status == "EXPIRED":
             try:
                 self.entry.async_start_reauth(self.hass)
             except Exception as err:  # noqa: BLE001 — reauth is a convenience; never break setup
                 _LOGGER.debug("could not start reauth flow: %s", err)
         return ok, detail
 
-    def _check_session(self) -> tuple[bool, str]:
+    def _check_session(self) -> tuple[bool, str, str]:
         self._bind_core()
         import session as SESSION
         return SESSION.check()

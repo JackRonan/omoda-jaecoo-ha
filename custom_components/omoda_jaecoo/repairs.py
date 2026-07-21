@@ -61,7 +61,9 @@ class OmodaJaecooPinRepairFlow(RepairsFlow):
                 )
                 await self.hass.config_entries.async_reload(entry.entry_id)
                 return self.async_create_entry(title="", data={})
-        schema = vol.Schema(
-            {vol.Required(CONF_PIN, default=entry.data.get(CONF_PIN, "")): str}
-        )
+        # P1-5: masked input, no plaintext PIN pre-filled.
+        from homeassistant.helpers.selector import (
+            TextSelector, TextSelectorConfig, TextSelectorType)
+        schema = vol.Schema({vol.Required(CONF_PIN): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.PASSWORD))})
         return self.async_show_form(step_id="pin", data_schema=schema, errors=errors)

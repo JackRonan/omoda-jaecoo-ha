@@ -41,15 +41,25 @@ PYEXE     = sys.executable  # the bridge's venv (has captcha/sm4/requests)
 _TIMEOUT  = int(os.environ.get("OMODA_OTP_TIMEOUT", "120"))
 
 
+STATUS_OK = "OK"                # BFF login succeeded with the current token
+STATUS_EXPIRED = "EXPIRED"      # token/session dead → a new OTP is needed (reauth)
+STATUS_NET_ERROR = "NET_ERROR"  # network/transient error → NOT an expired session
+
+
 def check():
-    """Returns (ok: bool, detail: str). ok=True if a BFF login with the current token succeeds."""
+    """Returns (ok: bool, detail: str, status: str). `status` is the STABLE marker
+    (STATUS_OK/EXPIRED/NET_ERROR) the coordinator decides reauth on; `detail` is only for the
+    user. Distinguishing EXPIRED from NET_ERROR matters: a network blip must NOT pop the
+    «Re-authenticate» card (the user would redo an OTP for nothing)."""
     try:
         ut, tu = wake._bff_login()
     except Exception as e:
-        return False, f"network error: {type(e).__name__}"
+        return False, f"network error: {type(e).__name__}", STATUS_NET_ERROR
     if ut:
-        return True, "Session active ✅"
-    return False, "Session expired ❌ — press «Request OTP code» (close the official app first)"
+        return True, "Session active ✅", STATUS_OK
+    return (False,
+            "Session expired ❌ — press «Request OTP code» (close the official app first)",
+            STATUS_EXPIRED)
 
 
 def refresh():
@@ -75,13 +85,23 @@ def _call_env():
     return email, src_dir, timeout
 
 
+def _subenv(**extra):
+    """P1-4: EPHEMERAL environment for the subprocess. Email and OTP travel HERE, not in argv:
+    the command line is readable by any user on the machine (`ps aux`, /proc/<pid>/cmdline), a
+    process's environment is not. The copy is local to the call → it does not touch os.environ."""
+    env = dict(os.environ)
+    env.update({k: str(v) for k, v in extra.items() if v is not None})
+    return env
+
+
 def request_otp(emit=lambda m: None):
     """Sends the OTP code to the user's email. True if the send succeeded."""
     email, src_dir, timeout = _call_env()
     emit("sending OTP code to email…")
     try:
-        r = subprocess.run([PYEXE, "login_omoda.py", "invia", email],
-                           cwd=src_dir, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run([PYEXE, "login_omoda.py", "invia"],
+                           cwd=src_dir, capture_output=True, text=True, timeout=timeout,
+                           env=_subenv(OMODA_EMAIL=email))
     except subprocess.TimeoutExpired:
         emit("OTP sending timed out — try again")
         return False
@@ -103,14 +123,15 @@ def confirm_otp(code, emit=lambda m: None):
     email, src_dir, timeout = _call_env()
     emit("minting token with code…")
     try:
-        r = subprocess.run([PYEXE, "prova_token.py", email, code],
-                           cwd=src_dir, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run([PYEXE, "prova_token.py"],
+                           cwd=src_dir, capture_output=True, text=True, timeout=timeout,
+                           env=_subenv(OMODA_EMAIL=email, OMODA_OTP=code))
     except subprocess.TimeoutExpired:
         return False, "token minting timed out"
     out = (r.stdout or "") + (r.stderr or "")
     # H7: outcome from returncode + stable sentinel, not from localized substrings
     if r.returncode == 0 and "RESULT: OK" in out:
-        ok, detail = check()
+        ok, _detail, _status = check()
         return ok, ("Session restored ✅" if ok else "token minted but login still failing")
     tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"
     return False, f"code rejected: {tail[:120]}"

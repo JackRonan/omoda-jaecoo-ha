@@ -282,7 +282,11 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ir.async_delete_issue(self.hass, DOMAIN, f"pin_wrong_{entry.entry_id}")
                 return self.async_update_reload_and_abort(
                     entry, data={**entry.data, CONF_PIN: new_pin})
-        schema = vol.Schema({vol.Required(CONF_PIN, default=entry.data.get(CONF_PIN, "")): str})
+        # P1-5: masked input, and no plaintext PIN pre-filled in the form.
+        from homeassistant.helpers.selector import (
+            TextSelector, TextSelectorConfig, TextSelectorType)
+        schema = vol.Schema({vol.Required(CONF_PIN): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.PASSWORD))})
         return self.async_show_form(step_id="reconfigure", data_schema=schema, errors=errors)
 
     # ───────────────────────── re-authentication (session expired → new OTP) ─────────────────

@@ -28,6 +28,7 @@ from .const import DOMAIN, CERT_FILES
 TO_REDACT = {
     "email", "pin", "vin", "tuserid", "seq",
     "lat", "lon", "latitude", "longitude", "position",
+    "certs_src",   # a local filesystem path = information disclosure
 }
 
 
@@ -55,7 +56,7 @@ async def async_get_config_entry_diagnostics(
             # title forced without VIN (the real title is "Omoda / Jaecoo (<VIN>)")
             "title": "Omoda / Jaecoo",
             "data": async_redact_data(dict(entry.data), TO_REDACT),
-            "options": dict(entry.options),
+            "options": async_redact_data(dict(entry.options), TO_REDACT),
         },
     }
 

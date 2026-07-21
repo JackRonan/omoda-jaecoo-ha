@@ -141,8 +141,10 @@ def _emit_result(ok):
 
 if __name__ == "__main__":
     a = sys.argv
-    if len(a) >= 3 and a[1] == "invia":
-        _emit_result(invia(a[2]))
+    # P1-4: the integration passes the email via OMODA_EMAIL (ephemeral env), not argv.
+    # argv still works for manual use.
+    if len(a) >= 2 and a[1] == "invia":
+        _emit_result(invia(a[2] if len(a) >= 3 else os.environ.get("OMODA_EMAIL", "")))
     elif len(a) >= 3 and a[1] == "invia-sms":
         _emit_result(invia_sms(a[2], a[3] if len(a) > 3 else "39"))
     elif len(a) >= 4 and a[1] == "token":

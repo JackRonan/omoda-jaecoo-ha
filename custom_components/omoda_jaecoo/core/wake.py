@@ -171,12 +171,15 @@ def _bff_login(_allow_refresh=True):
     except Exception:
         return None, None
     d = j.get("data", {}) if isinstance(j, dict) else None
-    if not isinstance(d, dict):
-        # expired session: try ONE automatic token renewal and retry only once
+    # P1-3: gate the refresh on the ABSENCE of a userToken, not just a non-dict data. A data={}
+    # or a dict without userToken is still an unusable session → try ONE silent refresh before
+    # giving up (which would force an OTP). No recursion beyond the single retry.
+    ut = d.get("userToken") if isinstance(d, dict) else None
+    if not ut:
         if _allow_refresh and _refresh_token():
             return _bff_login(_allow_refresh=False)
         return None, None
-    return d.get("userToken"), d.get("tUserId")
+    return ut, d.get("tUserId")
 
 def _signed_post(ut: str, path: str, params: dict):
     ts = int(time.time() * 1000)
