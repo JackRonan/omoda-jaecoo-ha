@@ -17,6 +17,25 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.6.0 — 2026-07-05 (robustness & security hardening + tests)
+
+Rolls in the audit hardening from upstream (Caslinovich, v1.5.26–1.5.27), adapted to this fork,
+plus a first test suite. No changes to how you use the integration.
+
+- **Commands are safer under load.** taskId minting is now serialized, so two commands firing at
+  once can't both trip the wrong-PIN counter; and a wrong PIN is now told apart from a
+  permission/config rejection or a dead session, so you get the right prompt (reconfigure PIN vs
+  re-authenticate) instead of a misleading "wrong PIN".
+- **Fewer false "re-authenticate" prompts.** A network blip no longer pops the re-auth card; it
+  only appears on a genuinely expired session. A missing session token is now refreshed silently
+  before asking you for a new code.
+- **Cleaner shutdown.** Background timers/reads can no longer fire while the integration is being
+  removed or after you turn automatic updates off.
+- **Security:** your email and one-time code are passed to the login helper through the process
+  environment instead of the command line (they were briefly visible to other local processes);
+  the PIN fields are masked; and diagnostics no longer include the certificate folder path.
+- **Tests + CI:** a pytest suite now covers the core protocol/auth logic and runs on every push.
+
 ## v1.5.47 — 2026-07-05 (code-scanning hardening)
 
 Housekeeping from GitHub code-scanning (CodeQL). No functional change.
