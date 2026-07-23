@@ -30,12 +30,14 @@ def _hdr_form(path):
             "Content-Type": "application/x-www-form-urlencoded"}
 
 def invia(email):
-    """Sends the OTP code via email. Returns True/False (H7: the outcome is the return
-    value; __main__ prints the sentinel `RESULT: OK/FAIL` for session.request_otp)."""
+    """Sends the OTP code via email. Returns (ok, reason): reason is "" on success,
+    otherwise a stable backend code (e.g. `email.not.exists`, `captcha.failed`) that
+    __main__ appends to the `RESULT: FAIL <reason>` sentinel for session.request_otp.
+    The reason carries no PIN, OTP or token."""
     print("Solving the captcha…")
     cv = C.risolvi()
     if not cv:
-        print("❌ captcha not solved, try again."); return False
+        print("❌ captcha not solved, try again."); return False, "captcha.failed"
     path = "/marketing/v2/app/code/sendMailCode"
     r = requests.post(BFF + path,
                       data={"email": email, "module": "APP-LOGIN", "captchaVerification": cv},
@@ -45,10 +47,10 @@ def invia(email):
     print(f"sendMailCode -> HTTP {r.status_code} key={j.get('key')} msg={j.get('msg')} data={j.get('data')}")
     if j.get("ok") or j.get("key") == "operation.successful":
         print("✅ Code sent to the email. Now: python3 login_omoda.py token <email> <codice>")
-        return True
+        return True, ""
     if j.get("key") == "email.not.exists":
         print("⚠️  Email not recognized as an account. Check the address registered in the app.")
-    return False
+    return False, (j.get("key") or "send.failed")
 
 def invia_sms(mobile, area="39"):
     mobile = mobile.lstrip("+").replace(" ", "")
@@ -134,15 +136,18 @@ def token(email, code, sms=False, area="39"):
             print(f"\n=== {nome}: NETWORK ERROR {e} ===")
     return True
 
-def _emit_result(ok):
-    """H7: stable sentinel + exit code for the callers (session.py)."""
-    print("RESULT: OK" if ok else "RESULT: FAIL")
+def _emit_result(ok, reason=""):
+    """H7: stable sentinel + exit code for the callers (session.py). On failure the
+    reason code is appended (`RESULT: FAIL <reason>`) so the caller can map it to a
+    specific, speaking error; it carries no PIN, OTP or token."""
+    print("RESULT: OK" if ok else ("RESULT: FAIL" + (f" {reason}" if reason else "")))
     sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
     a = sys.argv
     if len(a) >= 3 and a[1] == "invia":
-        _emit_result(invia(a[2]))
+        ok, reason = invia(a[2])
+        _emit_result(ok, reason)
     elif len(a) >= 3 and a[1] == "invia-sms":
         _emit_result(invia_sms(a[2], a[3] if len(a) > 3 else "39"))
     elif len(a) >= 4 and a[1] == "token":
