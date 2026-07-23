@@ -46,6 +46,8 @@
     },
     "error": {
       "otp_send_failed": "Could not send the OTP code. Check the email/PIN and try again.",
+      "email_not_found": "This email isn't registered as an Omoda/Jaecoo account. Check the exact address in the official app — and if you sign in there with a phone number, email login won't work.",
+      "captcha_failed": "Couldn't complete the security check. Please try again in a moment.",
       "otp_invalid": "Invalid or expired OTP code.",
       "no_vehicle": "Login succeeded but no vehicle was found on this account.",
       "pin_required": "Enter the vehicle control PIN."

@@ -32,6 +32,7 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 import wake  # reuses _bff_login / _refresh_token / TOKEN_PATH
+import otp_result  # pure: parse the FAIL sentinel reason (unit-tested)
 
 EMAIL     = os.environ.get("OMODA_EMAIL", "")   # PER-ACCOUNT: see omoda_jaecoo.env.example
 # Folder with login_omoda.py / prova_token.py / omoda.py: by default they are in this same
@@ -91,7 +92,11 @@ def request_otp(emit=lambda m: None):
         emit(f"📧 Code sent to {email} — enter it in the «OTP code» field and press «Confirm OTP»")
         return True
     tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"
-    emit(f"OTP sending failed: {tail[:120]}")
+    # H7: the FAIL sentinel may carry a stable backend reason code (e.g. email.not.exists)
+    # — surface it so the config flow can map it to a specific, speaking error. Falls back
+    # to the raw tail for unknown failures.
+    reason = otp_result.parse_fail_reason(out)
+    emit(reason or f"OTP sending failed: {tail[:120]}")
     return False
 
 

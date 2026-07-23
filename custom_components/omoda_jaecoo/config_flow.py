@@ -39,6 +39,10 @@ _CORE = os.path.join(os.path.dirname(__file__), "core")
 if _CORE not in sys.path:
     sys.path.insert(0, _CORE)
 
+# pure, dependency-free (safe to import at module load) — maps the OTP-send reason
+# code to a speaking config-flow error; the parsing itself is unit-tested (see tests/).
+import otp_result  # noqa: E402
+
 
 def _pending_token_path(hass: HomeAssistant) -> str:
     """Temporary path where the token is minted until the VIN is known."""
@@ -174,8 +178,8 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             if ok:
                 return await self.async_step_otp()
-            errors["base"] = "otp_send_failed"
-            reason = _reason_line(msg)
+            errors["base"] = otp_result.error_key(msg)
+            reason = "" if msg in otp_result.ERROR_BY_REASON else _reason_line(msg)
             _LOGGER.warning("Omoda / Jaecoo: OTP send failed: %s", msg)
 
         schema = vol.Schema({
