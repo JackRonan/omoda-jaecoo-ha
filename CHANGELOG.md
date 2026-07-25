@@ -17,6 +17,17 @@ original project's changelog (Italian + English), preserved for history.
   catalog directly from its files on every start, so the correct English command set (including
   Find Car and Locate Car) is always what the buttons are built from.
 
+## v1.6.1 — 2026-07-05
+
+Community contributions from @drake69 (thanks!).
+
+- **Clearer setup errors.** When sending the login code fails, setup now shows a specific reason
+  instead of the generic "check the email/PIN": an unregistered email says so directly (and notes
+  that phone-number accounts can't use email login), and a failed security check says to retry.
+  Unknown failures still show the raw detail, so nothing is hidden.
+- **CI hardening:** dependency CVE scanning (pip-audit), a dashboard-card syntax/mobile-compat
+  check, and automatic GitHub Actions updates (Dependabot).
+
 ## v1.6.0 — 2026-07-05 (robustness & security hardening + tests)
 
 Rolls in the audit hardening from upstream (Caslinovich, v1.5.26–1.5.27), adapted to this fork,
