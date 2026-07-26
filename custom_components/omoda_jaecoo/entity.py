@@ -39,6 +39,43 @@ def field_on(v) -> bool | None:
         return s.lower() not in ("false", "off", "no")
 
 
+def charge_state_on(v) -> bool:
+    """True only while ACTIVELY charging (chargeState == 1), tolerating the float
+    string form ('1.0') the realtime channel sometimes sends. '2' (completed) and
+    '0' (idle) are False, as is any absent/garbage value. Shared by the Charging
+    binary sensor and the home/away energy counters so the two never disagree — a
+    naive `== "1"` silently fails on the '1.0' form and stops the energy integral."""
+    return v is not None and str(v).strip() in ("1", "1.0")
+
+
+def _flt(v):
+    """float() or None (never raises)."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def car_zone(hass, position: dict | None) -> str | None:
+    """`"home"` / `"away"` / `None` (unknown) for a live GPS position, using HA's own zone
+    logic (`async_active_zone`) — the SAME computation that sets the car's device_tracker to
+    `home`/`not_home`. `None` when there is no usable fix, so callers can abstain instead of
+    guessing. Single source of truth reused by the At-Home binary sensor and the home/away
+    charging-energy counters."""
+    # local import: no hard dependency on the zone component at module import time
+    from homeassistant.components.zone import async_active_zone
+
+    pos = position or {}
+    lat = _flt(pos.get("lat") or pos.get("latitude"))
+    lon = _flt(pos.get("lon") or pos.get("longitude"))
+    if lat is None or lon is None:
+        return None
+    zone = async_active_zone(hass, lat, lon)
+    if zone is None:
+        return "away"
+    return "home" if zone.entity_id == "zone.home" else "away"
+
+
 def get_rt_field(rt: dict, field: str) -> Any:
     """Look up a field in the realtime dict, checking both the root and nested objects."""
     if not isinstance(rt, dict):

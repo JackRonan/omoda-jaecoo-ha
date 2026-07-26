@@ -350,6 +350,10 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 self._hv_poll_unsub()
                 self._hv_poll_unsub = None
             self._hv_poll_count = 0
+        # Nudge the entities so availability tracks the switch immediately: the home/away
+        # energy counters and the At-Home sensor go unavailable when polling is off (they
+        # need periodic realtime sampling to be meaningful) and come back when it's on.
+        self.async_update_listeners()
 
     def async_start_drive_watch(self) -> None:
         """Starts the drive-detection heartbeat (read-only). It's tied to `poll_enabled`

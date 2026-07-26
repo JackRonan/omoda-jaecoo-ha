@@ -91,7 +91,8 @@
           "poll_normal_min": "Update interval when parked (minutes, 0 = off)",
           "poll_charging_min": "Update interval while plugged in (minutes, 0 = off)",
           "vehicle_name": "Vehicle name (leave empty to use the name detected from the car)",
-          "vehicle_image": "Vehicle image URL (optional, shown on the card)"
+          "vehicle_image": "Vehicle image URL (optional, shown on the card)",
+          "charge_energy_sensors": "Charging-energy sensors (home/away, BEV only)"
         }
       }
     }
@@ -196,6 +197,9 @@
       },
       "charging": {
         "name": "Charging"
+      },
+      "at_home": {
+        "name": "At Home"
       }
     },
     "sensor": {
@@ -333,6 +337,12 @@
       },
       "electric_efficiency": {
         "name": "Electric Efficiency"
+      },
+      "home_charging_energy": {
+        "name": "Home Charging Energy"
+      },
+      "away_charging_energy": {
+        "name": "Away Charging Energy"
       }
     },
     "button": {
