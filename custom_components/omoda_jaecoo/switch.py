@@ -42,7 +42,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
         coord, "Climate Windshield Defrost", "frontWindshieldHeat", "frontWindshieldHeat",
         "defrost_parabrezza", "defrost_parabrezza_off", "mdi:car-defrost-front")
     lunotto = OmodaJaecooComfortSwitch(
-        coord, "Climate Rear Window Defrost", "rWinHeatingState", "rWinHeatingState",
+        coord, "Climate Rear Window Defrost", "fWinHeatingState", "fWinHeatingState",
         "defrost_lunotto", "defrost_lunotto_off", "mdi:car-defrost-rear")
     volante = OmodaJaecooComfortSwitch(
         coord, "Climate Steering Wheel Heating", "steerWheelHeating", "steerWheelHeating",
