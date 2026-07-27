@@ -11,7 +11,7 @@ PLATFORMS = ["sensor", "binary_sensor", "button", "lock", "switch", "climate",
 # (mSeatHeatingState2/mSeatVentilateState2) has NO dedicated command → stays read-only.
 FIELDS_AS_RICH_ENTITY = {
     "doorLock", "frontHVACState", "trunkDoor", "sunroofState",
-    "frontWindshieldHeat", "rWinHeatingState", "steerWheelHeating",
+    "frontWindshieldHeat", "steerWheelHeating",
     "dSeatHeatingState", "dSeatVentilateState",
     # passenger seat
     "pSeatHeatingState", "pSeatVentilateState",
