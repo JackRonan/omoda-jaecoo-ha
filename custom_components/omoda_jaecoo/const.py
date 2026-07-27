@@ -136,6 +136,12 @@ CONF_POLL_NORMAL = "poll_normal_min"
 CONF_POLL_CHARGING = "poll_charging_min"
 DEFAULT_POLL_NORMAL_MIN = 60
 DEFAULT_POLL_CHARGING_MIN = 30
+# Home/Away charging-energy sensors (BEV only): integrate `chargingPower` over time,
+# split by whether the car's device_tracker sits in the HA `home` zone. Opt-out toggle
+# in the options flow; only created when the car is a confirmed BEV (chargingPower is
+# BEV-only, see sensor.py) so PHEV/unknown powertrains never get empty energy counters.
+CONF_CHARGE_ENERGY_SENSORS = "charge_energy_sensors"
+DEFAULT_CHARGE_ENERGY_SENSORS = True
 # wait between the wake (locate) and the forced realtime read, so the car comes back online
 POLL_WAKE_WAIT = 25
 # High voltage (HV) and FRESH telemetry. Discovery verified live 2026-06-22: the
@@ -155,6 +161,11 @@ HV_ON_POLL_MAX = 90     # safety cap on the number of close reads (~90 min of dr
 # charging a realtime read immediately gives updated stato_ricarica/corrente_hv/tempo_residuo.
 CHARGING_POLL_EVERY = 120   # seconds between two realtime reads while the cable is connected (charging)
 CHARGING_POLL_MAX = 300     # safety cap (~10h: covers a full AC charge with margin)
+# Max gap (seconds) between two charging samples still integrated into the home/away energy
+# counters. During a charge the realtime poll runs every CHARGING_POLL_EVERY (120s); a wider
+# gap means the car went to sleep / stopped reporting, so we DON'T integrate across it (that
+# would invent energy). 300s = tolerate one missed poll, reject sleep gaps.
+CHARGE_ENERGY_MAX_GAP = 300
 # DRIVING (detection heartbeat): the car IN MOTION does not send MQTT pushes (verified live
 # 2026-06-24: while driving the MQTT session is connected but no 5A02 arrives → engine/
 # speed stayed at the previous day) and the periodic "wake+read" poll is every ~hour. Without

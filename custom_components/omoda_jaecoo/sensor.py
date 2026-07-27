@@ -24,6 +24,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
+    UnitOfEnergy,
     UnitOfLength,
     UnitOfPower,
     UnitOfPressure,
@@ -35,9 +36,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, FIELDS_AS_RICH_ENTITY
+from .const import (
+    CHARGE_ENERGY_MAX_GAP,
+    CONF_CHARGE_ENERGY_SENSORS,
+    DEFAULT_CHARGE_ENERGY_SENSORS,
+    DOMAIN,
+    FIELDS_AS_RICH_ENTITY,
+)
 from .coordinator import SENSORS
-from .entity import OmodaJaecooEntity, get_rt_field
+from .entity import OmodaJaecooEntity, car_zone, charge_state_on, get_rt_field
 
 
 # ───────────────────────── "realtime" sensors (Round B) ─────────────────────────
@@ -260,6 +267,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     bev = coord.is_pure_electric()
     ents += [OmodaJaecooRealtimeSensor(coord, s) for s in _RT_SENSORS
              if not (bev and s.suffix in _FUEL_ONLY_SUFFIXES)]
+    # Home/Away charging-energy counters: BEV-only (chargingPower is BEV-only) and opt-out
+    # via the options flow. On PHEV/unknown powertrains they're never created.
+    if bev and entry.options.get(CONF_CHARGE_ENERGY_SENSORS, DEFAULT_CHARGE_ENERGY_SENSORS):
+        ents.append(OmodaJaecooChargedEnergy(coord, home=True))
+        ents.append(OmodaJaecooChargedEnergy(coord, home=False))
     ents.append(OmodaJaecooSessionStatus(coord))
     # — diagnostic sensors (parity with the bridge) —
     # Explicit object_id → the entity_id is STABLE and translation-proof. Without it the
@@ -387,6 +399,97 @@ class OmodaJaecooSpeed(_OmodaJaecooRestoreSensor):
             return float(v) if v is not None else None
         except (TypeError, ValueError):
             return None
+
+
+def _f(v):
+    """float() or None (never raises) — mirrors device_tracker._f."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+class OmodaJaecooChargedEnergy(OmodaJaecooEntity, RestoreSensor):
+    """Energy charged while the car sits IN (home=True) or OUT OF (home=False) the HA
+    `home` zone. It's an ESTIMATE: the trapezoidal integral of `chargingPower` (kW, BEV-only)
+    over time, accumulated only while the car is actively charging AND its live GPS position
+    falls in / out of the home zone — the same zone logic HA uses for the device_tracker.
+
+    Lifetime counter (`TOTAL_INCREASING`, kWh) → drop it straight into the Energy dashboard as
+    a source. Home + Away ≈ total energy charged, split by location (home cost vs public columns).
+
+    Accuracy notes:
+      - samples come from the realtime poll (every ~120s while charging) → a few % off a real
+        meter, fine for the Energy dashboard, NOT a fiscal reading;
+      - intervals wider than CHARGE_ENERGY_MAX_GAP (car asleep / stopped reporting) are NOT
+        integrated, so a sleep gap can't invent energy;
+      - when the live position is `unknown` (no GPS fix) NEITHER counter accumulates — energy is
+        never attributed to the wrong zone.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coord, *, home: bool) -> None:
+        self._home = home
+        label = "Home Charging Energy" if home else "Away Charging Energy"
+        super().__init__(coord, label, "energy_charged_home" if home else "energy_charged_away",
+                         entity_id_format=ENTITY_ID_FORMAT)
+        self._attr_icon = "mdi:home-lightning-bolt" if home else "mdi:ev-station"
+        self._energy_wh: float = 0.0
+        self._last_ts: datetime | None = None
+        self._last_power: float = 0.0
+        self._last_active: bool = False
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last is not None and last.native_value is not None:
+            val = _f(last.native_value)
+            if val is not None and val >= 0:
+                self._energy_wh = val * 1000.0
+
+    def _sample(self) -> None:
+        """Trapezoidal integration step, run on every coordinator update."""
+        rt = self.coordinator.data.get("realtime") or {}
+        charge_state = get_rt_field(rt, "chargeState")
+        power = _f(get_rt_field(rt, "chargingPower"))
+        # NB: charge_state_on() tolerates the '1.0' float form the realtime channel sends;
+        # a naive `str(charge_state) == "1"` here silently kept the integral at 0.
+        charging = charge_state_on(charge_state) and power is not None and power > 0
+        zone = car_zone(self.hass, self.coordinator.data.get("position"))
+        target = "home" if self._home else "away"
+        active = charging and zone is not None and zone == target
+
+        now = dt_util.utcnow()
+        # integrate ONLY across an interval whose BOTH endpoints were active and close in time
+        if active and self._last_active and self._last_ts is not None:
+            dt_s = (now - self._last_ts).total_seconds()
+            if 0 < dt_s <= CHARGE_ENERGY_MAX_GAP:
+                # kW·h → Wh:  avg(kW) * (s/3600) * 1000
+                self._energy_wh += 0.5 * (self._last_power + power) * (dt_s / 3600.0) * 1000.0
+        self._last_ts = now
+        self._last_power = power if active else 0.0
+        self._last_active = active
+
+    def _handle_coordinator_update(self) -> None:
+        self._sample()
+        super()._handle_coordinator_update()
+
+    @property
+    def available(self) -> bool:
+        # These are time-integrating counters: they accrue energy across the trapezoid
+        # between consecutive realtime samples. With Auto Update off the car is read only
+        # once (the startup seed), so two consecutive active samples never arrive and the
+        # value can't grow — surface as UNAVAILABLE instead of a misleading frozen 0.
+        # (Turning Auto Update on nudges the listeners → this flips back to available.)
+        return bool(self.coordinator.poll_enabled)
+
+    @property
+    def native_value(self) -> float:
+        return round(self._energy_wh / 1000.0, 3)
 
 
 class OmodaJaecooRealtimeSensor(_OmodaJaecooRestoreSensor):

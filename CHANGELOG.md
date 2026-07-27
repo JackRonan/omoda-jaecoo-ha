@@ -7,6 +7,28 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.7.0 — 2026-07-26 (home vs away charging energy + charging-energy card)
+
+- **New (BEV only): "Home Charging Energy" and "Away Charging Energy" sensors.** Two lifetime
+  energy counters (kWh) that estimate how much you charged at home versus anywhere else. They
+  integrate the car's live charging power over time and split it by whether the car sits inside
+  your Home Assistant `home` zone while charging. Add them straight to the **Energy dashboard**
+  to see home vs public charging. It's an estimate from ~2-minute samples, not a meter reading;
+  a sleep gap never invents energy, and while the position is unknown neither counter moves.
+  Toggle them off in the integration **options** ("Charging-energy sensors"). BEV-only, since the
+  charging-power field is electric-only.
+- **New: "At Home" binary sensor.** ON when the car sits inside your Home Assistant `home` zone
+  and OFF when away (from the car's GPS position, the same zone your map marker uses); `unknown`
+  until the first fix. Convenient for automations and cards that just need the boolean.
+- **New: Charging-energy Lovelace card** (`www/omoda-jaecoo-energy-card.js`). A stacked histogram
+  of charging energy by period (day / week / month; home green, away yellow) with an Energy-style
+  selector, plus a live "charging now" strip showing instantaneous power, the estimated time the
+  charge will be complete, and whether you're charging at home or away. English/Italian, picked
+  automatically from the Home Assistant language.
+- **Note:** the energy counters (and "At Home") need the **Auto Update** switch ON — they rely on
+  periodic realtime sampling. With Auto Update off they report _unavailable_ instead of a
+  misleading frozen `0`, and come straight back when you turn it on.
+
 ## v1.5.41 — 2026-07-03
 
 - **Find Car / Locate Car: fixed the recurring regression for good.** After some updates these

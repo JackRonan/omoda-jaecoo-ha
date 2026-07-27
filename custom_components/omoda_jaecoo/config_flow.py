@@ -30,6 +30,7 @@ from .const import (
     CONF_CAR_MQTT_HOST, CONF_CAR_MQTT_PORT, DEFAULTS,
     CONF_POLL_NORMAL, CONF_POLL_CHARGING,
     DEFAULT_POLL_NORMAL_MIN, DEFAULT_POLL_CHARGING_MIN,
+    CONF_CHARGE_ENERGY_SENSORS, DEFAULT_CHARGE_ENERGY_SENSORS,
     CONF_VEHICLE_NAME, CONF_VEHICLE_IMAGE, capabilities_from_item,
 )
 
@@ -361,6 +362,11 @@ class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):
                 CONF_POLL_CHARGING,
                 default=opt.get(CONF_POLL_CHARGING, DEFAULT_POLL_CHARGING_MIN),
             ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
+            # BEV only: create the Home/Away charging-energy counters (estimate from chargingPower).
+            vol.Optional(
+                CONF_CHARGE_ENERGY_SENSORS,
+                default=opt.get(CONF_CHARGE_ENERGY_SENSORS, DEFAULT_CHARGE_ENERGY_SENSORS),
+            ): bool,
             # manual override of the vehicle name (empty = use the one detected from the car)
             vol.Optional(
                 CONF_VEHICLE_NAME,

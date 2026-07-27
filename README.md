@@ -56,7 +56,12 @@ location and commands — just like the official app, but integrated into HA.
   a **Charging** sensor, charging power, charge state, odometer, speed. Range and
   battery update while **driving or charging**; a read-only refresh runs at startup
   so they're populated at rest too.
-- **Location / GPS** — full-precision `device_tracker`, plus a Locate button.
+- **Location / GPS** — full-precision `device_tracker`, an **At Home** presence
+  binary sensor, plus a Locate button.
+- **Home vs away charging energy** (BEV) — two lifetime kWh counters that estimate how
+  much you charged inside your Home Assistant `home` zone versus anywhere else, ready to
+  drop into the **Energy dashboard**. It's an estimate from the live charging power; turn
+  it off in the integration options if you don't want it.
 - **Adapts to your car** — pure-electric (BEV) vs plug-in hybrid (PHEV) is detected
   from your account, so it only shows the sensors that apply (no empty fuel gauges on
   a BEV) and uses your car's real climate temperature range.

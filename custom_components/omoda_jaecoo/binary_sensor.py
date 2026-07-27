@@ -21,7 +21,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, FIELDS_AS_RICH_ENTITY
 from .coordinator import SENSORS
-from .entity import OmodaJaecooEntity, field_on, get_rt_field
+from .entity import OmodaJaecooEntity, car_zone, charge_state_on, field_on, get_rt_field
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
@@ -35,6 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEnt
     ents.append(OmodaJaecooAwake(coord))
     ents.append(OmodaJaecooSession(coord))
     ents.append(OmodaJaecooCharging(coord))
+    ents.append(OmodaJaecooAtHome(coord))
     # — warnings from the realtime channel (Round B): tires + low battery —
     for suffix, name, field, dc in _RT_BINARIES:
         ents.append(OmodaJaecooRealtimeBinary(coord, name, suffix, field, dc))
@@ -155,7 +156,32 @@ class OmodaJaecooCharging(_OmodaJaecooRestoreBinary):
         v = get_rt_field(rt, "chargeState")
         if v is None or str(v).strip() in ("", "None"):
             return None
-        return str(v).strip() in ("1", "1.0")
+        return charge_state_on(v)
+
+
+class OmodaJaecooAtHome(OmodaJaecooEntity, BinarySensorEntity):
+    """Whether the car sits inside the Home Assistant `home` zone, from its live GPS position
+    (same zone logic as the device_tracker). ON = home, OFF = away, `unknown` when there is no
+    usable fix yet. Handy for automations/cards that only need the boolean without parsing the
+    device_tracker state. Shares `car_zone` with the home/away charging-energy counters."""
+
+    _attr_device_class = BinarySensorDeviceClass.PRESENCE
+    _attr_icon = "mdi:home-map-marker"
+
+    def __init__(self, coord) -> None:
+        super().__init__(coord, "At Home", "at_home", entity_id_format=ENTITY_ID_FORMAT)
+
+    @property
+    def available(self) -> bool:
+        # Position-derived: with Auto Update off the GPS fix isn't refreshed and this would
+        # report a possibly-stale home/away, so it's UNAVAILABLE until periodic sampling is on.
+        # (Turning Auto Update on nudges the listeners → this flips back to available.)
+        return bool(self.coordinator.poll_enabled)
+
+    @property
+    def is_on(self) -> bool | None:
+        zone = car_zone(self.hass, self.coordinator.data.get("position"))
+        return None if zone is None else zone == "home"
 
 
 class OmodaJaecooAwake(OmodaJaecooEntity, BinarySensorEntity):
