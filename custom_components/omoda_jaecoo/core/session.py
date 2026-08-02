@@ -142,5 +142,49 @@ def confirm_otp(code, emit=lambda m: None):
     return False, f"code rejected: {tail[:120]}"
 
 
+def request_otp_sms(mobile, area="39", emit=lambda m: None):
+    """Sends the OTP code by SMS (for phone-number accounts). True if the send succeeded.
+    Phone/area travel via the ephemeral env (like the email path), not argv."""
+    _email, src_dir, timeout = _call_env()
+    emit("sending OTP code by SMS…")
+    try:
+        r = subprocess.run([PYEXE, "login_omoda.py", "invia-sms"],
+                           cwd=src_dir, capture_output=True, text=True, timeout=timeout,
+                           env=_subenv(OMODA_PHONE=mobile, OMODA_AREA=area))
+    except subprocess.TimeoutExpired:
+        emit("SMS sending timed out — try again")
+        return False
+    out = (r.stdout or "") + (r.stderr or "")
+    if r.returncode == 0 and "RESULT: OK" in out:
+        emit("📱 Code sent by SMS — enter it in the «OTP code» field and press «Confirm OTP»")
+        return True
+    tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"
+    reason = otp_result.parse_fail_reason(out)
+    emit(reason or f"SMS sending failed: {tail[:120]}")
+    return False
+
+
+def confirm_otp_sms(code, mobile, area="39", emit=lambda m: None):
+    """Mints the token from the SMS code (grant_type=mobile). Returns (ok, detail).
+    Phone/OTP/area travel via the ephemeral env, not argv."""
+    code = (code or "").strip()
+    if not code:
+        return False, "no code entered"
+    _email, src_dir, timeout = _call_env()
+    emit("minting token with SMS code…")
+    try:
+        r = subprocess.run([PYEXE, "login_omoda.py", "token-sms"],
+                           cwd=src_dir, capture_output=True, text=True, timeout=timeout,
+                           env=_subenv(OMODA_PHONE=mobile, OMODA_OTP=code, OMODA_AREA=area))
+    except subprocess.TimeoutExpired:
+        return False, "token minting timed out"
+    out = (r.stdout or "") + (r.stderr or "")
+    if r.returncode == 0 and "RESULT: OK" in out:
+        ok, _detail, _status = check()
+        return ok, ("Session restored ✅" if ok else "token minted but login still failing")
+    tail = out.strip().splitlines()[-1] if out.strip() else f"rc={r.returncode}"
+    return False, f"code rejected: {tail[:120]}"
+
+
 if __name__ == "__main__":
     print("check:", check())

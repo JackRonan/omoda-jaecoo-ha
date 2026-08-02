@@ -26,6 +26,8 @@ from homeassistant.data_entry_flow import AbortFlow
 
 from .const import (
     DOMAIN, CONF_EMAIL, CONF_PIN, CONF_VIN, CONF_TUSERID,
+    CONF_LOGIN_METHOD, CONF_PHONE, CONF_AREA,
+    LOGIN_METHOD_EMAIL, LOGIN_METHOD_PHONE, DEFAULT_AREA,
     CONF_BFF, CONF_TSP_HOST, CONF_CERTS_SRC, CONF_CHANNEL_ID,
     CONF_CAR_MQTT_HOST, CONF_CAR_MQTT_PORT, DEFAULTS,
     CONF_POLL_NORMAL, CONF_POLL_CHARGING,
@@ -61,6 +63,8 @@ def _reason_line(detail: str | None) -> str:
 def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None) -> None:
     """Set up the environment for the core/ modules (read at import-time) from the flow data."""
     os.environ["OMODA_EMAIL"] = data.get(CONF_EMAIL, "")
+    os.environ["OMODA_PHONE"] = data.get(CONF_PHONE, "")
+    os.environ["OMODA_AREA"] = str(data.get(CONF_AREA, DEFAULT_AREA))
     os.environ["OMODA_PIN"] = data.get(CONF_PIN, "")
     os.environ["VIN"] = data.get(CONF_VIN, "")
     os.environ["TUSERID"] = data.get(CONF_TUSERID, "")
@@ -73,22 +77,36 @@ def _prepare_env(hass: HomeAssistant, data: dict, token_path: str | None = None)
     os.environ["OMODA_SRC_DIR"] = _CORE
 
 
+def _is_phone(data: dict) -> bool:
+    """True when the account logs in with a phone number (SMS OTP) rather than an email."""
+    return data.get(CONF_LOGIN_METHOD) == LOGIN_METHOD_PHONE
+
+
 def _send_otp(hass: HomeAssistant, data: dict, token_path: str | None = None) -> tuple[bool, str]:
-    """Solves the captcha and sends the OTP to the email (executor) → core.session.request_otp."""
+    """Solves the captcha and sends the OTP the account's way (executor). Email accounts
+    → core.session.request_otp; phone accounts → core.session.request_otp_sms."""
     _prepare_env(hass, data, token_path)
     import session as SESSION
     msgs: list[str] = []
-    ok = SESSION.request_otp(emit=msgs.append)
+    if _is_phone(data):
+        ok = SESSION.request_otp_sms(
+            data.get(CONF_PHONE, ""), data.get(CONF_AREA, DEFAULT_AREA), emit=msgs.append)
+    else:
+        ok = SESSION.request_otp(emit=msgs.append)
     return ok, (msgs[-1] if msgs else "")
 
 
 def _mint_token(hass: HomeAssistant, data: dict, code: str,
                 token_path: str | None = None) -> tuple[bool, str]:
-    """Mints the token from the OTP code (executor) → core.session.confirm_otp.
+    """Mints the token from the OTP code (executor). Email accounts → core.session.confirm_otp
+    (grant_type=email); phone accounts → confirm_otp_sms (grant_type=mobile).
     token_path=None mints to the pending path (initial setup); a per-VIN path is passed
     during re-authentication so the fresh token lands where the coordinator reads it."""
     _prepare_env(hass, data, token_path)
     import session as SESSION
+    if _is_phone(data):
+        return SESSION.confirm_otp_sms(
+            code, data.get(CONF_PHONE, ""), data.get(CONF_AREA, DEFAULT_AREA))
     return SESSION.confirm_otp(code)
 
 
@@ -163,6 +181,7 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._vins: list[str] = []
         self._vehicles: list[dict] = []
         self._reauth_entry: config_entries.ConfigEntry | None = None
+        self._reauth_otp_sent: bool = False
 
     @staticmethod
     @callback
@@ -174,17 +193,37 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         reason = ""
         if user_input is not None:
             self._data.update(user_input)
-            ok, msg = await self.hass.async_add_executor_job(
-                _send_otp, self.hass, self._data
-            )
-            if ok:
-                return await self.async_step_otp()
-            errors["base"] = otp_result.error_key(msg)
-            reason = "" if msg in otp_result.ERROR_BY_REASON else _reason_line(msg)
-            _LOGGER.warning("Omoda / Jaecoo: OTP send failed: %s", msg)
+            # The account is registered EITHER with an email OR a phone number: require the one
+            # that matches the chosen method (both fields are optional in the schema so the form
+            # can offer both, but exactly the relevant identifier must be filled).
+            if _is_phone(self._data):
+                if not (self._data.get(CONF_PHONE) or "").strip():
+                    errors["base"] = "phone_required"
+            elif not (self._data.get(CONF_EMAIL) or "").strip():
+                errors["base"] = "email_required"
+            if not errors:
+                ok, msg = await self.hass.async_add_executor_job(
+                    _send_otp, self.hass, self._data
+                )
+                if ok:
+                    return await self.async_step_otp()
+                errors["base"] = otp_result.error_key(msg)
+                reason = "" if msg in otp_result.ERROR_BY_REASON else _reason_line(msg)
+                _LOGGER.warning("Omoda / Jaecoo: OTP send failed: %s", msg)
 
+        from homeassistant.helpers.selector import (
+            SelectSelector, SelectSelectorConfig, SelectSelectorMode)
         schema = vol.Schema({
-            vol.Required(CONF_EMAIL): str,
+            # Email OR Phone: which identifier the account uses (drives email-code vs SMS-code OTP).
+            vol.Required(CONF_LOGIN_METHOD, default=LOGIN_METHOD_EMAIL): SelectSelector(
+                SelectSelectorConfig(
+                    options=[LOGIN_METHOD_EMAIL, LOGIN_METHOD_PHONE],
+                    translation_key="login_method",
+                    mode=SelectSelectorMode.DROPDOWN)),
+            vol.Optional(CONF_EMAIL, default=""): str,
+            # Phone accounts: mobile number (no leading +, no spaces) + dialling area code.
+            vol.Optional(CONF_PHONE, default=""): str,
+            vol.Optional(CONF_AREA, default=DEFAULT_AREA): str,
             vol.Required(CONF_PIN): str,
             # Only for regions outside Europe / advanced setup (default EU).
             vol.Optional(CONF_BFF, default=DEFAULTS[CONF_BFF]): str,
@@ -304,16 +343,40 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None):
-        """Re-login: on first display send a fresh OTP to the account email; on submit mint a
-        new token into the existing per-VIN path and reload the entry."""
+        """Re-login, in TWO explicit steps so a network blip that popped the reauth card can't
+        silently burn an OTP send (the old flow auto-sent on first display):
+          phase 1 — a "send code" form (no code field). Submitting it sends the OTP.
+          phase 2 — the code field. A wrong code re-shows this form (with a resend option)
+                    instead of dead-ending, so the user isn't forced to restart the flow.
+        The fresh token is minted into the existing per-VIN path and the entry is reloaded."""
         entry = self._reauth_entry
         vin = (entry.data if entry else {}).get(CONF_VIN, "")
         token_path = self.hass.config.path(f"omoda9_{vin}_token.json")
         errors: dict[str, str] = {}
         reason = ""
+        resend = bool(user_input and user_input.get("resend"))
 
-        if user_input is not None:
-            code = user_input["code"].strip()
+        # PHASE 1 — send the code (explicit; also the "resend" path once a code was already sent)
+        if not self._reauth_otp_sent or resend:
+            if user_input is not None:
+                ok, msg = await self.hass.async_add_executor_job(
+                    _send_otp, self.hass, self._data, token_path)
+                if ok:
+                    self._reauth_otp_sent = True
+                else:
+                    errors["base"] = otp_result.error_key(msg)
+                    reason = "" if msg in otp_result.ERROR_BY_REASON else _reason_line(msg)
+                    _LOGGER.warning("Omoda / Jaecoo: reauth OTP send failed: %s", msg)
+            if not self._reauth_otp_sent:
+                # still on phase 1: show the "send code" confirmation form (no OTP fired yet)
+                return self.async_show_form(
+                    step_id="reauth_confirm", data_schema=vol.Schema({}),
+                    errors=errors,
+                    description_placeholders={"account": self._account_label(), "reason": reason})
+
+        # PHASE 2 — a code was sent: accept it (but NOT on a resend submit — that only re-sends)
+        if user_input is not None and "code" in user_input and not resend:
+            code = (user_input.get("code") or "").strip()
             ok, detail = await self.hass.async_add_executor_job(
                 _mint_token, self.hass, self._data, code, token_path)
             if ok:
@@ -322,20 +385,22 @@ class OmodaJaecooConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "otp_invalid"
             reason = _reason_line(detail)
             _LOGGER.warning("Omoda / Jaecoo: reauth OTP confirm failed: %s", detail)
-        else:
-            # first display → send the OTP code to the account email
-            ok, msg = await self.hass.async_add_executor_job(
-                _send_otp, self.hass, self._data, token_path)
-            if not ok:
-                # speaking error for known reasons (email.not.exists / captcha), raw fallback else.
-                errors["base"] = otp_result.error_key(msg)
-                reason = "" if msg in otp_result.ERROR_BY_REASON else _reason_line(msg)
-                _LOGGER.warning("Omoda / Jaecoo: reauth OTP send failed: %s", msg)
 
-        schema = vol.Schema({vol.Required("code"): str})
+        # code field + an opt-in "resend the code" checkbox (ticking it re-enters phase 1)
+        schema = vol.Schema({
+            vol.Required("code"): str,
+            vol.Optional("resend", default=False): bool,
+        })
         return self.async_show_form(
             step_id="reauth_confirm", data_schema=schema, errors=errors,
-            description_placeholders={"email": self._data.get(CONF_EMAIL, ""), "reason": reason})
+            description_placeholders={"account": self._account_label(), "reason": reason})
+
+    def _account_label(self) -> str:
+        """The identifier shown on the reauth form: email, or `+<area> <phone>` for SMS accounts."""
+        if _is_phone(self._data):
+            area = self._data.get(CONF_AREA, DEFAULT_AREA)
+            return f"+{area} {self._data.get(CONF_PHONE, '')}".strip()
+        return self._data.get(CONF_EMAIL, "")
 
 
 class OmodaJaecooOptionsFlow(config_entries.OptionsFlow):

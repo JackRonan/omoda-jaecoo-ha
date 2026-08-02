@@ -72,3 +72,30 @@ def test_confirm_otp_passes_code_via_env_not_argv(monkeypatch):
     assert ok is True
     assert "654321" not in store["argv"]
     assert store["env"].get("OMODA_OTP") == "654321"
+
+
+def test_request_otp_sms_passes_phone_via_env_not_argv(monkeypatch):
+    store = {}
+    monkeypatch.setattr(SESSION.subprocess, "run", _fake_run(store))
+    assert SESSION.request_otp_sms("3331234567", "44") is True
+    assert "invia-sms" in store["argv"]           # SMS send verb
+    assert "3331234567" not in store["argv"]                 # phone NOT on the command line
+    assert store["env"].get("OMODA_PHONE") == "3331234567"
+    assert store["env"].get("OMODA_AREA") == "44"
+
+
+def test_confirm_otp_sms_passes_code_and_phone_via_env_not_argv(monkeypatch):
+    store = {}
+    monkeypatch.setattr(SESSION.subprocess, "run", _fake_run(store))
+    monkeypatch.setattr(SESSION.wake, "_bff_login", lambda *a, **k: ("ut", "tu"))
+    ok, _detail = SESSION.confirm_otp_sms("654321", "3331234567", "44")
+    assert ok is True
+    assert "token-sms" in store["argv"]           # SMS token verb
+    assert "654321" not in store["argv"] and "3331234567" not in store["argv"]
+    assert store["env"].get("OMODA_OTP") == "654321"
+    assert store["env"].get("OMODA_PHONE") == "3331234567"
+
+
+def test_confirm_otp_sms_empty_code_rejected(monkeypatch):
+    ok, detail = SESSION.confirm_otp_sms("  ", "3331234567", "44")
+    assert ok is False and "no code" in detail

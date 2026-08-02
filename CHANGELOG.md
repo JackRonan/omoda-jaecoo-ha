@@ -7,6 +7,37 @@ This is the **English fork** of the original Omoda 9 / Jaecoo integration. Every
 above the "Pre-fork history" divider is the English fork; everything below it is the
 original project's changelog (Italian + English), preserved for history.
 
+## v1.8.0 — 2026-08-03 (phone-number login, English emails, truthful climate results, reauth rework)
+
+- **Fixed: OTP emails now arrive in English again.** A previous merge had reverted the forced
+  language back to Italian, so account emails and backend messages came through in Italian. Every
+  backend request now pins `en-GB` again, so the OTP email you receive is in English.
+- **New: log in with a phone number (SMS), not just email.** The setup form now asks whether your
+  account uses an **Email** or a **Phone number**. Pick Phone and enter your mobile plus the
+  dialling area code (default 39), and the OTP code is sent by **SMS**; the token is minted the
+  phone way (grant_type=mobile). Email login is unchanged and stays the default. (Closes the
+  phone-login request; SMS support ported and adapted from upstream Caslinovich/omoda9-ha.)
+- **Fixed: commands no longer "cry wolf" on a climate-only confirmation.** The car reports the
+  climate module on nearly every OFF command, which was rendered as a scary "executed only in
+  part" alarm even for a clean success. A climate-only report is now shown as a normal success
+  (the raw codes are still kept in the message for diagnosis). (Adapted from upstream `a316a23`.)
+- **Privacy: GPS no longer leaks into the location-probe status text.** The human-readable probe
+  message (persisted as a sensor state and shareable in diagnostics) no longer includes
+  coordinates; the position still reaches the map/device_tracker as before. (Adapted from
+  upstream `5e502b0`.)
+- **Fixed: "Charging time remaining" no longer sticks at the last value.** At end-of-charge the
+  field disappears from the car's telemetry; the sensor now goes `unknown` instead of latching the
+  final minutes forever.
+- **Fixed: "Car Awake" now returns to off.** The flag is set when the car is publishing, but the
+  car stops publishing silently when it sleeps, so it used to latch on forever (leaving the Wake
+  button inert). It now expires after a window of MQTT silence.
+- **Reauth reworked: no more silently-burned OTP.** When the session expires, the re-authenticate
+  screen now sends the code only when you press Submit (a network blip that popped the card no
+  longer fires an OTP by itself), a wrong code re-shows the form instead of dead-ending, and there
+  is a "Resend the code" option.
+- **New: the OMODA | JAECOO logo** now shows in HACS and the integrations page (brand images
+  bundled from upstream `21f1227`).
+
 ## v1.7.0 — 2026-07-26 (home vs away charging energy + charging-energy card)
 
 - **New (BEV only): "Home Charging Energy" and "Away Charging Energy" sensors.** Two lifetime

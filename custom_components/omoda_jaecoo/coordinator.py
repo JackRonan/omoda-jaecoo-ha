@@ -197,6 +197,10 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         self._hv_poll_count = 0       # close-together reads done in the HV-on window (cap HV_ON_POLL_MAX)
         self._closing = False         # P0: set on unload → guards timers/probe from firing mid-teardown
         self._startup_probe_unsub = None  # one-shot: seeds the follow-up right after startup
+        # one-shot that clears the "Car Awake" flag when the car goes silent: the flag is set
+        # True on every MQTT push, but the car stops publishing WITHOUT any "going to sleep"
+        # message, so without this timer `awake` would latch True forever (Wake button inert).
+        self._awake_expiry_unsub = None
         # drive-detection heartbeat (read-only): starts the automatic refresh during a
         # trip, since the moving car does NOT send MQTT pushes. See DRIVE_WATCH_EVERY.
         self._drive_watch_unsub = None
@@ -533,6 +537,9 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         if self._startup_probe_unsub is not None:
             self._startup_probe_unsub()
             self._startup_probe_unsub = None
+        if self._awake_expiry_unsub is not None:
+            self._awake_expiry_unsub()
+            self._awake_expiry_unsub = None
         if self._drive_watch_unsub is not None:
             self._drive_watch_unsub()
             self._drive_watch_unsub = None
@@ -603,6 +610,10 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
                 lambda: self.hass.async_create_task(self.async_probe())
             )
 
+        # (re)arm the awake-expiry one-shot on the loop: this message refreshed `awake` to True,
+        # so push the "went silent" deadline out to now + awake_window.
+        self.hass.loop.call_soon_threadsafe(self._arm_awake_expiry)
+
         # [HV] the car is DRIVING (engine on) → high voltage is ON and the realtime has the
         # TRUE values (odometer/SOC climbing). We force a realtime read (bypasses the
         # probe's cooldown) which in turn starts the close follow-up while HV stays
@@ -663,6 +674,29 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
     def _apply_update(self, patch: dict) -> None:
         self.data = {**self.data, **patch}
         self.async_set_updated_data(self.data)
+
+    @callback
+    def _arm_awake_expiry(self) -> None:
+        """(loop thread) (re)arm the one-shot that clears `awake` after `awake_window` seconds
+        of MQTT silence. Called on every push, so the deadline always tracks the last message."""
+        if self._closing:
+            return
+        if self._awake_expiry_unsub is not None:
+            self._awake_expiry_unsub()
+            self._awake_expiry_unsub = None
+        self._awake_expiry_unsub = async_call_later(
+            self.hass, self.awake_window, self._awake_expiry_cb)
+
+    @callback
+    def _awake_expiry_cb(self, _now) -> None:
+        """Fires `awake_window` after the last push. A newer message may have re-armed a later
+        timer (this one is stale) — guard on `_last_msg_ts` so we only expire on real silence."""
+        self._awake_expiry_unsub = None
+        if self._closing:
+            return
+        stale = not self._last_msg_ts or (time.time() - self._last_msg_ts) >= self.awake_window
+        if stale and self.data.get("awake"):
+            self._apply_update({"awake": False})
 
     # ───────────────── bind config → core/ modules ─────────────────
     def _bind_core(self) -> None:

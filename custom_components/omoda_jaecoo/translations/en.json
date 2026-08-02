@@ -3,9 +3,12 @@
     "step": {
       "user": {
         "title": "Omoda / Jaecoo",
-        "description": "Enter your Omoda/Jaecoo account email and vehicle PIN. An OTP code will be sent to your email; VIN and account ID are detected automatically.{reason}",
+        "description": "Sign in with the email OR the phone number registered on your Omoda/Jaecoo account, plus the vehicle PIN. Pick the login method that matches your account: an OTP code is sent to your email or by SMS. VIN and account ID are detected automatically.{reason}",
         "data": {
-          "email": "Account email",
+          "login_method": "Login method",
+          "email": "Account email (for email login)",
+          "phone": "Mobile number (for phone login, no + or spaces)",
+          "area": "Phone area code (e.g. 39 = Italy, 44 = UK)",
           "pin": "Vehicle control PIN",
           "bff": "BFF endpoint (region)",
           "tsp_host": "TSP console host (region)",
@@ -16,8 +19,8 @@
         }
       },
       "otp": {
-        "title": "Email verification code",
-        "description": "Enter the OTP code received by email.{reason}",
+        "title": "Verification code",
+        "description": "Enter the OTP code received by email or SMS.{reason}",
         "data": {
           "code": "OTP code"
         }
@@ -31,9 +34,10 @@
       },
       "reauth_confirm": {
         "title": "Re-authenticate Omoda / Jaecoo",
-        "description": "Your session for {email} has expired (this happens when the official app is opened). A new OTP code has been sent to your email — enter it to reconnect.{reason}",
+        "description": "Your session for {account} has expired (this happens when the official app is opened). Press Submit to send a fresh OTP code, then enter it to reconnect. Tick \"Resend the code\" if you need a new one.{reason}",
         "data": {
-          "code": "OTP code"
+          "code": "OTP code",
+          "resend": "Resend the code"
         }
       },
       "reconfigure": {
@@ -50,7 +54,9 @@
       "captcha_failed": "Couldn't complete the security check. Please try again in a moment.",
       "otp_invalid": "Invalid or expired OTP code.",
       "no_vehicle": "Login succeeded but no vehicle was found on this account.",
-      "pin_required": "Enter the vehicle control PIN."
+      "pin_required": "Enter the vehicle control PIN.",
+      "email_required": "Enter the account email, or switch the login method to Phone.",
+      "phone_required": "Enter the mobile number, or switch the login method to Email."
     },
     "abort": {
       "already_configured": "This vehicle (VIN) is already configured.",
@@ -58,6 +64,14 @@
       "reauth_successful": "Re-authentication successful — the vehicle is reconnected.",
       "reconfigure_no_entry": "Integration not found — reload Home Assistant and try again.",
       "reconfigure_successful": "PIN updated. The integration was reloaded."
+    },
+    "selector": {
+      "login_method": {
+        "options": {
+          "email": "Email",
+          "phone": "Phone number (SMS)"
+        }
+      }
     }
   },
   "issues": {

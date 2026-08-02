@@ -53,22 +53,24 @@ def invia(email):
     return False, (j.get("key") or "send.failed")
 
 def invia_sms(mobile, area="39"):
+    """Sends the OTP code by SMS. Returns (ok, reason): reason is "" on success, else a stable
+    backend code for the RESULT: FAIL <reason> sentinel (carries no PIN/OTP/token)."""
     mobile = mobile.lstrip("+").replace(" ", "")
     print("Solving the captcha…")
     cv = C.risolvi()
     if not cv:
-        print("❌ captcha not solved, try again."); return False
+        print("❌ captcha not solved, try again."); return False, "captcha.failed"
     path = "/marketing/v2/app/code/sendSmsCode"
     r = requests.post(BFF + path,
                       data={"mobile": mobile, "areaCode": area, "module": "APP-LOGIN", "captchaVerification": cv},
                       headers=_hdr_form(path), timeout=15)
     try: j = r.json()
     except Exception: j = {"_t": r.text[:200]}
-    print(f"sendSmsCode -> HTTP {r.status_code} {j}")
+    print(f"sendSmsCode -> HTTP {r.status_code} key={j.get('key')} msg={j.get('msg')}")
     if j.get("ok") or j.get("key") == "operation.successful":
-        print("✅ Code sent via SMS. Now: python3 login_omoda.py token-sms <mobile> <codice>")
-        return True
-    return False
+        print("✅ Code sent via SMS.")
+        return True, ""
+    return False, (j.get("key") or "send.failed")
 
 # oauth2/token combinations to try (codeId is NOT needed)
 def _combos(email, code):
@@ -118,11 +120,20 @@ def token(email, code, sms=False, area="39"):
         time.sleep(0.5)
     if not win:
         print("❌ no combination worked (code expired/wrong or different fields)."); return False
-    with open("token.json", "w") as fh:
+    # Save to the caller-provided token path (the config flow mints to a per-VIN/pending path),
+    # atomically + owner-only, NOT to a stray token.json in the current directory.
+    out_path = os.environ.get("OMODA_TOKEN_PATH", "token.json")
+    tmp = out_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(win, fh, indent=2, ensure_ascii=False)
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, out_path)
     tok = win.get("access_token") or (win.get("data") or {}).get("access_token")
     # LOW: don't print the token (stdout can end up in the logs) — just confirm
-    print("\n✅ LOGIN OK — token saved to token.json.")
+    print("\n✅ LOGIN OK — token saved.")
     # Stage 2
     HB = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json", "User-Agent": "okhttp/4.9.0",
           "tenant": omoda.TENANT_CODE, "channelId": omoda.CHANNEL_ID, "countryId": omoda.COUNTRY_ID,
@@ -151,11 +162,19 @@ if __name__ == "__main__":
     if len(a) >= 2 and a[1] == "invia":
         ok, reason = invia(a[2] if len(a) >= 3 else os.environ.get("OMODA_EMAIL", ""))
         _emit_result(ok, reason)
-    elif len(a) >= 3 and a[1] == "invia-sms":
-        _emit_result(invia_sms(a[2], a[3] if len(a) > 3 else "39"))
+    elif len(a) >= 2 and a[1] == "invia-sms":
+        # phone + area via env (OMODA_PHONE/OMODA_AREA), argv still works for manual use
+        mob = a[2] if len(a) >= 3 else os.environ.get("OMODA_PHONE", "")
+        area = a[3] if len(a) >= 4 else os.environ.get("OMODA_AREA", "39")
+        ok, reason = invia_sms(mob, area)
+        _emit_result(ok, reason)
     elif len(a) >= 4 and a[1] == "token":
         _emit_result(token(a[2], a[3]))
-    elif len(a) >= 4 and a[1] == "token-sms":
-        _emit_result(token(a[2], a[3], sms=True))
+    elif len(a) >= 2 and a[1] == "token-sms":
+        # phone/OTP via env (OMODA_PHONE/OMODA_OTP), argv still works for manual use
+        mob = a[2] if len(a) >= 3 else os.environ.get("OMODA_PHONE", "")
+        code = a[3] if len(a) >= 4 else os.environ.get("OMODA_OTP", "")
+        area = a[4] if len(a) >= 5 else os.environ.get("OMODA_AREA", "39")
+        _emit_result(token(mob, code, sms=True, area=area))
     else:
         print(__doc__)

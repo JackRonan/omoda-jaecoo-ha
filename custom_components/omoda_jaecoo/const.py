@@ -57,6 +57,16 @@ CONF_PIN = "pin"
 CONF_VIN = "vin"
 CONF_TUSERID = "tuserid"
 
+# Login method: an account can be registered with an EMAIL or a PHONE number. The OTP is
+# delivered the matching way (email code vs SMS code) and the token is minted with a
+# different grant_type (email vs mobile). Default stays email (the original behaviour).
+CONF_LOGIN_METHOD = "login_method"   # "email" | "phone"
+CONF_PHONE = "phone"                 # mobile number (no leading +, no spaces)
+CONF_AREA = "area"                   # dialling area code, digits only (default 39 = IT)
+LOGIN_METHOD_EMAIL = "email"
+LOGIN_METHOD_PHONE = "phone"
+DEFAULT_AREA = "39"
+
 # Vehicle identity for the HA device (dynamic name: "Omoda / Jaecoo", "Jaecoo 7"…). `vehicle_name`
 # = nickname/model from the app, saved in entry.data (captured at config flow or backfilled);
 # it is also an OPTION for the manual override. model/brand stay only in entry.data.
