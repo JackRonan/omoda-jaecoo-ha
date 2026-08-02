@@ -161,7 +161,7 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
         os.environ["OMODA_TOKEN_PATH"] = self.token_path
         os.environ["OMODA_BFF"] = self.bff
         os.environ["TSP_HOST"] = self.tsp_host
-        os.environ["OMODA_LANGUAGE"] = os.environ.get("OMODA_LANGUAGE", "it-IT")
+        os.environ["OMODA_LANGUAGE"] = os.environ.get("OMODA_LANGUAGE", "en-GB")
         os.environ["OMODA_DEPT_ID"] = os.environ.get("OMODA_DEPT_ID", "39")
         if self.pin:
             os.environ["OMODA_PIN"] = self.pin

@@ -120,7 +120,7 @@ def headers_post(url_path: str, secret: str=SIGN_SECRET, nonce: str=SIGN_NONCE, 
     h = {
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/x-www-form-urlencoded",
-        "Accept-Language": os.environ.get("OMODA_LANGUAGE", "it-IT"),
+        "Accept-Language": os.environ.get("OMODA_LANGUAGE", "en-GB"),
         "Accept-Encoding": "gzip, deflate",
         "agent": "android",
         "version": APP_VERSION,
