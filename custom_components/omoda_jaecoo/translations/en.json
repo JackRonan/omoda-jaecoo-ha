@@ -1,4 +1,12 @@
 {
+  "selector": {
+    "login_method": {
+      "options": {
+        "email": "Email",
+        "phone": "Phone number (SMS)"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -64,14 +72,6 @@
       "reauth_successful": "Re-authentication successful — the vehicle is reconnected.",
       "reconfigure_no_entry": "Integration not found — reload Home Assistant and try again.",
       "reconfigure_successful": "PIN updated. The integration was reloaded."
-    },
-    "selector": {
-      "login_method": {
-        "options": {
-          "email": "Email",
-          "phone": "Phone number (SMS)"
-        }
-      }
     }
   },
   "issues": {

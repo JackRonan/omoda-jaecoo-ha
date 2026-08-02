@@ -1,4 +1,12 @@
 {
+  "selector": {
+    "login_method": {
+      "options": {
+        "email": "Email",
+        "phone": "Phone number (SMS)"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
@@ -57,14 +65,6 @@
       "pin_required": "Enter the vehicle control PIN.",
       "email_required": "Enter the account email, or switch the login method to Phone.",
       "phone_required": "Enter the mobile number, or switch the login method to Email."
-    },
-    "selector": {
-      "login_method": {
-        "options": {
-          "email": "Email",
-          "phone": "Phone number (SMS)"
-        }
-      }
     },
     "abort": {
       "already_configured": "This vehicle (VIN) is already configured.",
