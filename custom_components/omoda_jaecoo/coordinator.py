@@ -109,6 +109,19 @@ META = {s["key"]: s for s in SENSORS}
 # state telemetry → they must not go into "fields" (see _on_car_message / Item 4).
 CMD_CONFIRM_META = ("result", "resultTime", "seq", "reason", "hasAsy")
 
+
+def _reason_climate_only(reason) -> bool:
+    """True if the car's `reason` list reports ONLY the climate module (`modelId` 0). The backend
+    puts climate in `reason` even on success — a code (e.g. 95, and 11 as seen in issue #6) arrives
+    on nearly every OFF command, including a perfectly-executed "climate off" — so climate alone is
+    NOT a failure and must not raise the "executed only in part" alarm. A malformed `reason` is not
+    treated as climate-only (stay cautious)."""
+    if not isinstance(reason, (list, tuple)) or not reason:
+        return False
+    if not all(isinstance(v, dict) for v in reason):
+        return False
+    return all(str(v.get("modelId")) == "0" for v in reason)
+
 # [MED] "geo" fields allowed in self.position (1301 push / realtime probe). We keep
 # ONLY the geolocation: battery/speed/online live in self.data["realtime"].
 GEO_KEYS = ("lat", "lon", "latitude", "longitude", "speed", "vehicleSpeed",
@@ -632,8 +645,11 @@ class OmodaJaecooCoordinator(DataUpdateCoordinator):
           - other codes → reported raw, without inventing their meaning."""
         result = str(data.get("result", "")).strip()
         reason = data.get("reason")
-        if reason:  # list of failure reasons reported by the car
+        if reason and not _reason_climate_only(reason):  # a real, non-climate-only failure
             return f"The car reported a problem ❌ ({reason})"[:255]
+        if reason:  # climate-only reason = NOT a failure; keep the raw codes for diagnosis
+            codes = ", ".join(str(v.get("code")) for v in reason)
+            return f"Command executed ✅ (climate module reported code {codes} — this is normal)"[:255]
         if result == "5":
             return "Command running on the car… ⏳"
         if result in ("1", "2"):
