@@ -52,7 +52,7 @@ def invia(email):
         print("⚠️  Email not recognized as an account. Check the address registered in the app.")
     return False, (j.get("key") or "send.failed")
 
-def invia_sms(mobile, area="39"):
+def invia_sms(mobile, area="44"):
     """Sends the OTP code by SMS. Returns (ok, reason): reason is "" on success, else a stable
     backend code for the RESULT: FAIL <reason> sentinel (carries no PIN/OTP/token)."""
     mobile = mobile.lstrip("+").replace(" ", "")
@@ -82,7 +82,7 @@ def _combos(email, code):
         {"grant_type": "password", "loginType": "email", "loginAction": "1", "email": email, "code": code, "needDecode": "0"},
     ]
 
-def _combos_sms(mobile, code, area="39"):
+def _combos_sms(mobile, code, area="44"):
     mobile = mobile.lstrip("+").replace(" ", "")
     return [
         {"grant_type": "mobile", "mobile": mobile, "code": code, "areaCode": area, "needDecode": "0"},
@@ -105,7 +105,7 @@ def _token_headers(path, params):
             "nonce": NONCE, "timestamp": str(ts), "url": path, "keys": ",".join(keys),
             "signature": _md5(f"{SECRET}{NONCE}{path}{ts}[{vals_csv}]")}
 
-def token(email, code, sms=False, area="39"):
+def token(email, code, sms=False, area="44"):
     win = None
     combos = _combos_sms(email, code, area) if sms else _combos(email, code)
     for params in combos:
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     elif len(a) >= 2 and a[1] == "invia-sms":
         # phone + area via env (OMODA_PHONE/OMODA_AREA), argv still works for manual use
         mob = a[2] if len(a) >= 3 else os.environ.get("OMODA_PHONE", "")
-        area = a[3] if len(a) >= 4 else os.environ.get("OMODA_AREA", "39")
+        area = a[3] if len(a) >= 4 else os.environ.get("OMODA_AREA", "44")
         ok, reason = invia_sms(mob, area)
         _emit_result(ok, reason)
     elif len(a) >= 4 and a[1] == "token":
@@ -174,7 +174,7 @@ if __name__ == "__main__":
         # phone/OTP via env (OMODA_PHONE/OMODA_OTP), argv still works for manual use
         mob = a[2] if len(a) >= 3 else os.environ.get("OMODA_PHONE", "")
         code = a[3] if len(a) >= 4 else os.environ.get("OMODA_OTP", "")
-        area = a[4] if len(a) >= 5 else os.environ.get("OMODA_AREA", "39")
+        area = a[4] if len(a) >= 5 else os.environ.get("OMODA_AREA", "44")
         _emit_result(token(mob, code, sms=True, area=area))
     else:
         print(__doc__)

@@ -16,7 +16,7 @@
           "login_method": "Login method",
           "email": "Account email (for email login)",
           "phone": "Mobile number (for phone login, no + or spaces)",
-          "area": "Phone area code (e.g. 39 = Italy, 44 = UK)",
+          "area": "Phone area code (e.g. 44 = UK, 39 = Italy)",
           "pin": "Vehicle control PIN",
           "bff": "BFF endpoint (region)",
           "tsp_host": "TSP console host (region)",

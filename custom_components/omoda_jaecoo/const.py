@@ -62,10 +62,10 @@ CONF_TUSERID = "tuserid"
 # different grant_type (email vs mobile). Default stays email (the original behaviour).
 CONF_LOGIN_METHOD = "login_method"   # "email" | "phone"
 CONF_PHONE = "phone"                 # mobile number (no leading +, no spaces)
-CONF_AREA = "area"                   # dialling area code, digits only (default 39 = IT)
+CONF_AREA = "area"                   # dialling area code, digits only (default 44 = UK)
 LOGIN_METHOD_EMAIL = "email"
 LOGIN_METHOD_PHONE = "phone"
-DEFAULT_AREA = "39"
+DEFAULT_AREA = "44"
 
 # Vehicle identity for the HA device (dynamic name: "Omoda / Jaecoo", "Jaecoo 7"…). `vehicle_name`
 # = nickname/model from the app, saved in entry.data (captured at config flow or backfilled);

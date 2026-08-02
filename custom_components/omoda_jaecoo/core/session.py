@@ -142,7 +142,7 @@ def confirm_otp(code, emit=lambda m: None):
     return False, f"code rejected: {tail[:120]}"
 
 
-def request_otp_sms(mobile, area="39", emit=lambda m: None):
+def request_otp_sms(mobile, area="44", emit=lambda m: None):
     """Sends the OTP code by SMS (for phone-number accounts). True if the send succeeded.
     Phone/area travel via the ephemeral env (like the email path), not argv."""
     _email, src_dir, timeout = _call_env()
@@ -164,7 +164,7 @@ def request_otp_sms(mobile, area="39", emit=lambda m: None):
     return False
 
 
-def confirm_otp_sms(code, mobile, area="39", emit=lambda m: None):
+def confirm_otp_sms(code, mobile, area="44", emit=lambda m: None):
     """Mints the token from the SMS code (grant_type=mobile). Returns (ok, detail).
     Phone/OTP/area travel via the ephemeral env, not argv."""
     code = (code or "").strip()
