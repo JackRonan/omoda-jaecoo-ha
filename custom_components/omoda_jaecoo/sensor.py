@@ -99,6 +99,8 @@ class _RtSpec:
     compute: Callable | None = None  # value COMPUTED from several realtime fields (ignores `field`)
     scale: float | None = None  # multiplicative factor on the raw value (e.g. kPa→bar = 0.01)
     precision: int | None = None  # decimal digits suggested for the UI
+    volatile: bool = False    # field vanishes when it no longer applies (e.g. remainChargeTime at
+                              #   end of charge) → report `unknown`, do NOT keep the last value
 
 
 # ── code→text maps for the charging enum fields ──
@@ -211,7 +213,7 @@ _RT_SENSORS: list[_RtSpec] = [
     # in MINUTES — to be reconfirmed with the car charging. chargeState/appointmentChargeState/
     # fastChargingGunStatus = codes (all 0 = idle from the live car) → raw, to be decoded.
     _RtSpec("tempo_ricarica", "Charge Remaining Time", "remainChargeTime",
-            DUR, MIN, None, "mdi:timer-sand"),
+            DUR, MIN, None, "mdi:timer-sand", volatile=True),
     # Instantaneous charging power (kW): 0.0 at idle, rises while charging. Present on BEVs
     # (`chargingPower`) → useful for following an AC/DC session live.
     _RtSpec("potenza_ricarica", "Charging Power", "chargingPower",
@@ -524,6 +526,15 @@ class OmodaJaecooRealtimeSensor(_OmodaJaecooRestoreSensor):
         fields absent for the powertrain come out as «unavailable» (the card
         hides them) instead of cluttering the UI with empty sensors."""
         return self._live_value() is not None or self._restored is not None
+
+    @property
+    def native_value(self):
+        # Volatile fields (e.g. remainChargeTime, which vanishes at end of charge) must NOT keep
+        # their last value — that would show a stale "120 min" for hours. Report the live value
+        # only → `unknown` when the field is absent. Non-volatile fields keep the restore fallback.
+        if self._spec.volatile:
+            return self._live_value()
+        return super().native_value
 
     def _live_value(self):
         # field COMPUTED from several realtime fields (e.g. total range = electric + gasoline)

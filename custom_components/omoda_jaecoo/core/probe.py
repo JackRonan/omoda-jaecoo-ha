@@ -50,6 +50,12 @@ _last_run = {"ts": 0.0}
 RICH_KEYS = ("lat", "lon", "altitude", "direction", "gpsSpeed", "vehicleSpeed",
              "odometer", "dumpEnergy", "electricRange", "pureElectricRange",
              "chargeState", "inCarTemperature", "onlineStatus")
+# Geographic keys are kept OUT of the human-readable summary message: that message is published
+# as a sensor state (→ persisted in HA's history DB), written to the log, and can end up in
+# shared diagnostics. The position still reaches the device_tracker via on_data (raw dict), so
+# nothing is lost — it just no longer leaks into free text.
+_GEO_KEYS = ("lat", "lon", "altitude", "direction")
+_MSG_KEYS = tuple(k for k in RICH_KEYS if k not in _GEO_KEYS)
 
 
 def _log(rec: dict):
@@ -66,10 +72,12 @@ def _log(rec: dict):
 
 
 def _rich(data: dict) -> dict:
-    """Extracts the interesting fields if present, for the readable summary."""
+    """Extracts the interesting fields for the readable summary — WITHOUT the position (see
+    _GEO_KEYS): the coordinates must not enter the message, which is persisted as a sensor state
+    and can be shared. All other rich fields (odometer/energy/range) stay."""
     if not isinstance(data, dict):
         return {}
-    return {k: data[k] for k in RICH_KEYS if k in data}
+    return {k: data[k] for k in _MSG_KEYS if k in data}
 
 
 def probe_once(publish, force=False, on_data=None):
